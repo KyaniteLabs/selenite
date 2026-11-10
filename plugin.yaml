@@ -1,0 +1,28 @@
+name: selenite
+label: Selenite
+version: 0.1.0
+description: >
+  Selenite removes friction between people and their agents. It ships the
+  provider-agnostic `frictionless` skill, a /frictionless command, a ledger
+  tool, and observe-only hooks that notice overload, repeating approval
+  prompts and tasks blocked on a human, so the skill can learn from them.
+author: Selenite contributors
+license: MIT
+tags: [workflow, ergonomics, self-improvement, human-in-the-loop]
+enabled: true
+provides_tools:
+  - selenite_ledger
+provides_hooks:
+  - pre_llm_call
+  - pre_approval_request
+  - post_approval_response
+  - kanban_task_blocked
+optional_env:
+  - name: SELENITE_HOOKS
+    description: "Set to 0 to turn off all Selenite hooks (the skill and command stay)"
+    prompt: "Enable Selenite hooks? (1/0)"
+    password: false
+  - name: SELENITE_STATE
+    description: "Where the private ledger and reports live (default ~/.local/state/selenite)"
+    prompt: "Selenite state directory (or empty)"
+    password: false
