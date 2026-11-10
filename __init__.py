@@ -2,19 +2,23 @@
 
 Selenite is the stone used to clear the other stones, and it needs no
 cleansing itself: no upkeep, self-trimming state. This Hermes plugin wraps
-the provider-agnostic `frictionless` skill and registers:
+Selenite's three provider-agnostic facet skills and registers:
 
-  skill    selenite:frictionless   (skills/frictionless/SKILL.md)
-  command  /frictionless [cleanse|gate|calm|evolve] [text]
-  tool     selenite_ledger         (add, summary, cleanse)
+  skills   frictionless, antibeaurocracy, antipedantry   (skills/<name>/SKILL.md)
+  commands /frictionless [cleanse|gate|calm|evolve] [text]
+           /antibeaurocracy [audit|check|mode|ledger], /fake-gate <reason>
+  tools    selenite_ledger (add, summary, cleanse), bureaucracy_classify, bureaucracy_audit
   hooks    pre_llm_call            -> Calm-mode context on the two-signal rule
            pre_approval_request    -> one row per human approval prompt
            post_approval_response  -> a human "always" logs that approval as fixed
-           kanban_task_blocked     -> logs tasks blocked on a human (no reason text)
+           kanban_task_blocked     -> one observer: fake-gate verdict, plus a row when the wait lands on a human
            kanban_task_completed   -> clears that task's blocked badge
+           pre_tool_call, transform_tool_result, on_kanban_dispatch_tick
+                                   -> the fake-gate facet (antibeaurocracy_core/plugin.py)
 
-Hooks only observe and add context. They never block, approve or edit.
-Turn them off with the `hooks` setting or SELENITE_HOOKS=0.
+Hooks never approve, unblock or edit a card. Only fake_gate_mode "ask" hands a
+kanban_block back with a question, at most max_refusals times, and fails open.
+Turn every hook off with the `hooks` setting or SELENITE_HOOKS=0.
 """
 from __future__ import annotations
 
@@ -50,6 +54,16 @@ def _scripts(*names: str):
 
 
 cleanse, ledger, signals = _scripts("cleanse", "ledger", "signals")
+
+# Hermes and the tests both load this file as a package, so the facet imports relatively.
+from .antibeaurocracy_core import HUMAN, WALL  # noqa: E402
+from .antibeaurocracy_core import plugin as fake_gates  # noqa: E402
+
+SKILLS = {  # one product, three facets of one intent: fewer steps, waits and checks reach the human
+    "frictionless": "Clear and recharge every other tool in the stack so fewer steps reach the human.",
+    "antibeaurocracy": "Tell a real wall from a wait between agents that will end up on the human's desk.",
+    "antipedantry": "Tell rigor from checks that cannot change the decision but still delay it.",
+}
 
 MODES = ("cleanse", "gate", "calm", "evolve")
 ALIASES = {"audit": "cleanse"}  # the 0.3 name for the same pass
@@ -105,8 +119,8 @@ def _safe(fn):
     def wrapped(*a, **kw):
         try:
             return fn(*a, **kw)
-        except Exception as exc:  # a friction plugin must never add friction
-            logger.debug("selenite hook %s failed: %s", fn.__name__, exc)
+        except Exception as exc:  # a friction plugin must never add friction, so it fails open, loudly
+            logger.warning("selenite hook %s failed open: %s", fn.__name__, exc)
             return None
     wrapped.__name__ = fn.__name__
     return wrapped
@@ -144,12 +158,24 @@ def post_approval_response(pattern_key=None, choice=None, decided_by=None, **_kw
         ledger.add("fix", f"approval:{str(pattern_key)[:70]}", note="allowlisted by the human", agent="hermes")
 
 
+def lands_on_a_human(reason: str, verdict) -> bool:
+    """One routing rule for every block. An evidenced verdict decides: WALL and HUMAN wait on a person,
+    FAKE, DEPENDENCY and MACHINERY do not (a fake gate is an agent's job to dissolve). With no evidence,
+    the classifier's default is not a finding, so Selenite's own human-step words decide."""
+    if verdict is not None and verdict.evidenced:
+        return verdict.cls in (WALL, HUMAN)
+    return bool(_GATE_RE.search(reason)) or "human_gate" in signals.classify(reason)
+
+
 @_safe
-def kanban_task_blocked(task_id=None, reason=None, assignee=None, **_kw):
-    if not _hooks_on() or not task_id or not isinstance(reason, str):
+def kanban_task_blocked(task_id=None, reason=None, assignee=None, board=None, **_kw):
+    """The one observer for blocked cards: classify once, ledger the fake-gate verdict, and log the
+    task on Selenite's ledger when the wait lands on a person. Never keeps the reason text."""
+    if not _hooks_on() or not task_id:
         return
-    if _GATE_RE.search(reason) or "human_gate" in signals.classify(reason):
-        # The reason text stays on the board; the ledger keeps only the task id.
+    reason = reason if isinstance(reason, str) else ""
+    verdict = fake_gates.observe_block(task_id=str(task_id), board=board, reason=reason, kind=_kw.get("kind"))
+    if reason and lands_on_a_human(reason, verdict):
         ledger.add("blocked", f"kanban:{task_id}", note="waiting on a human", agent=str(assignee or "hermes")[:40])
 
 
@@ -232,8 +258,8 @@ def selenite_ledger(args: dict, **_kw) -> str:
 def register(ctx) -> None:
     global _ctx
     _ctx = ctx
-    ctx.register_skill("frictionless", SKILL_DIR / "SKILL.md",
-                       description="Clear and recharge every other tool in the stack so fewer steps reach the human.")
+    for name, description in SKILLS.items():
+        ctx.register_skill(name, ROOT / "skills" / name / "SKILL.md", description=description)
     ctx.register_command(name="frictionless", handler=frictionless_command,
                          description="Selenite: cleanse the stack, shrink a human step, calm mode, evolve",
                          args_hint="[cleanse|gate|calm|evolve] [context]")
@@ -242,3 +268,5 @@ def register(ctx) -> None:
     for hook in (pre_llm_call, pre_approval_request, post_approval_response,
                  kanban_task_blocked, kanban_task_completed):
         ctx.register_hook(hook.__name__, hook)
+    fake_gates.HOOKS_ON = _hooks_on  # one off switch for every hook Selenite runs
+    fake_gates.register(ctx)

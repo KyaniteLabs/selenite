@@ -3,3 +3,10 @@ __pycache__/
 .selenite/
 profile.md
 signals.txt
+.pytest_cache/
+*.egg-info/
+/build/
+# audit output carries card titles and local paths; keep it out of the repo
+/audit*.json
+/audit*.md
+plugin-data/

@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""Shell entry point for any agent harness (Claude Code, Codex, Gemini, Kimi, Hermes, plain bash)."""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+from antibeaurocracy_core.cli import main  # noqa: E402
+
+raise SystemExit(main())

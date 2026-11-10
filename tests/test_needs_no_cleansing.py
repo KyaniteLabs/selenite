@@ -10,18 +10,41 @@ import json
 import sys
 import time
 
-from conftest import HOME, cleanse, evolve, ledger, mine, plugin
+from conftest import HOME, REPO, cleanse, evolve, ledger, mine, plugin
 
 
-def test_selenite_skill_is_clean():
+def test_selenite_skills_are_clean():
     assert cleanse.needs_no_cleansing() == []
+
+
+def test_a_dirty_facet_is_caught(monkeypatch, tmp_path):
+    bad = tmp_path / "antipedantry"; bad.mkdir()
+    (bad / "SKILL.md").write_text("no frontmatter")
+    monkeypatch.setattr(cleanse, "SELF_SKILL", tmp_path / "frictionless")
+    for name in ("frictionless", "antibeaurocracy"):
+        (tmp_path / name).symlink_to(REPO / "skills" / name)
+    assert [f["check"] for f in cleanse.needs_no_cleansing()] == ["no-frontmatter"]
 
 
 def test_selenite_is_never_a_finding():
     (HOME / ".claude/skills").mkdir(parents=True)
-    (HOME / ".claude/skills/frictionless").symlink_to(cleanse.SELF_SKILL)
+    for name in cleanse.SELF_SKILLS:
+        (HOME / ".claude/skills" / name).symlink_to(cleanse.SELF_SKILL.parent / name)
     report = cleanse.run()
-    assert not any("frictionless" in f["where"] or f["stone"] == "selenite" for f in report["findings"])
+    assert not any(any(n in f["where"] for n in cleanse.SELF_SKILLS) or f["stone"] == "selenite"
+                   for f in report["findings"])
+
+
+def test_fake_gate_ledger_stays_bounded(tmp_path, monkeypatch):
+    fg = plugin.fake_gates
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    monkeypatch.setattr(fg, "LEDGER_ROTATE_BYTES", 2000)
+    for i in range(400):
+        fg._ledger("blocked_observed", task=f"t_{i}", verdict="F1-ack", conf=0.8)
+    d = tmp_path / "plugin-data/antibeaurocracy"
+    files = sorted(p.name for p in d.glob("ledger*.jsonl"))
+    assert files == ["ledger.1.jsonl", "ledger.jsonl"]
+    assert all((d / n).stat().st_size < 2200 for n in files)
 
 
 def test_state_stays_bounded_without_a_human(tmp_path, monkeypatch):

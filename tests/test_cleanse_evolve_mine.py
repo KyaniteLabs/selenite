@@ -94,18 +94,23 @@ def test_ledger_findings_rank_first_and_respect_fixes():
     assert not any(f["where"] == "git-push" for f in fs)
 
 
-def test_runbooks_and_peers(tmp_path):
+def test_runbooks_and_fake_gates(tmp_path):
     rb = tmp_path / "RUNBOOK.md"
     rb.write_text("Step 1: you need to log in to the console.\nStep 2: run gh auth login.\n")
-    peer = HOME / ".hermes/plugin-data/antibeaurocracy"; peer.mkdir(parents=True)
+    fg = HOME / ".hermes/plugin-data/antibeaurocracy"; fg.mkdir(parents=True)
     now = time.time()
-    peer.joinpath("ledger.jsonl").write_text("\n".join(json.dumps(r) for r in [
-        {"ts": now, "event": "block", "verdict": "F1-ack"}, {"ts": now, "event": "block", "verdict": "WALL"},
-        {"ts": now - 90 * 86400, "event": "block", "verdict": "FAKE"}, "junk"]))
+    fg.joinpath("ledger.jsonl").write_text("\n".join(json.dumps(r) for r in [
+        {"ts": now, "event": "block_attempt", "task": "t_1", "verdict": "F1-ack", "conf": 0.8},
+        {"ts": now, "event": "blocked_observed", "task": "t_1", "verdict": "F1-ack", "conf": 0.8},  # same card
+        {"ts": now, "event": "blocked_observed", "task": "t_2", "verdict": "F6-vague", "conf": 0.3},  # a guess
+        {"ts": now, "event": "asked", "task": "t_3", "verdict": "F2-relay", "conf": 0.9},  # not a block
+        {"ts": now, "event": "blocked_observed", "task": "t_4", "verdict": "WALL", "conf": 0.9},
+        {"ts": now - 90 * 86400, "event": "block_attempt", "task": "t_5", "verdict": "F1-ack", "conf": 0.9},
+        "junk"]))
     fs = cleanse.run(paths=[rb])["findings"]
     assert any(f["check"] == "manual-steps" and f["problem"].startswith("2 ") for f in fs)
-    peer_f = [f for f in fs if f["stone"] == "peer"]
-    assert len(peer_f) == 1 and peer_f[0]["interruptions"] == 1
+    fg_f = [f for f in fs if f["stone"] == "fake-gate"]
+    assert len(fg_f) == 1 and fg_f[0]["interruptions"] == 1
 
 
 def test_a_broken_adapter_does_not_hide_the_others(monkeypatch):

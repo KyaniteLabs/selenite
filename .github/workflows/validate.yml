@@ -17,9 +17,14 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Unit tests (includes the needs-no-cleansing requirement)
         run: python -m pip install pytest==8.4.2 fastapi==0.115.12 httpx==0.28.1 && python -m pytest -q
+      - name: Package installs and the fake-gate CLI runs
+        run: |
+          V=$(mktemp -d) && python -m venv "$V" && "$V/bin/pip" install --no-cache-dir . && "$V/bin/antibeaurocracy" classify "Awaiting ACK from platform"
       - name: install.sh into an empty HOME
         run: |
-          H=$(mktemp -d) && mkdir "$H/.claude" && HOME="$H" sh install.sh && test -L "$H/.claude/skills/frictionless"
+          H=$(mktemp -d) && mkdir "$H/.claude" && HOME="$H" sh install.sh
+          for n in frictionless antibeaurocracy antipedantry; do test -L "$H/.claude/skills/$n"; done
+          test -L "$H/.local/bin/antibeaurocracy"
   hermes-validate:
     runs-on: ubuntu-latest
     steps:

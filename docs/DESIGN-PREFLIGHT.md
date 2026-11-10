@@ -4,7 +4,7 @@ Before any pixel, this receipt ties the title, the stone and the purpose togethe
 
 ## 1. Purpose (the job)
 
-Selenite takes friction off the human. Friction means every effort a person spends that a tool could have spent: manual steps, logins, clicks, things to remember, read or decide. It is an accessibility problem as much as an agent-to-agent one. Selenite clears every other tool in the agent stack (skills, plugins, hooks, approval allowlists, runbooks, peer products), ranks what costs the human most, drafts the fix, and shrinks any step it can't remove to one accessible command. Overload detection is a small input that switches replies to Calm. It is not the product.
+Selenite takes friction off the human. Friction means every effort a person spends that a tool could have spent: manual steps, logins, clicks, things to remember, read or decide. It is an accessibility problem as much as an agent-to-agent one. Selenite clears every other tool in the agent stack (skills, plugins, hooks, approval allowlists, runbooks, Kanban boards), ranks what costs the human most, drafts the fix, and shrinks any step it can't remove to one accessible command. One test runs through three facets: steps handed to a person (Gate), waits between agents that end up on a person's desk (fake gates), and checks that can't change the decision but still delay it (pedantry). Walls stand in all three. Overload detection is a small input that switches replies to Calm. It is not the product.
 
 **Requirement: Selenite needs no cleansing.** It adds no upkeep: nothing to set up after install, state that trims itself, and a CI gate that keeps its own skill clean, so it never appears as the human's finding.
 

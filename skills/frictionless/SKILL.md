@@ -4,7 +4,7 @@ description: Take friction off the human, treated as accessibility. Clears every
 license: MIT
 metadata:
   product: Selenite
-  version: 0.4.0
+  version: 0.5.0
 ---
 
 # frictionless
@@ -21,7 +21,7 @@ Three outcomes, from the stone:
 
 **Selenite needs no cleansing.** This is a requirement. Never hand the human upkeep for Selenite itself: no setup steps after install, no state to prune, no findings about Selenite. Its state trims itself and CI keeps its own skill clean.
 
-Siblings, so nothing is done twice: waits *between* agents (ACKs, relays, parking) belong to `antibeaurocracy`. Rigor *inside* a decision that can't change it (one-sample vetoes, threshold cliffs, re-checks of unchanged work) belongs to `antipedantry`. Selenite owns what lands on the human: their steps, clicks, lookups and approvals, across every tool in the stack. A pedantic check that ends in "a human decides" is both: hand the check to `antipedantry` and the human step to Gate.
+Selenite has three facets of one test (does this step, wait or check earn its cost to the human?), so nothing is done twice. This skill owns what lands on the human: their steps, clicks, lookups and approvals, across every tool in the stack. Waits *between* agents (ACKs, relays, parking) are the `antibeaurocracy` facet. Rigor *inside* a decision that can't change it (one-sample vetoes, threshold cliffs, re-checks of unchanged work) is the `antipedantry` facet. A pedantic check that ends in "a human decides" is both: hand the check to `antipedantry` and the human step to Gate.
 
 Pick the mode from what triggered it. If Calm applies, run it first.
 
@@ -40,7 +40,7 @@ Pick the mode from what triggered it. If Calm applies, run it first.
    - **Hooks:** hook scripts that no longer exist, which fail on every call.
    - **Approvals** the human keeps giving, and **gates** that keep coming back (from the ledger).
    - **Runbooks** that tell a human to do manual steps.
-   - **Peers** that keep their own ledger, such as antibeaurocracy for agent-to-agent waits.
+   - **Fake gates**: cards the `antibeaurocracy` facet's ledger saw blocked on another agent with no real wall (counted once per card, confident verdicts only).
 2. **Rank.** Measured interruptions come first, then structural faults by how often they bite (every call, every use, sometimes, drift). The result is the clarity view.
 3. **Recharge.** Take the top finding and clear it in the repo that owns that stone, as a reviewable change: a fixed frontmatter, a restored script, an allowlist entry, a one-shot command in a runbook. Choose the fix by capability fit, cheapest first: **deterministic code** (a script, hook, allowlist or default) → **classic ML** (a classifier or threshold) → **LLM** (prompt or skill text). Prose is the last resort, because a rule in prose is a request while a hook is a guarantee.
 4. Report in one line: stone → fix → evidence. Cleanse never edits another owner's files silently. A change outside the human's own repos is a proposal.

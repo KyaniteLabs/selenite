@@ -16,9 +16,8 @@ changed: the fixes are proposals for a reviewable change.
 Read-only apart from its own report under $SELENITE_STATE (0600, newest 10
 kept). Paths in the report are shown with the home prefix as ~. Stdlib only.
 
-Stones are checked by small adapters in CHECKS. A peer product that keeps its
-own ledger (antibeaurocracy today) is read as one more stone, through its
-metadata only.
+Stones are checked by small adapters in CHECKS. The fake-gate facet keeps
+its own metadata ledger; it is read as one more stone, by counts only.
 """
 from __future__ import annotations
 
@@ -41,6 +40,7 @@ else:  # run as a script
 
 HOME = Path.home()
 SELF_SKILL = Path(__file__).resolve().parent.parent
+SELF_SKILLS = ("frictionless", "antibeaurocracy", "antipedantry")  # Selenite's three facets, side by side
 KEEP = 10
 DESC_LIMIT = 1024  # Agent Skills spec: description is at most 1024 characters
 APPROVAL_REPEAT = 3  # the same approval this often in the window is an allowlist candidate
@@ -245,38 +245,49 @@ def check_runbooks(ctx: dict) -> list[dict]:
     return out
 
 
-def check_peers(ctx: dict) -> list[dict]:
-    """Peer products read as stones, through their metadata ledgers only."""
+FAKE_EVENTS = ("block_attempt", "blocked_observed")  # a card blocked or about to be; not asks or declarations
+FAKE_MIN_CONF = 0.6  # the facet's own nudge floor: under it the classifier is guessing, not finding
+
+
+def check_fake_gates(ctx: dict) -> list[dict]:
+    """The fake-gate facet's metadata ledger: distinct cards whose block read as agent bureaucracy."""
     out: list[dict] = []
-    f = hermes_home() / "plugin-data/antibeaurocracy/ledger.jsonl"
-    if not f.exists():
-        return out
+    d = hermes_home() / "plugin-data/antibeaurocracy"
     since = time.time() - ctx["days"] * 86400
-    fake = 0
+    cards: set[str] = set()
+    for f in (d / "ledger.1.jsonl", d / "ledger.jsonl"):
+        if f.exists():
+            _fake_cards(f, since, cards)
+    if cards:
+        out.append(finding("fake-gate", "kanban", "fake-waits",
+                           f"{len(cards)} card(s) waited on another agent with no real wall",
+                           "Run `antibeaurocracy audit` and clear the shared cause it names.", n=len(cards)))
+    return out
+
+
+def _fake_cards(f: Path, since: float, cards: set[str]) -> None:
     with f.open(errors="ignore") as fh:
         for line in fh:
             try:
                 r = json.loads(line)
             except ValueError:
                 continue
-            if isinstance(r, dict) and isinstance(r.get("ts"), (int, float)) and r["ts"] >= since \
-                    and str(r.get("verdict", "")).upper().startswith(("FAKE", "F1", "F2", "F3", "F4", "F5", "F6")):
-                fake += 1
-    if fake:
-        out.append(finding("peer", "antibeaurocracy", "fake-waits",
-                           f"antibeaurocracy saw {fake} agent-to-agent waits with no real wall",
-                           "Run `antibeaurocracy audit` and clear the shared cause it names.", n=fake))
-    return out
+            if not (isinstance(r, dict) and isinstance(r.get("ts"), (int, float)) and r["ts"] >= since):
+                continue
+            conf = r.get("conf")
+            if r.get("event") in FAKE_EVENTS and re.match(r"(FAKE|F[1-6])\b", str(r.get("verdict", "")).upper()) \
+                    and isinstance(conf, (int, float)) and conf >= FAKE_MIN_CONF:
+                cards.add(str(r.get("task") or f"row{len(cards)}"))
 
 
 def needs_no_cleansing() -> list[dict]:
     """Selenite needs no cleansing: this must return []. CI runs it on every
     change, so a dirty Selenite never ships and never shows up as the human's
     finding. The runtime sweep does not list Selenite."""
-    return _check_one_skill(SELF_SKILL, "frictionless")
+    return [f for name in SELF_SKILLS for f in _check_one_skill(SELF_SKILL.parent / name, name)]
 
 
-CHECKS = [check_ledger, check_peers, check_hooks, check_skills, check_plugins, check_runbooks]
+CHECKS = [check_ledger, check_fake_gates, check_hooks, check_skills, check_plugins, check_runbooks]
 
 
 def rank(findings: list[dict]) -> list[dict]:

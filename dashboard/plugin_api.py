@@ -39,6 +39,17 @@ cleanse, evolve, ledger, signals = _scripts("cleanse", "evolve", "ledger", "sign
 
 router = APIRouter()
 
+
+def _mount_fake_gates() -> None:
+    """The fake-gate facet's read-only view lives at /fake-gates, under the same one plugin."""
+    spec = importlib.util.spec_from_file_location("selenite_fake_gates_api", Path(__file__).resolve().parent / "fake_gates_api.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    router.include_router(mod.router, prefix="/fake-gates")
+
+
+_mount_fake_gates()
+
 GATE_KINDS = ("gate", "blocked")
 DAY = 86400
 PROPOSAL_CHARS = 20000

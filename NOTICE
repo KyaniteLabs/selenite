@@ -1,0 +1,10 @@
+Selenite
+Copyright (c) 2026 KyaniteLabs
+
+Includes antibeaurocracy and its antipedantry skill (antibeaurocracy_core/,
+bin/, skills/antibeaurocracy/, skills/antipedantry/), merged from
+antibeaurocracy main @a564f2c, also Copyright (c) 2026 KyaniteLabs.
+
+Licensed under the MIT License (see LICENSE). No third-party code is bundled.
+The research notes in skills/antibeaurocracy/references/ cite and summarise
+published work; those works remain under their authors' own terms.

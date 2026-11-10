@@ -1,8 +1,9 @@
 #!/usr/bin/env sh
-# Selenite installer. Links the frictionless skill into each agent harness it
-# finds, and with --hermes also links and enables the Hermes plugin.
-#   ./install.sh             link the skill wherever a harness exists
-#   ./install.sh --hermes    also install the Hermes plugin (it registers the skill itself)
+# Selenite installer. Links its three skills (frictionless, antibeaurocracy,
+# antipedantry) into each agent harness it finds and the `antibeaurocracy` CLI
+# into ~/.local/bin; with --hermes it also links and enables the Hermes plugin.
+#   ./install.sh             link the skills and CLI wherever a harness exists
+#   ./install.sh --hermes    also install the Hermes plugin (it registers all three skills itself)
 #   ./install.sh --dry-run   show what would be linked
 # Idempotent. It only creates symlinks and never overwrites a real file or folder.
 set -eu
@@ -24,12 +25,14 @@ link() {  # link <target> <link-path>
   mkdir -p "$(dirname "$2")"; ln -s "$1" "$2"; echo "link  $2"
 }
 
-# Agent Skills-format homes. Hermes is not listed: its plugin registers the skill,
-# so linking it into the Hermes skills folder as well would load it twice.
-[ -d "$HOME/.claude" ] && link "$SKILL" "$HOME/.claude/skills/frictionless"            # Claude Code
-[ -d "$HOME/.agents" ] && link "$SKILL" "$HOME/.agents/skills/frictionless"            # any agentskills reader
-[ -d "$HOME/.codex" ] && link "$SKILL" "$HOME/.codex/skills/frictionless"              # Codex
-[ -d "$HOME/.config/opencode" ] && link "$SKILL" "$HOME/.config/opencode/skills/frictionless"
+# Agent Skills-format homes. Hermes is not listed: its plugin registers the skills,
+# so linking them into the Hermes skills folder as well would load them twice.
+for NAME in frictionless antibeaurocracy antipedantry; do
+  for H in .claude .agents .codex .config/opencode; do   # Claude Code, any agentskills reader, Codex, OpenCode
+    [ -d "$HOME/$H" ] && link "$ROOT/skills/$NAME" "$HOME/$H/skills/$NAME"
+  done
+done
+link "$ROOT/bin/antibeaurocracy" "$HOME/.local/bin/antibeaurocracy"   # the fake-gate CLI, for any shell
 true  # a missing harness is not an error
 found=0; for d in .claude .agents .codex .config/opencode; do [ -d "$HOME/$d" ] && found=1; done
 [ "$found" = 1 ] || [ "$HERMES" = 1 ] || echo "No agent home found (~/.claude, ~/.agents, ~/.codex, ~/.config/opencode), so nothing was linked."
@@ -37,6 +40,11 @@ found=0; for d in .claude .agents .codex .config/opencode; do [ -d "$HOME/$d" ] 
 if [ "$HERMES" = 1 ]; then
   HH=${HERMES_HOME:-$HOME/.hermes}
   link "$ROOT" "$HH/plugins/selenite"
+  # Selenite now carries the fake-gate facet. A standalone antibeaurocracy plugin would run the same hooks twice.
+  if [ -e "$HH/plugins/antibeaurocracy" ] || [ -L "$HH/plugins/antibeaurocracy" ]; then
+    echo "warn  $HH/plugins/antibeaurocracy is still installed; Selenite includes it now."
+    echo "      Disable it so its hooks don't run twice: hermes plugins disable antibeaurocracy"
+  fi
   if [ "$DRY" = 0 ] && command -v hermes >/dev/null 2>&1; then
     HERMES_HOME=$HH hermes plugins enable selenite || echo "enable it with: hermes plugins enable selenite"
     echo "Restart the Hermes gateway the supported way to load the hooks."
@@ -48,4 +56,4 @@ if [ "$DRY" = 0 ]; then
   mkdir -p "$STATE" && chmod 700 "$STATE"
   if python3 -I "$SKILL/scripts/ledger.py" summary --days 1 >/dev/null; then echo "PASS: ledger works"; else echo "FAIL: ledger"; exit 1; fi
 fi
-echo "Try: python3 $SKILL/scripts/cleanse.py"
+echo "Try: python3 $SKILL/scripts/cleanse.py   (and: antibeaurocracy audit)"

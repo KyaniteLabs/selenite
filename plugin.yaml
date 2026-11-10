@@ -1,35 +1,42 @@
 name: selenite
 label: Selenite
-version: "0.4.0"
+version: "0.5.0"
 manifest_version: 2
 api_version: 1
 description: >
-  Selenite takes friction off the human: fewer manual steps, clicks and things to
-  remember, treated as accessibility. A read-only cleanse pass checks your skills,
-  plugins, hooks, approval prompts and runbooks for what keeps handing work back
-  to you, ranks it by how often it lands on you, and drafts the fix for each one.
-  It needs no upkeep itself. It ships the provider-agnostic `frictionless`
-  skill, a /frictionless command, a ledger tool, and observe-only hooks that log
-  repeating approvals and tasks blocked on a human and switch the agent to a
-  quieter reply style when your messages show overload. Disclosure: the hooks
-  add context to the agent's prompt in Calm mode; they never block, approve or
-  edit anything.
+  Selenite takes friction off the human, treated as accessibility, and clears it
+  at the source. One test runs through all of it: does this step, wait or check
+  earn its cost to the person? Three facets apply it. Gate: steps handed to a
+  person (logins, approvals, manual runbook steps). Fake gates: one agent parking
+  work on another for a reason that isn't real, which ends up as a stale board a
+  person must untangle. Pedantry: checks that cannot change the decision but
+  still delay or escalate it. Walls always stand: credentials, spend, publishing
+  or deploying, destructive, legal, a named freeze, or a question only a person
+  can answer. A read-only cleanse pass ranks what to clear across skills,
+  plugins, hooks, approvals, runbooks and boards; one ledger records what
+  cleared. Selenite needs no upkeep itself. Disclosure: the hooks add context to
+  the agent's prompt in Calm mode, and in fake_gate_mode "nudge" or "ask" they
+  add a note to, or hand back with a question, a kanban block that reads as
+  agent bureaucracy. They never approve, delete or edit a card.
 author: KyaniteLabs
 license: MIT
 requires_hermes: ">=0.23.0"
-tags: [workflow, ergonomics, self-improvement, human-in-the-loop]
-provides_tools: [selenite_ledger]
+tags: [workflow, ergonomics, accessibility, human-in-the-loop, kanban, governance]
+provides_tools: [selenite_ledger, bureaucracy_classify, bureaucracy_audit]
 provides_hooks:
   - pre_llm_call
   - pre_approval_request
   - post_approval_response
   - kanban_task_blocked
   - kanban_task_completed
+  - pre_tool_call
+  - transform_tool_result
+  - on_kanban_dispatch_tick
 config_schema:
   hooks:
     type: bool
     default: true
-    description: "Run the observe-only hooks. Off keeps the skill, command, tool and pages. SELENITE_HOOKS=0 also turns them off."
+    description: "Run every Selenite hook, fake-gate hooks included. Off keeps the skills, commands, tools and pages. SELENITE_HOOKS=0 also turns them off."
   calm_senders:
     type: str
     default: ""
@@ -37,6 +44,49 @@ config_schema:
       Comma-separated sender ids whose messages count toward Calm mode. Empty means
       everyone, which suits a one-person setup. In shared chats, list only yourself so
       other people's messages never switch your agent's reply style.
+  fake_gate_mode:
+    type: str
+    default: nudge
+    description: >
+      What to do when an agent blocks a card for a reason the classifier calls bureaucracy.
+      "observe" only writes to the ledger. "nudge" (default) lets the block through and adds what to do
+      instead to the tool result. "ask" hands an evidenced fake back with a question: what kind of wait
+      is it (needs_input for a wall or a person, dependency, capability, transient)? Any declared kind
+      goes through and is ledgered next to the verdict. Text with a wall-family word (money, prod,
+      deletion, credentials, publishing, legal, freezes, a person's role) is only nudged. It asks up to
+      max_refusals times per card, then lets the block through. "enforce" (0.2) is read as "ask".
+  max_refusals:
+    type: int
+    default: 1
+    description: "In ask mode, how many times one card's block is handed back with a question before it goes through. Counted per card on disk, so it survives worker restarts, and it fails open so a misread never traps an agent."
+  refusal_ttl_hours:
+    type: float
+    default: 168
+    description: "How long a card's refusal count is remembered before it resets. 0 or less means the default (168); under 1 is raised to 1."
+  min_confidence:
+    type: float
+    default: 0.6
+    description: "Only nudge or ask when the classifier is at least this confident and has matched an actual phrase."
+  extra_seats:
+    type: str
+    default: ""
+    description: "Comma-separated names your agents use for each other (for example \"quartermaster, scribe\"). Waiting on one of these counts as waiting on another agent."
+  extra_ceremony:
+    type: str
+    default: ""
+    description: "Comma-separated ceremony phrases specific to your org (for example \"attestation bundle\")."
+  doctrine_section:
+    type: bool
+    default: false
+    description: "Add a short rule about waits between agents to each new session's system prompt. Off by default."
+  fake_gate_ledger:
+    type: bool
+    default: true
+    description: "Record block attempts, declared kinds, questions and fail-opens to plugin-data/antibeaurocracy/ledger.jsonl: event, tool, card id, verdict, declared kind, confidence, mode and session id. Never reason or prompt text."
+  snapshot_minutes:
+    type: int
+    default: 60
+    description: "How often the dispatcher tick refreshes plugin-data/antibeaurocracy/snapshot.json (counts only) and emits selenite:snapshot."
 optional_env:
   - name: SELENITE_STATE
     description: "Where the private ledger and reports live (default ~/.local/state/selenite)"

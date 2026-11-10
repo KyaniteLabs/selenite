@@ -1,9 +1,9 @@
 {
   "name": "selenite",
   "label": "Selenite",
-  "description": "Friction ledger: the human steps your agents keep handing you, and what Selenite proposes to remove them.",
+  "description": "What keeps landing on you: human steps, fake gates between agents and checks that cannot change the decision, ranked, with what cleared.",
   "icon": "Sparkles",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "api": "plugin_api.py",
   "tab": {
     "path": "/selenite",

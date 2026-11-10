@@ -33,9 +33,14 @@ jobs:
           persist-credentials: false
       - name: Unit tests (includes the needs-no-cleansing requirement)
         run: python3 -m pip install --no-cache-dir pytest==8.4.2 fastapi==0.115.12 httpx==0.28.1 && python3 -m pytest -q
+      - name: Package installs and the fake-gate CLI runs
+        run: |
+          V=$(mktemp -d) && python3 -m venv "$V" && "$V/bin/pip" install --no-cache-dir . && "$V/bin/antibeaurocracy" classify "Awaiting ACK from platform"
       - name: install.sh into an empty HOME
         run: |
-          H=$(mktemp -d) && mkdir "$H/.claude" && HOME="$H" sh install.sh && test -L "$H/.claude/skills/frictionless"
+          H=$(mktemp -d) && mkdir "$H/.claude" && HOME="$H" sh install.sh
+          for n in frictionless antibeaurocracy antipedantry; do test -L "$H/.claude/skills/$n"; done
+          test -L "$H/.local/bin/antibeaurocracy"
           HOME="$H" sh install.sh | grep -q "^ok "   # idempotent
       - name: Cleanse runs on an empty HOME with no findings
         run: |

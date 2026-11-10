@@ -23,6 +23,15 @@ class Ctx:
     def register_hook(self, name, fn):
         self.hooks[name] = fn
 
+    def register_cli_command(self, name, **_kw):
+        self.cli = name
+
+    def register_system_prompt_section(self, *a, **kw):
+        pass
+
+    def emit(self, *a, **kw):
+        pass
+
 
 def _kinds():
     return [(r["kind"], r["key"]) for r in ledger.rows()]
@@ -32,10 +41,14 @@ def test_register_matches_manifest():
     ctx = Ctx()
     plugin.register(ctx)
     manifest = (REPO / "plugin.yaml").read_text()
-    assert ctx.skills[0][0] == "frictionless" and ctx.skills[0][1].exists()
-    assert ctx.commands == ["frictionless"] and ctx.tools[0][0] == "selenite_ledger"
-    for hook in ctx.hooks:
-        assert f"  - {hook}\n" in manifest
+    assert [n for n, _ in ctx.skills] == ["frictionless", "antibeaurocracy", "antipedantry"]
+    assert all(path.exists() for _, path in ctx.skills)
+    assert ctx.commands == ["frictionless", "antibeaurocracy", "fake-gate"]
+    assert [t for t, _ in ctx.tools] == ["selenite_ledger", "bureaucracy_classify", "bureaucracy_audit"]
+    assert all(f"  - {hook}\n" in manifest for hook in ctx.hooks)
+    assert manifest.count("\n  - ") - manifest.split("optional_env:")[1].count("\n  - ") == len(ctx.hooks)
+    for tool, _ in ctx.tools:
+        assert tool in manifest.split("provides_tools:")[1].split("\n")[0]
     assert "manifest_version: 2" in manifest and "enabled:" not in manifest
 
 
@@ -44,7 +57,11 @@ def test_versions_agree():
     v_manifest = re.search(r'^version: "([\d.]+)"', (REPO / "plugin.yaml").read_text(), re.M).group(1)
     v_skill = re.search(r"^  version: ([\d.]+)", (REPO / "skills/frictionless/SKILL.md").read_text(), re.M).group(1)
     v_py = re.search(r'^version = "([\d.]+)"', (REPO / "pyproject.toml").read_text(), re.M).group(1)
-    assert v_manifest == v_skill == v_py
+    v_skills = {re.search(r"^  version: ([\d.]+)", (REPO / f"skills/{n}/SKILL.md").read_text(), re.M).group(1)
+                for n in plugin.SKILLS}
+    v_core = re.search(r'^__version__ = "([\d.]+)"', (REPO / "antibeaurocracy_core/__init__.py").read_text(), re.M).group(1)
+    v_dash = json.loads((REPO / "dashboard/manifest.json").read_text())["version"]
+    assert {v_manifest, v_skill, v_py, v_core, v_dash} | v_skills == {v_manifest}
 
 
 def test_one_signal_is_not_calm():
