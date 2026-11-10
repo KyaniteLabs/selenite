@@ -3,11 +3,18 @@
 
   ledger.py add <kind> <key> [--note TEXT] [--agent NAME]
   ledger.py summary [--days N]
+  ledger.py state-dir          print the first state folder that accepts a write
 
 kind: gate | calm | audit | cleanse | approval | blocked | miss | fp | fix | reopen
 key:  a short stable slug for the friction (e.g. gh-login, npm-otp).
 Keys and notes are redacted when written (emails, IPs, tokens, secrets, the
 home path) and truncated: keys to 80 characters, notes to 200.
+
+Where state lives: $SELENITE_STATE wins; then $XDG_STATE_HOME/selenite, then
+$HERMES_HOME/plugin-data/selenite, then ~/.local/state/selenite. An agent seat
+normally has a read-only home and a writable Hermes home, so the third choice is
+what keeps it working there. Every write tries each folder in that order and
+gives up quietly instead of failing the caller.
 """
 from __future__ import annotations
 
@@ -20,7 +27,52 @@ import time
 from collections import Counter
 from pathlib import Path
 
-STATE = Path(os.environ.get("SELENITE_STATE", Path.home() / ".local/state/selenite"))
+
+def _state_from_env() -> Path:
+    """The folder Selenite prefers: explicit, then XDG, then the Hermes home, then ~/.local/state."""
+    explicit = os.environ.get("SELENITE_STATE")
+    if explicit:
+        return Path(explicit).expanduser()
+    xdg = os.environ.get("XDG_STATE_HOME")
+    if xdg:
+        return Path(xdg).expanduser() / "selenite"
+    hermes = os.environ.get("HERMES_HOME")
+    if hermes:
+        return Path(hermes).expanduser() / "plugin-data/selenite"
+    return Path.home() / ".local/state/selenite"
+
+
+def state_dirs() -> list[Path]:
+    """Every folder Selenite may keep state in, most preferred first.
+
+    The list exists because an agent seat is the product's normal home and its
+    home folder is read-only: the preference falls through to a folder that
+    takes the write instead of a traceback.
+    """
+    out = [STATE]
+    xdg = os.environ.get("XDG_STATE_HOME")
+    hermes = os.environ.get("HERMES_HOME")
+    for extra in (Path(xdg).expanduser() / "selenite" if xdg else None,
+                  Path(hermes).expanduser() / "plugin-data/selenite" if hermes else None,
+                  Path.home() / ".local/state/selenite"):
+        if extra is not None and extra not in out:
+            out.append(extra)
+    return out
+
+
+def writable_state() -> Path | None:
+    """The first state folder that accepts a write, or None when all are read-only."""
+    for state in state_dirs():
+        try:
+            state.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError:
+            continue
+        if os.access(state, os.W_OK):
+            return state
+    return None
+
+
+STATE = _state_from_env()
 LEDGER = STATE / "ledger.jsonl"
 ROTATED = STATE / "ledger.1.jsonl"
 ROTATE_BYTES = 4 * 1024 * 1024  # one rotated file is kept; older history is dropped
@@ -54,8 +106,11 @@ def redact(text: str) -> str:
 class _Lock:
     """An advisory lock around rotate-and-append, so two writers never rotate the same file twice."""
 
+    def __init__(self, state: Path | None = None):
+        self.state = STATE if state is None else state
+
     def __enter__(self):
-        self.fd = os.open(STATE / ".ledger.lock", os.O_WRONLY | os.O_CREAT, 0o600)
+        self.fd = os.open(self.state / ".ledger.lock", os.O_WRONLY | os.O_CREAT, 0o600)
         try:
             import fcntl
             fcntl.flock(self.fd, fcntl.LOCK_EX)
@@ -67,33 +122,47 @@ class _Lock:
         os.close(self.fd)  # closing releases the lock
 
 
-def _rotate() -> None:
+def _rotate(state: Path | None = None) -> None:
+    state = STATE if state is None else state
+    ledger, rotated = state / "ledger.jsonl", state / "ledger.1.jsonl"
     try:
-        if LEDGER.stat().st_size >= ROTATE_BYTES:
-            os.replace(LEDGER, ROTATED)
+        if ledger.stat().st_size >= ROTATE_BYTES:
+            os.replace(ledger, rotated)
     except FileNotFoundError:
         pass
 
 
-def add(kind: str, key: str, note: str = "", agent: str = "") -> dict:
+def add(kind: str, key: str, note: str = "", agent: str = "") -> dict | None:
+    """Append one row to the first state folder that takes it.
+
+    Returns the row, or None when every state folder is read-only. A hook that
+    cannot write its own ledger must not fail the agent's turn, so this never
+    raises OSError: an agent seat with a read-only home keeps working.
+    """
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {sorted(KINDS)}")
-    STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
     row = {"ts": time.time(), "kind": kind, "key": redact(key)[:80], "note": redact(note)[:200],
            "agent": redact(agent or os.environ.get("SELENITE_AGENT", ""))[:40]}
-    with _Lock():
-        _rotate()
-        fd = os.open(LEDGER, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-        with os.fdopen(fd, "a") as fh:
-            fh.write(json.dumps(row) + "\n")
-    return row
+    for state in state_dirs():
+        try:
+            state.mkdir(mode=0o700, parents=True, exist_ok=True)
+            with _Lock(state):
+                _rotate(state)
+                fd = os.open(state / "ledger.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+                with os.fdopen(fd, "a") as fh:
+                    fh.write(json.dumps(row) + "\n")
+            return row
+        except OSError:  # read-only home, full disk, no permission: the next folder may take it
+            continue
+    return None
 
 
 def rows(days: int = 3650):
-    """Yield well-formed rows newer than `days`. Malformed lines are skipped."""
+    """Yield well-formed rows newer than `days` from every state folder. Malformed lines are skipped."""
     since = time.time() - days * 86400
-    for path in (ROTATED, LEDGER):
-        yield from _read(path, since)
+    for state in state_dirs():
+        for path in (state / "ledger.1.jsonl", state / "ledger.jsonl"):
+            yield from _read(path, since)
 
 
 def _read(path: Path, since: float):
@@ -149,9 +218,15 @@ def main() -> int:
     a.add_argument("kind"); a.add_argument("key")
     a.add_argument("--note", default=""); a.add_argument("--agent", default="")
     s = sub.add_parser("summary"); s.add_argument("--days", type=int, default=30)
+    sub.add_parser("state-dir", help="print the first state folder that accepts a write")
     ns = ap.parse_args()
     if ns.cmd == "add":
         print(json.dumps(add(ns.kind, ns.key, ns.note, ns.agent)))
+    elif ns.cmd == "state-dir":
+        state = writable_state()
+        if state is None:
+            return 1  # every folder is read-only: the caller prints the one line that fixes it
+        print(state)
     else:
         print(json.dumps(summary(ns.days), indent=2))
     return 0

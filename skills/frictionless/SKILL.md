@@ -82,7 +82,7 @@ A curse is a **late** marker. By then the human's stated rules have usually been
 
 Evolve improves Selenite's signals. It is optional: Selenite needs no cleansing, so skipping Evolve degrades nothing and never creates a task for the human. It never rewrites itself silently.
 
-1. **Collect.** Gate, Calm and Cleanse append to the ledger in `$SELENITE_STATE` (default `~/.local/state/selenite`, outside the repo). The Hermes plugin also logs approvals a person granted once or for a session on a safe command (allowlist candidates; denials, timeouts, the smart approver, payments, MCP prompts and Hermes's own dangerous-command keys are never logged), Kanban tasks blocked on a person, and overload. Calm stays off inside a Kanban worker, where no person is reading. Record mistakes with `ledger.py add miss <key>` and `ledger.py add fp <key>`.
+1. **Collect.** Gate, Calm and Cleanse append to the ledger in the state folder: `$SELENITE_STATE` if set, else `$XDG_STATE_HOME/selenite`, else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite` (outside the repo). A read-only home, which is normal in an agent seat, falls through to the next folder; when none takes the write the pass prints one line and keeps its findings. The Hermes plugin also logs approvals a person granted once or for a session on a safe command (allowlist candidates; denials, timeouts, the smart approver, payments, MCP prompts and Hermes's own dangerous-command keys are never logged), Kanban tasks blocked on a person, and overload. Calm stays off inside a Kanban worker, where no person is reading. Record mistakes with `ledger.py add miss <key>` and `ledger.py add fp <key>`.
 2. **Sweep.** Run `scripts/mine.py` and `scripts/cleanse.py`. Selenite's own skills are held clean by CI (`needs_no_cleansing()`); the sweep scans them like any other stone, so drift on one machine still shows up. Each cleanse run writes a report and one ledger row with its finding count.
 3. **Propose.** Run `scripts/evolve.py`. It writes a proposal from the ledger, the newest miner report and the newest cleanse report. It also counts how many cycles in a row each signal category stayed silent. Silence only counts when it was measured: every category when a new miner report arrived, the Calm categories when Calm logged anything.
 4. **Review.** Draft the accepted changes on a local branch of this repo. Opening a PR is the human's decision, and a human merges it. There is no auto-merge, and the installed copy is never edited.
@@ -101,5 +101,5 @@ Evolve improves Selenite's signals. It is optional: Selenite needs no cleansing,
 - `scripts/cleanse.py`: the cleanse pass and clarity ranking.
 - `scripts/signals.py`: the shared overload detector.
 - `scripts/mine.py`: transcript miner (Claude Code, Codex, Hermes, generic).
-- `scripts/ledger.py`: append and summarize friction events.
+- `scripts/ledger.py`: append and summarize friction events; `ledger.py state-dir` prints the first state folder that accepts a write.
 - `scripts/evolve.py`: Selenite's self-cleanse proposal.

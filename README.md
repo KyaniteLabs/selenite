@@ -23,7 +23,7 @@ Walls always stand: credentials, spend, publishing or deploying, destructive ste
 | `skills/` | The three facet skills (`frictionless`, `antibeaurocracy`, `antipedantry`) in the open [Agent Skills](https://agentskills.io) format. They work with any agent that loads `SKILL.md`: Claude Code, Codex, OpenCode, Hermes and others. |
 | `antibeaurocracy_core/`, `bin/` | The fake-gate classifier and board audit: stdlib Python 3.10+, no dependencies, and the `antibeaurocracy` CLI. |
 | `__init__.py`, `plugin.yaml` | A Hermes plugin. It registers the three skills, the `/frictionless`, `/antibeaurocracy` and `/fake-gate` commands, the `selenite_ledger`, `bureaucracy_classify` and `bureaucracy_audit` tools, and eight hooks. |
-| `install.sh` | Links the skills into each agent it finds and the CLI into `~/.local/bin`, creates the state folder (0700) and checks the ledger works. Add `--hermes` to also link the plugin and enable it in Hermes. Idempotent; it never overwrites a real file or folder, and warns when a real folder hides a skill link. |
+| `install.sh` | Links the skills into each agent it finds and the CLI into `~/.local/bin`, creates the state folder (0700) and checks the ledger works. Add `--hermes` to also link the plugin and enable it in Hermes. Idempotent; it never overwrites a real file or folder, and warns when a real folder hides a skill link. A read-only target (an agent seat, a managed Mac, a container) is skipped, not fatal: every target is attempted and the last line counts linked, skipped and failed. `--no-enable` links the plugin but leaves `hermes plugins enable` to you. |
 | `desktop/` | The Hermes Desktop page, status chip and Kanban badges (`plugin.js`), plus the Chakra Petch subsets it embeds. |
 | `dashboard/` | The web dashboard tab and its backend routes (`plugin_api.py`, plus `fake_gates_api.py` for the fake-gate card), served by Hermes under `/api/plugins/selenite/`. |
 | `assets/` | The icon concept and the Chakra Petch font license (OFL). |
@@ -49,6 +49,10 @@ git clone <this repo> ~/src/selenite && ~/src/selenite/install.sh            # t
 ```
 
 Hermes picks up the plugin on its next gateway restart. In Hermes, the `hooks` setting (or `SELENITE_HOOKS=0`) turns every hook off and keeps everything else. If you ran the standalone antibeaurocracy plugin before, disable it: running both doubles the fake-gate hooks, and the installer warns when it finds one.
+
+One Selenite per machine: if `~/.local/share/selenite` or another Hermes home already has the plugin, `--hermes` reuses that copy instead of adding a second checkout of the same plugin name, which Hermes refuses to admit (`Two workspace members are both named 'selenite'`).
+
+In a sandbox or a seat with a read-only home, the installer skips the folders it cannot write and still links the rest. `--hermes` ends with `hermes plugins enable selenite`; on a source checkout that command may first finish a pending Hermes update and rebuild its desktop app, so pass `--no-enable` when a caller has its own timeout and run the printed command yourself.
 
 Fake-gate settings live under `plugins.entries.selenite.settings`: `fake_gate_mode` (`observe`, `nudge` by default, or `ask`), `max_refusals`, `refusal_ttl_hours`, `min_confidence`, `extra_seats`, `extra_ceremony`, `doctrine_section`, `fake_gate_ledger` and `snapshot_minutes`. `plugin.yaml` says what each does. Start in `observe` or `nudge` and read the ledger before trying `ask`. The CLI and the dashboard card read the same `extra_seats`, `extra_ceremony` and `min_confidence`; `antibeaurocracy audit --seat NAME` adds to the configured seats.
 
@@ -76,9 +80,9 @@ antibeaurocracy audit --judge "llm -m some-model"   # optional second opinion, s
   - `kanban.db` files under `$HERMES_HOME`, opened with SQLite `mode=ro`, for the fake-gate audit, tool and dashboard card. The CLI audit also scans every `~/.hermes*` directory.
   - The CLI audit (not the plugin hooks or tools) reads the agent rule files it finds, such as `~/.claude/CLAUDE.md`, `~/AGENTS.md`, `~/.agents/rules/*.md` and each Hermes home's `SOUL.md`, and prints up to eight example gate lines from each. Selenite's own skills are skipped. Use `--no-rules` to skip this, or `--counts` for numbers only.
 - **Writes:**
-  - The ledger, reports and proposals in `~/.local/state/selenite` (folder 0700, files 0600). Each `cleanse.py` run writes a report there and one ledger row with its finding count. Ledger notes are redacted before they are written.
+  - The ledger, reports and proposals in the state folder (folder 0700, files 0600): `$SELENITE_STATE`, else `$XDG_STATE_HOME/selenite`, else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite`. Each `cleanse.py` run writes a report there and one ledger row with its finding count; if no folder takes the write (a read-only home, the normal case in an agent seat) it prints one line saying so and still prints the findings. Ledger notes are redacted before they are written.
   - `$HERMES_HOME/plugin-data/antibeaurocracy/`: `ledger.jsonl` (0600, rotating at 4 MB: event, tool, card id, verdict, declared kind, confidence, mode and session id, never reason or prompt text), `refusals.json` (per-card question counts in `ask` mode, expiring after `refusal_ttl_hours`) and `snapshot.json` (counts only).
-  - The installer creates symlinks (the skills in each agent's skills folder, the CLI in `~/.local/bin`, and with `--hermes` the plugin in `$HERMES_HOME/plugins`) and the state folder. With `--hermes` it also runs `hermes plugins enable selenite`, which changes Hermes's config.
+  - The installer creates symlinks (the skills in each agent's skills folder, the CLI in `~/.local/bin`, and with `--hermes` the plugin in `$HERMES_HOME/plugins`) and the state folder. A target it cannot write is skipped and counted, never fatal. With `--hermes` it also runs `hermes plugins enable selenite`, which changes Hermes's config; `--no-enable` leaves that command to you.
   - Selenite never edits another tool, card or rule file. Every fix is a proposal or a change you review.
 - **Changes agent behaviour:**
   - In Calm mode, when two overload signals appear, `pre_llm_call` adds a short context note telling the agent to ask nothing and reply in one line.

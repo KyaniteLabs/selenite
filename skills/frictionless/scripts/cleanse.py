@@ -13,9 +13,13 @@ changed: the fixes are proposals for a reviewable change.
   cleanse.py --json             print the report as JSON
   cleanse.py --days N           window for ledger-measured findings (default 30)
 
-Read-only apart from its own report under $SELENITE_STATE (0600, newest 10
+Read-only apart from its own report under the state folder (0600, newest 10
 kept) and, when run from the command line, one ledger row with the finding
-count. Paths in the report are shown with the home prefix as ~. Stdlib only.
+count. The state folder is $SELENITE_STATE, else $XDG_STATE_HOME/selenite, else
+$HERMES_HOME/plugin-data/selenite, else ~/.local/state/selenite; a read-only
+home falls through to the next one and, if none takes it, prints one line and
+still prints the findings. Paths in the report are shown with the home prefix
+as ~. Stdlib only.
 
 Stones are checked by small adapters in CHECKS. The fake-gate facet keeps
 its own metadata ledger; it is read as one more stone, by counts only.
@@ -328,19 +332,42 @@ def run(days: int = 30, paths: list[Path] | None = None) -> dict:
             "errors": errors}
 
 
-def write(report: dict) -> Path:
-    ledger.STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
-    out = ledger.STATE / f"cleanse-{time.strftime('%Y%m%dT%H%M%S')}.json"
-    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as fh:
-        json.dump(report, fh, indent=2)
-    for old in sorted(ledger.STATE.glob("cleanse-*.json"), key=lambda f: f.stat().st_mtime)[:-KEEP]:
-        old.unlink(missing_ok=True)
-    return out
+def write(report: dict) -> Path | None:
+    """Write the report to the first state folder that takes it.
+
+    Returns None when every folder is read-only. A seat with a read-only home
+    must still get its findings, so this is never allowed to raise: losing the
+    report file is survivable, losing 126 findings to a traceback is not.
+    """
+    stamp = time.strftime('%Y%m%dT%H%M%S')
+    for state in ledger.state_dirs():
+        out = state / f"cleanse-{stamp}.json"
+        try:
+            state.mkdir(mode=0o700, parents=True, exist_ok=True)
+            fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        except OSError:
+            continue
+        try:
+            with os.fdopen(fd, "w") as fh:
+                json.dump(report, fh, indent=2)
+        except OSError:  # a full disk can fail mid-write: drop it and try the next folder
+            try:
+                out.unlink()
+            except OSError:
+                pass
+            continue
+        for old in sorted(state.glob("cleanse-*.json"), key=lambda f: f.stat().st_mtime)[:-KEEP]:
+            try:
+                old.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return out
+    return None
 
 
 def latest() -> dict | None:
-    files = sorted(ledger.STATE.glob("cleanse-*.json"), key=lambda f: f.stat().st_mtime)
+    files = sorted((f for state in ledger.state_dirs() for f in state.glob("cleanse-*.json")),
+                   key=lambda f: f.stat().st_mtime)
     for f in reversed(files):
         try:
             return json.loads(f.read_text())
@@ -372,7 +399,10 @@ def main() -> int:
     path = write(report)
     ledger.add("cleanse", "run", note=f"{len(report['findings'])} findings")
     print(json.dumps(report, indent=2) if a.json else render(report))
-    print(f"report: {tilde(path)}", file=sys.stderr)
+    if path is None:  # a read-only home is normal in an agent seat: the findings still print
+        print("state dir not writable, set SELENITE_STATE", file=sys.stderr)
+    else:
+        print(f"report: {tilde(path)}", file=sys.stderr)
     return 0
 
 
