@@ -42,6 +42,12 @@ fail() {  # fail <path> <reason>: recorded, reported at the end, never fatal mid
   echo "FAIL  $1: $2" >&2
 }
 
+writable_parent() {  # 0 when the nearest folder that exists above <path> takes a write
+  _x=$1
+  while [ ! -e "$_x" ] && [ "$_x" != "/" ] && [ "$_x" != "." ]; do _x=$(dirname "$_x"); done
+  [ -w "$_x" ]
+}
+
 link() {  # link <target> <link-path>; never fatal, always continues
   _t=$1 _d=$2
   if [ -L "$_d" ] && [ "$(readlink -f "$_d" 2>/dev/null)" = "$(readlink -f "$_t" 2>/dev/null)" ]; then
@@ -68,7 +74,7 @@ link() {  # link <target> <link-path>; never fatal, always continues
   if [ "$DRY" = 1 ]; then echo "would $_d -> $_t"; return 0; fi
   _p=$(dirname "$_d")
   if ! _e=$(mkdir -p "$_p" 2>&1); then
-    if [ ! -w "$_p" ]; then skip_readonly "$_d"; else fail "$_d" "$_e"; fi
+    if writable_parent "$_d"; then fail "$_d" "$_e"; else skip_readonly "$_d"; fi
     return 0
   fi
   if _e=$(ln -s "$_t" "$_d" 2>&1); then
@@ -76,7 +82,7 @@ link() {  # link <target> <link-path>; never fatal, always continues
   fi
   # A read-only filesystem is the product's normal seat, not a defect: say so
   # and keep going. Anything else (a full disk, a permission wall) is a failure.
-  if [ ! -w "$_p" ]; then skip_readonly "$_d"; else fail "$_d" "$_e"; fi
+  if writable_parent "$_d"; then fail "$_d" "$_e"; else skip_readonly "$_d"; fi
 }
 
 # Agent Skills-format homes. Hermes is not listed: its plugin registers the skills,
