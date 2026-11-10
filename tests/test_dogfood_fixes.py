@@ -1,4 +1,4 @@
-"""Classifier regressions from the 2026-11-10 growth-comms dogfood report.
+"""Classifier regressions from the 2026-11-10 dogfood report.
 
 Catalog/marketplace submissions are publishing walls, and the infinitive form
 after a role ("needs the CEO to approve") reads as a person's approval.

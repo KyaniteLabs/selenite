@@ -107,7 +107,7 @@ if [ "$HERMES" = 1 ]; then
   existing_install() {  # prints the resolved path; returns 1 when there is none
     _me=$(readlink -f "$ROOT")
     for _cand in "$HOME/.local/share/selenite" "$HOME/.hermes/plugins/selenite" "$HH/plugins/selenite" \
-                 "$HOME"/.hermes-org/profiles/*/plugins/selenite; do
+                 "$HOME"/.hermes*/profiles/*/plugins/selenite; do
       if [ -e "$_cand" ] && [ -f "$_cand/plugin.yaml" ]; then
         _got=$(readlink -f "$_cand" 2>/dev/null) || continue
         if [ "$_got" != "$_me" ]; then printf '%s\n' "$_got"; return 0; fi
