@@ -2,6 +2,26 @@
 
 ## 0.5.0 (unreleased)
 
+### Dogfood fixes (2026-11-10)
+
+- **Packaging in a read-only seat:** the defects that only show up in the environment Selenite is
+  built for. `cleanse.py` no longer dies with `OSError: [Errno 30] Read-only file system` after
+  computing its findings: the state folder is `$SELENITE_STATE`, else `$XDG_STATE_HOME/selenite`,
+  else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite`; every write falls
+  through that list, and when none takes it one line says so and the findings still print (exit 0).
+  The ledger treats the same case as "quietly skip the row" instead of failing the agent's turn.
+  `install.sh` no longer aborts at the first read-only target: a read-only target is skipped, a real
+  failure is recorded, every other target is still attempted, `linked / skipped / failed` is the
+  last line, and only a real failure exits non-zero. `--hermes` reuses the Selenite this machine
+  already loads (`~/.local/share/selenite` or another Hermes home) and repoints a link at a second
+  checkout, because two sources with one plugin name are refused by Hermes admission. The
+  `hermes plugins enable` step is last, never fatal, and `--no-enable` skips it: on a source
+  checkout that command may first complete a code update and a desktop rebuild.
+- **classify.py:** catalog/marketplace/store/registry submissions are now publishing walls
+  ("Needs Simon to approve the catalog entry" is a WALL, not F6), and the infinitive form after a
+  role ("needs the CEO to approve", "waiting on the owner to sign off") reads as a person's
+  approval. Proper names are deliberately still not matched (product names are not people).
+
 Selenite, antibeaurocracy and antipedantry are now one product, Selenite, with three facets of one test: does this step, wait or check earn its cost to the person? See `docs/MERGE-INTENT.md` for the intent and what the merge surfaced.
 
 - **One plugin:** the fake-gate hooks, tools, commands and dashboard card now load from the `selenite` Hermes plugin. Disable a standalone antibeaurocracy plugin, or its hooks run twice.
@@ -14,7 +34,6 @@ Selenite, antibeaurocracy and antipedantry are now one product, Selenite, with t
 - **Blocked cards:** a declared kind decides the route first, and the kind an agent declared in `pre_tool_call` carries over to `kanban_task_blocked`. A block Hermes rejects no longer hides the next real one. Any status change clears the badge, not only completion.
 - **Cleanse:** a fake-gate card counts by its latest event, so an ask or a declared kind clears it and a later fake block reopens it. Runbook lines that only mention 2FA, OTP or friction are not counted as steps. Each run writes a report and one ledger row.
 - **Evolve:** a category's silence counts only in cycles that measured it, a damaged state file resets, notes are redacted, and the proposal leaves opening a PR to the human.
-- **Packaging in a read-only seat:** the defect that only shows up in the environment Selenite is built for. `cleanse.py` no longer dies with `OSError: [Errno 30] Read-only file system` after computing its findings: the state folder is `$SELENITE_STATE`, else `$XDG_STATE_HOME/selenite`, else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite`, every write falls through that list, and when none takes it one line says so and the findings still print. The ledger treats the same case as "quietly skip the row" instead of failing the agent's turn. `install.sh` no longer aborts at the first read-only target: each link is attempted, `linked / skipped / failed` is the last line, and only a real failure exits non-zero. `--hermes` reuses the Selenite this machine already loads (`~/.local/share/selenite` or another Hermes home) and repoints a link at a second checkout, because two sources with one plugin name are refused by Hermes admission. The `hermes plugins enable` step is last, never fatal, and `--no-enable` skips it: on a source checkout that command may first complete a code update and a desktop rebuild.
 - **Settings without private imports:** the plugin, the CLI and the dashboard read `extra_seats`, `extra_ceremony`, `min_confidence` and `fake_gate_mode` through `settings.py`, from `$HERMES_HOME/config.yaml` outside Hermes. A bad config is reported, not hidden, and a host with no YAML library reads it with a small stdlib reader. `audit --seat` adds to the configured seats. The stored block kind is read from the documented Kanban DB layout. `hermes plugins validate` passes with no warnings, and both CI workflows now fail on any warning.
 - **Ledger redaction** covers more secret shapes; plain words are left alone. `install.sh` warns when a real folder hides a skill link.
 - **Check Yourself boundary:** `docs/CHECKYOURSELF-BOUNDARY.md` splits the two products by question (truth of a completion claim vs cost of the process to the person). Tests hold Selenite off `kanban_complete` and keep a missing-evidence wait from being nudged or asked.
