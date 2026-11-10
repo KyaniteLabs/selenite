@@ -22,6 +22,8 @@ People keep a selenite wand next to their other crystals to clear and recharge t
 | `tests/` | Unit tests for the scripts, the plugin hooks, the backend routes, and the needs-no-cleansing requirement. |
 | `tools/` | `embed-fonts.py`, which rebuilds the font subsets embedded in `desktop/plugin.js`. |
 
+Siblings: `antibeaurocracy` clears waits between agents, and its `antipedantry` skill clears rigor that can't change a decision. Selenite clears what lands on the human.
+
 One product, one skill: **Selenite** is the product, `frictionless` is its skill, and `selenite_ledger` is its tool.
 
 ## The four modes

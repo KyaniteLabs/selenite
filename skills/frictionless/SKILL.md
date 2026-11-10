@@ -21,6 +21,8 @@ Three outcomes, from the stone:
 
 **Selenite needs no cleansing.** This is a requirement. Never hand the human upkeep for Selenite itself: no setup steps after install, no state to prune, no findings about Selenite. Its state trims itself and CI keeps its own skill clean.
 
+Siblings, so nothing is done twice: waits *between* agents (ACKs, relays, parking) belong to `antibeaurocracy`. Rigor *inside* a decision that can't change it (one-sample vetoes, threshold cliffs, re-checks of unchanged work) belongs to `antipedantry`. Selenite owns what lands on the human: their steps, clicks, lookups and approvals, across every tool in the stack. A pedantic check that ends in "a human decides" is both: hand the check to `antipedantry` and the human step to Gate.
+
 Pick the mode from what triggered it. If Calm applies, run it first.
 
 | Trigger | Mode |
