@@ -740,3 +740,25 @@ def test_no_private_hermes_imports():
     for f in [*ROOT.glob("*.py"), *ROOT.glob("antibeaurocracy_core/*.py"), *ROOT.glob("dashboard/*.py"),
               *ROOT.glob("skills/*/scripts/*.py")]:
         assert not _re.search(r"^\s*(from|import) hermes_cli\b", f.read_text(), _re.M), f
+
+
+# Check Yourself boundary (docs/CHECKYOURSELF-BOUNDARY.md): its gate owns kanban_complete, Selenite owns kanban_block.
+EVIDENCE_WAIT = "blocked: tests not run yet, need executed coverage receipt"
+
+
+@pytest.mark.parametrize("mode", ["observe", "nudge", "ask"])
+def test_completion_is_never_touched(tmp_path, monkeypatch, mode):
+    _, ctx = _load_plugin(tmp_path, monkeypatch, {"fake_gate_mode": mode, "min_confidence": 0.0})
+    args = {"task_id": "t_c", "summary": RELAY, "reason": RELAY}
+    assert ctx.hooks["pre_tool_call"](tool_name="kanban_complete", args=args, session_id="s") is None
+    out = ctx.hooks["transform_tool_result"](tool_name="kanban_complete", args=args, result='{"ok": true}', session_id="s")
+    assert out is None or out == '{"ok": true}'
+    assert not [r for r in _ledger(tmp_path) if r.get("tool") == "kanban_complete"]
+
+
+def test_a_missing_evidence_wait_is_not_nudged_or_asked(tmp_path, monkeypatch):
+    _, ctx = _load_plugin(tmp_path, monkeypatch, {"fake_gate_mode": "ask"})
+    args = {"task_id": "t_e", "reason": EVIDENCE_WAIT}
+    assert ctx.hooks["pre_tool_call"](tool_name="kanban_block", args=args, session_id="s") is None
+    out = ctx.hooks["transform_tool_result"](tool_name="kanban_block", args=args, result='{"ok": true}', session_id="s")
+    assert out is None or out == '{"ok": true}'

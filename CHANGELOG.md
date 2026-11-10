@@ -16,6 +16,7 @@ Selenite, antibeaurocracy and antipedantry are now one product, Selenite, with t
 - **Evolve:** a category's silence counts only in cycles that measured it, a damaged state file resets, notes are redacted, and the proposal leaves opening a PR to the human.
 - **Settings without private imports:** the plugin, the CLI and the dashboard read `extra_seats`, `extra_ceremony`, `min_confidence` and `fake_gate_mode` through `settings.py`, from `$HERMES_HOME/config.yaml` outside Hermes. A bad config is reported, not hidden, and a host with no YAML library reads it with a small stdlib reader. `audit --seat` adds to the configured seats. The stored block kind is read from the documented Kanban DB layout. `hermes plugins validate` passes with no warnings, and both CI workflows now fail on any warning.
 - **Ledger redaction** covers more secret shapes; plain words are left alone. `install.sh` warns when a real folder hides a skill link.
+- **Check Yourself boundary:** `docs/CHECKYOURSELF-BOUNDARY.md` splits the two products by question (truth of a completion claim vs cost of the process to the person). Tests hold Selenite off `kanban_complete` and keep a missing-evidence wait from being nudged or asked.
 - **Imported from** antibeaurocracy main @a564f2c, whose tree is identical to 0.3.0 below.
 
 ## 0.3.0 (antibeaurocracy)

@@ -27,7 +27,7 @@ Walls always stand: credentials, spend, publishing or deploying, destructive ste
 | `desktop/` | The Hermes Desktop page, status chip and Kanban badges (`plugin.js`), plus the Chakra Petch subsets it embeds. |
 | `dashboard/` | The web dashboard tab and its backend routes (`plugin_api.py`, plus `fake_gates_api.py` for the fake-gate card), served by Hermes under `/api/plugins/selenite/`. |
 | `assets/` | The icon concept and the Chakra Petch font license (OFL). |
-| `docs/` | The design system, the design preflight receipt, and `MERGE-INTENT.md` (why the three facets are one product). |
+| `docs/` | The design system, the design preflight receipt, `MERGE-INTENT.md` (why the three facets are one product) and `CHECKYOURSELF-BOUNDARY.md` (where Selenite stops and Check Yourself starts). |
 | `CHANGELOG.md`, `NOTICE` | Release notes, and the attribution for the merged antibeaurocracy and antipedantry code. |
 | `tests/` | Unit tests for the scripts, the plugin hooks, the backend routes, and the needs-no-cleansing requirement. |
 | `tools/` | `embed-fonts.py`, which rebuilds the font subsets embedded in `desktop/plugin.js`. |

@@ -15,7 +15,7 @@ Agents mistake care for value. They veto a model on one answer, read a 0.001 mis
 
 This skill tells rigor from pedantry and gives the move that dissolves the pedantry without dropping the safety work.
 
-Scope: this is Selenite's pedantry facet, for checks *inside* a decision, such as gates, vetoes, thresholds, reviews, re-checks and preregistration. Its sibling facets: waits *between* agents (ACKs, relays, parking) are `antibeaurocracy`; a step handed to a person (manual steps, approvals, lookups, across the whole stack) is `frictionless` Gate mode.
+Scope: this is Selenite's pedantry facet, for checks *inside* a decision, such as gates, vetoes, thresholds, reviews, re-checks and preregistration. Its sibling facets: waits *between* agents (ACKs, relays, parking) are `antibeaurocracy`; a step handed to a person (manual steps, approvals, lookups, across the whole stack) is `frictionless` Gate mode. Whether a claim of done is backed by evidence is a verification tool's question, such as Check Yourself's; this facet asks only whether a check earns its cost, and its answer is advice, never a block.
 
 ## The test
 
