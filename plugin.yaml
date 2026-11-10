@@ -1,28 +1,43 @@
 name: selenite
 label: Selenite
-version: 0.3.0
-requires_hermes: ">=0.21"
+version: "0.4.0"
+manifest_version: 2
+api_version: 1
 description: >
-  Selenite removes friction between people and their agents. It ships the
-  provider-agnostic `frictionless` skill, a /frictionless command, a ledger
-  tool, and observe-only hooks that notice overload, repeating approval
-  prompts and tasks blocked on a human, so the skill can learn from them.
-author: Selenite contributors
+  Selenite takes friction off the human: fewer manual steps, clicks and things to
+  remember, treated as accessibility. A read-only cleanse pass checks your skills,
+  plugins, hooks, approval prompts and runbooks for what keeps handing work back
+  to you, ranks it by how often it lands on you, and drafts the fix for each one.
+  It needs no upkeep itself. It ships the provider-agnostic `frictionless`
+  skill, a /frictionless command, a ledger tool, and observe-only hooks that log
+  repeating approvals and tasks blocked on a human and switch the agent to a
+  quieter reply style when your messages show overload. Disclosure: the hooks
+  add context to the agent's prompt in Calm mode; they never block, approve or
+  edit anything.
+author: KyaniteLabs
 license: MIT
+requires_hermes: ">=0.23.0"
 tags: [workflow, ergonomics, self-improvement, human-in-the-loop]
-enabled: true
-provides_tools:
-  - selenite_ledger
+provides_tools: [selenite_ledger]
 provides_hooks:
   - pre_llm_call
   - pre_approval_request
   - post_approval_response
   - kanban_task_blocked
+  - kanban_task_completed
+config_schema:
+  hooks:
+    type: bool
+    default: true
+    description: "Run the observe-only hooks. Off keeps the skill, command, tool and pages. SELENITE_HOOKS=0 also turns them off."
+  calm_senders:
+    type: str
+    default: ""
+    description: >
+      Comma-separated sender ids whose messages count toward Calm mode. Empty means
+      everyone, which suits a one-person setup. In shared chats, list only yourself so
+      other people's messages never switch your agent's reply style.
 optional_env:
-  - name: SELENITE_HOOKS
-    description: "Set to 0 to turn off all Selenite hooks (the skill and command stay)"
-    prompt: "Enable Selenite hooks? (1/0)"
-    password: false
   - name: SELENITE_STATE
     description: "Where the private ledger and reports live (default ~/.local/state/selenite)"
     prompt: "Selenite state directory (or empty)"

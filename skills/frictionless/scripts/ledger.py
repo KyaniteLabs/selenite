@@ -4,7 +4,7 @@
   ledger.py add <kind> <key> [--note TEXT] [--agent NAME]
   ledger.py summary [--days N]
 
-kind: gate | calm | audit | approval | blocked | miss | fp | fix | reopen
+kind: gate | calm | audit | cleanse | approval | blocked | miss | fp | fix | reopen
 key:  a short stable slug for the friction (e.g. gh-login, npm-otp).
 Notes must not contain secrets; they are truncated to 200 characters.
 """
@@ -20,13 +20,24 @@ from pathlib import Path
 
 STATE = Path(os.environ.get("SELENITE_STATE", Path.home() / ".local/state/selenite"))
 LEDGER = STATE / "ledger.jsonl"
-KINDS = {"gate", "calm", "audit", "approval", "blocked", "miss", "fp", "fix", "reopen"}
+ROTATED = STATE / "ledger.1.jsonl"
+ROTATE_BYTES = 4 * 1024 * 1024  # one rotated file is kept; older history is dropped
+KINDS = {"gate", "calm", "audit", "cleanse", "approval", "blocked", "miss", "fp", "fix", "reopen"}
+
+
+def _rotate() -> None:
+    try:
+        if LEDGER.stat().st_size >= ROTATE_BYTES:
+            os.replace(LEDGER, ROTATED)
+    except FileNotFoundError:
+        pass
 
 
 def add(kind: str, key: str, note: str = "", agent: str = "") -> dict:
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {sorted(KINDS)}")
     STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
+    _rotate()
     row = {"ts": time.time(), "kind": kind, "key": key[:80], "note": note[:200],
            "agent": agent or os.environ.get("SELENITE_AGENT", "")}
     fd = os.open(LEDGER, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
@@ -38,9 +49,14 @@ def add(kind: str, key: str, note: str = "", agent: str = "") -> dict:
 def rows(days: int = 3650):
     """Yield well-formed rows newer than `days`. Malformed lines are skipped."""
     since = time.time() - days * 86400
-    if not LEDGER.exists():
+    for path in (ROTATED, LEDGER):
+        yield from _read(path, since)
+
+
+def _read(path: Path, since: float):
+    if not path.exists():
         return
-    with LEDGER.open(errors="ignore") as fh:
+    with path.open(errors="ignore") as fh:
         for line in fh:
             try:
                 r = json.loads(line)

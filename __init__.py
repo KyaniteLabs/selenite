@@ -1,23 +1,29 @@
-"""Selenite: a Hermes plugin wrapping the provider-agnostic `frictionless` skill.
+"""Selenite: takes friction off the human, treated as accessibility.
 
-Registers:
+Selenite is the stone used to clear the other stones, and it needs no
+cleansing itself: no upkeep, self-trimming state. This Hermes plugin wraps
+the provider-agnostic `frictionless` skill and registers:
+
   skill    selenite:frictionless   (skills/frictionless/SKILL.md)
-  command  /frictionless [gate|audit|calm|evolve] [text]
-  tool     selenite_ledger         (add / summary of friction events)
-  hooks    pre_llm_call            -> Calm-mode context when overload shows
-           pre_approval_request    -> logs repeating approval prompts
-           post_approval_response  -> logs the human's choice
-           kanban_task_blocked     -> logs tasks blocked on a human
+  command  /frictionless [cleanse|gate|calm|evolve] [text]
+  tool     selenite_ledger         (add, summary, cleanse)
+  hooks    pre_llm_call            -> Calm-mode context on the two-signal rule
+           pre_approval_request    -> one row per human approval prompt
+           post_approval_response  -> a human "always" logs that approval as fixed
+           kanban_task_blocked     -> logs tasks blocked on a human (no reason text)
+           kanban_task_completed   -> clears that task's blocked badge
 
 Hooks only observe and add context. They never block, approve or edit.
-Set SELENITE_HOOKS=0 to disable them.
+Turn them off with the `hooks` setting or SELENITE_HOOKS=0.
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
+import re
 import sys
+from collections import OrderedDict
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -43,25 +49,56 @@ def _scripts(*names: str):
     return [importlib.import_module(f"{pkg}.{n}") for n in names]
 
 
-ledger, signals = _scripts("ledger", "signals")
+cleanse, ledger, signals = _scripts("cleanse", "ledger", "signals")
 
-MODES = ("gate", "audit", "calm", "evolve")
+MODES = ("cleanse", "gate", "calm", "evolve")
+ALIASES = {"audit": "cleanse"}  # the 0.3 name for the same pass
 
 CALM_CONTEXT = (
-    "[selenite] Overload signals in the human's message ({reasons}). Use the "
+    "[selenite] Overload signals in the human's messages ({reasons}). Use the "
     "frictionless skill's Calm mode: find and fix the skipped rule first, ask no "
     "clarifying questions, pick the sensible default and act, reply with a "
-    "one-line result plus one next action, and verify against live state."
+    "one-line result plus one next action, and verify against live state. "
+    "Authority walls still stand: spending, deleting, publishing, changing "
+    "visibility and new credentials still need explicit approval."
 )
 
-_GATE_WORDS = ("human", "approval", "approve", "login", "log in", "token", "2fa",
-               "otp", "credential", "manual", "owner", "ceo", "needs ")
+# A blocked Kanban task counts as waiting on a human only on these whole words.
+_GATE_RE = re.compile(
+    r"\b(human|approv(al|e|ed)|log ?in|sign ?in|2fa|otp|credentials?|api key|"
+    r"manual(ly)?|needs? (the )?(owner|user|operator|ceo))\b", re.I)
 
-_streak: dict[str, int] = {}
+STREAK_MAX = 256  # sessions remembered for the two-signal rule
+_streak: "OrderedDict[str, bool]" = OrderedDict()  # session -> previous message had a reason
+_ctx = None
+
+
+def _cfg(key: str, default):
+    try:
+        val = _ctx.get_config(key, default) if _ctx is not None else default
+    except Exception:
+        val = default
+    return default if val is None else val
 
 
 def _hooks_on() -> bool:
-    return os.environ.get("SELENITE_HOOKS", "1") != "0"
+    if os.environ.get("SELENITE_HOOKS", "1") == "0":
+        return False
+    return bool(_cfg("hooks", True))
+
+
+def _calm_sender_ok(sender_id) -> bool:
+    """In shared chats, only the configured people count toward Calm."""
+    allowed = {s.strip() for s in str(_cfg("calm_senders", "")).split(",") if s.strip()}
+    return not allowed or (sender_id is not None and str(sender_id) in allowed)
+
+
+def _remember(key: str, had_reason: bool) -> bool:
+    prev = _streak.pop(key, False)
+    _streak[key] = had_reason
+    while len(_streak) > STREAK_MAX:
+        _streak.popitem(last=False)
+    return prev
 
 
 def _safe(fn):
@@ -78,56 +115,73 @@ def _safe(fn):
 # --- hooks -----------------------------------------------------------------
 
 @_safe
-def pre_llm_call(session_id=None, user_message=None, parent_session_id=None, **_kw):
+def pre_llm_call(session_id=None, user_message=None, parent_session_id=None, sender_id=None, **_kw):
     if not _hooks_on() or parent_session_id or not isinstance(user_message, str):
         return None
-    reasons = signals.overload(user_message)
-    key = session_id or "-"
-    if not reasons:
-        _streak.pop(key, None)
+    if not _calm_sender_ok(sender_id):
         return None
-    _streak[key] = _streak.get(key, 0) + 1
-    ledger.add("calm", "+".join(sorted(reasons)), agent="hermes")
-    ctx = CALM_CONTEXT.format(reasons=", ".join(reasons))
-    if _streak[key] >= 2:
-        ctx += " Second signal in a row: stop explaining and only act."
-    return {"context": ctx}
+    reasons = signals.overload(user_message)
+    previous = _remember(session_id or "-", bool(reasons))
+    if not signals.calm_due(reasons, previous):
+        return None
+    ledger.add("calm", "+".join(sorted(set(reasons))), agent="hermes")
+    return {"context": CALM_CONTEXT.format(reasons=", ".join(sorted(set(reasons))))}
 
 
 @_safe
-def pre_approval_request(pattern_key=None, surface=None, **_kw):
-    if _hooks_on():
-        ledger.add("approval", str(pattern_key or "unknown"), note=f"surface={surface}", agent="hermes")
+def pre_approval_request(pattern_key=None, surface=None, coalesced=False, **_kw):
+    # One row per prompt a human actually sees: the smart approver and
+    # follower prompts folded into another one are not human interruptions.
+    if not _hooks_on() or coalesced or surface == "smart":
+        return
+    ledger.add("approval", str(pattern_key or "unknown")[:80], note=f"surface={surface}", agent="hermes")
 
 
 @_safe
-def post_approval_response(pattern_key=None, choice=None, **_kw):
-    # "always" means the human just did the allowlisting by hand: a fix candidate.
-    if _hooks_on() and choice in ("once", "session"):
-        ledger.add("approval", f"{pattern_key}:{choice}", agent="hermes")
+def post_approval_response(pattern_key=None, choice=None, decided_by=None, **_kw):
+    # A human "always" allowlisted it by hand: that approval stops interrupting.
+    if _hooks_on() and choice == "always" and decided_by != "aux_llm" and pattern_key:
+        ledger.add("fix", f"approval:{str(pattern_key)[:70]}", note="allowlisted by the human", agent="hermes")
 
 
 @_safe
 def kanban_task_blocked(task_id=None, reason=None, assignee=None, **_kw):
-    if not _hooks_on() or not reason:
+    if not _hooks_on() or not task_id or not isinstance(reason, str):
         return
-    low = reason.lower()
-    if any(w in low for w in _GATE_WORDS) or "human_gate" in signals.classify(reason):
-        ledger.add("blocked", f"kanban:{task_id}", note=reason[:200], agent=assignee or "hermes")
+    if _GATE_RE.search(reason) or "human_gate" in signals.classify(reason):
+        # The reason text stays on the board; the ledger keeps only the task id.
+        ledger.add("blocked", f"kanban:{task_id}", note="waiting on a human", agent=str(assignee or "hermes")[:40])
+
+
+@_safe
+def kanban_task_completed(task_id=None, **_kw):
+    if not _hooks_on() or not task_id:
+        return
+    key = f"kanban:{task_id}"
+    if any(r["kind"] == "blocked" and r["key"] == key for r in ledger.rows(90)):
+        ledger.add("fix", key, note="task completed", agent="hermes")
 
 
 # --- command ---------------------------------------------------------------
 
 def frictionless_command(raw_args: str) -> str:
-    parts = (raw_args or "").strip().split(None, 1)
-    mode = parts[0].lower() if parts and parts[0].lower() in MODES else ""
-    rest = parts[1] if mode and len(parts) > 1 else ("" if mode else (raw_args or "").strip())
+    raw = (raw_args or "").strip()
+    parts = raw.split(None, 1)
+    word = parts[0].lower() if parts else ""
+    mode = ALIASES.get(word, word) if ALIASES.get(word, word) in MODES else ""
+    rest = (parts[1] if len(parts) > 1 else "") if mode else raw
     head = "Load and follow the frictionless skill (skill_view name='selenite:frictionless').\n\n"
     if mode == "evolve":
         return head + (
-            "Run Evolve mode: run skills/frictionless/scripts/mine.py at low priority, "
+            "Run Evolve mode: run skills/frictionless/scripts/mine.py and cleanse.py at low priority, "
             "then evolve.py, read the proposal, and open one PR against the Selenite repo "
             "with the accepted changes. Never edit the installed copy directly.\n"
+            f"Plugin root: {ROOT}\n" + (f"Focus: {rest}\n" if rest else "")
+        )
+    if mode == "cleanse":
+        return head + (
+            "Run Cleanse mode: run skills/frictionless/scripts/cleanse.py (read-only), take the top "
+            "finding, and clear it with a reviewable change in the repo that owns that stone.\n"
             f"Plugin root: {ROOT}\n" + (f"Focus: {rest}\n" if rest else "")
         )
     if mode:
@@ -140,13 +194,14 @@ def frictionless_command(raw_args: str) -> str:
 LEDGER_SCHEMA = {
     "name": "selenite_ledger",
     "description": (
-        "Log or summarize friction events for the Selenite frictionless skill. "
-        "action=add records one event (kind, key, note); action=summary returns the top recurring frictions."
+        "Selenite's ledger and cleanse pass. action=add records one friction event (kind, key, note); "
+        "action=summary returns the top recurring frictions; action=cleanse ranks what to clear across "
+        "the stack (skills, plugins, hooks, approvals, gates) and returns the top findings with fixes."
     ),
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["add", "summary"]},
+            "action": {"type": "string", "enum": ["add", "summary", "cleanse"]},
             "kind": {"type": "string", "enum": sorted(ledger.KINDS)},
             "key": {"type": "string", "description": "short stable slug, e.g. gh-login"},
             "note": {"type": "string", "description": "no secrets; max 200 chars"},
@@ -162,6 +217,11 @@ def selenite_ledger(args: dict, **_kw) -> str:
         if args.get("action") == "add":
             row = ledger.add(args["kind"], args["key"], args.get("note", ""), "hermes")
             return json.dumps({"success": True, "row": row})
+        if args.get("action") == "cleanse":
+            report = cleanse.run(int(args.get("days", 30)))
+            cleanse.write(report)
+            return json.dumps({"success": True, "findings": report["findings"][:15],
+                               "total": len(report["findings"]), "by_stone": report["by_stone"]})
         return json.dumps({"success": True, **ledger.summary(int(args.get("days", 30)))})
     except Exception as exc:
         return json.dumps({"success": False, "error": str(exc)})
@@ -170,12 +230,15 @@ def selenite_ledger(args: dict, **_kw) -> str:
 # --- registration ----------------------------------------------------------
 
 def register(ctx) -> None:
+    global _ctx
+    _ctx = ctx
     ctx.register_skill("frictionless", SKILL_DIR / "SKILL.md",
-                       description="Remove friction between a human and their agents.")
+                       description="Clear and recharge every other tool in the stack so fewer steps reach the human.")
     ctx.register_command(name="frictionless", handler=frictionless_command,
-                         description="Selenite: shrink human steps, audit friction, calm mode, evolve",
-                         args_hint="[gate|audit|calm|evolve] [context]")
+                         description="Selenite: cleanse the stack, shrink a human step, calm mode, evolve",
+                         args_hint="[cleanse|gate|calm|evolve] [context]")
     ctx.register_tool(name="selenite_ledger", toolset="selenite", schema=LEDGER_SCHEMA,
                       handler=selenite_ledger, description=LEDGER_SCHEMA["description"], emoji="🤍")
-    for hook in (pre_llm_call, pre_approval_request, post_approval_response, kanban_task_blocked):
+    for hook in (pre_llm_call, pre_approval_request, post_approval_response,
+                 kanban_task_blocked, kanban_task_completed):
         ctx.register_hook(hook.__name__, hook)

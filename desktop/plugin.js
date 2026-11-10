@@ -154,7 +154,7 @@ const EN = {
   },
   evolve: {
     title: 'Evolve', none: 'no proposal yet', drafted: when => `drafted ${when}`,
-    about: 'A proposal turns the ledger into changes Selenite would make to itself. You review it as a pull request; nothing changes silently.',
+    about: 'A proposal turns the ledger into ways to sharpen Selenite. Optional: skipping it degrades nothing. You review it as a pull request; nothing changes silently.',
     draft: 'Draft proposal', drafting: 'Drafting…', copy: 'Copy /frictionless evolve', region: 'Latest evolve proposal'
   },
   signals: { title: 'Signal health', sub: 'Silent twice in a row → pruned', silent: 'silent' },
@@ -497,7 +497,7 @@ export default {
 
     ctx.registerMany([
       { id: 'page', area: ROUTES_AREA, data: { path: PATH }, render: () => jsx(SelenitePage, { ctx, prefs, update, refreshStatus: pull }) },
-      { id: 'nav', area: SIDEBAR_NAV_AREA, data: { path: PATH, label: tNow('name'), codicon: 'ruby' } },
+      { id: 'nav', area: SIDEBAR_NAV_AREA, data: { path: PATH, label: tNow('name'), codicon: 'wand' } },
       { id: 'chip', area: STATUSBAR_AREAS.right, order: 105, render: () => jsx(Chip, { prefs, status }) },
       { id: 'open', area: PALETTE_AREA, data: { id: 'selenite.open', label: tNow('palette.open'), keywords: ['friction', 'gate', 'calm', 'ledger'], run: () => host.navigate(PATH) } },
       { id: 'draft', area: PALETTE_AREA, data: { id: 'selenite.draft', label: tNow('palette.draft'), keywords: ['evolve', 'proposal', 'improve'],
@@ -509,6 +509,6 @@ export default {
       } }] : [])
     ])
 
-    ctx.registerSettingsPage?.({ id: 'settings', title: tNow('name'), icon: 'ruby', render: () => jsx(Settings, { prefs, update, status }) })
+    ctx.registerSettingsPage?.({ id: 'settings', title: tNow('name'), icon: 'wand', render: () => jsx(Settings, { prefs, update, status }) })
   }
 }

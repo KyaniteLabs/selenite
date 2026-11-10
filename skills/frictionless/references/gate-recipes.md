@@ -5,10 +5,10 @@ One-shot patterns for human steps that come up often. Every recipe ends with a c
 ## Paste a secret into a store without echoing it
 
 ```bash
-read -rsp "Paste token: " T && printf %s "$T" | <store-cmd> --stdin && unset T && <verify-cmd> && echo PASS || echo FAIL
+read -rsp "Paste token: " T; printf %s "$T" | <store-cmd> --stdin; S=$?; unset T; [ $S -eq 0 ] && <verify-cmd> && echo PASS || echo FAIL
 ```
 
-Swap `<store-cmd>` for the real sink, for example `gh secret set NAME`, `pass insert -m name` or `security add-generic-password`. Never put the secret in argv.
+Swap `<store-cmd>` for the real sink, for example `gh secret set NAME`, `pass insert -m name` or `security add-generic-password`. The secret is cleared from the shell even when the store command fails. Never put the secret in argv.
 
 ## CLI login that opens the browser
 

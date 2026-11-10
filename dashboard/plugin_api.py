@@ -1,8 +1,10 @@
 """Selenite backend routes, mounted by Hermes at /api/plugins/selenite/.
 
-Read-mostly views over the local friction ledger for the desktop page and the
-dashboard tab. The only writes are a human logging a fix, a missed signal or a
-false positive, and drafting an evolve proposal. The ledger stays on the host
+Read-mostly views over the local friction ledger and the latest cleanse
+report, for the desktop page and the dashboard tab. The only writes are a
+human logging a fix, a missed signal or a false positive, running a cleanse
+pass (read-only over the stack; it writes only its own report), and drafting
+an evolve proposal. The ledger stays on the host
 that runs the agent; clients read it through the Hermes gateway, and these
 routes make no other network calls.
 """
@@ -33,7 +35,7 @@ def _scripts(*names: str):
     return [importlib.import_module(f"{pkg}.{n}") for n in names]
 
 
-evolve, ledger, signals = _scripts("evolve", "ledger", "signals")
+cleanse, evolve, ledger, signals = _scripts("cleanse", "evolve", "ledger", "signals")
 
 router = APIRouter()
 
@@ -123,7 +125,7 @@ def overview(days: int = Days) -> dict:
             if ts >= g["last"]:
                 g["last"], g["note"] = ts, r.get("note", "")
         elif k == "approval":
-            approvals[key.split(":")[0]] += 1
+            approvals[key] += 1
         elif k == "calm":
             calm_reasons.update(key.split("+"))
 
@@ -195,3 +197,30 @@ def draft(days: int = Days) -> dict:
     if last and time.time() - last.stat().st_mtime < DRAFT_COOLDOWN:
         return {"proposal": _proposal_view(last), "reused": True}
     return {"proposal": _proposal_view(evolve.build(days)), "reused": False}
+
+
+CLEANSE_COOLDOWN = 60  # seconds: a repeat run inside this returns the last report
+
+
+def _cleanse_view(report: dict | None) -> dict | None:
+    if not report:
+        return None
+    return {"generated": report.get("generated"), "total": len(report.get("findings", [])),
+            "by_stone": report.get("by_stone", {}), "findings": report.get("findings", [])[:25],
+            "errors": report.get("errors", [])}
+
+
+@router.get("/cleanse")
+def cleanse_latest() -> dict:
+    """Clarity: the latest ranked view of what to clear across the stack."""
+    return {"cleanse": _cleanse_view(cleanse.latest())}
+
+
+@router.post("/cleanse")
+def cleanse_run(days: int = Days) -> dict:
+    files = sorted(ledger.STATE.glob("cleanse-*.json"), key=lambda p: p.stat().st_mtime)
+    if files and time.time() - files[-1].stat().st_mtime < CLEANSE_COOLDOWN:
+        return {"cleanse": _cleanse_view(cleanse.latest()), "reused": True}
+    report = cleanse.run(days)
+    cleanse.write(report)
+    return {"cleanse": _cleanse_view(report), "reused": False}

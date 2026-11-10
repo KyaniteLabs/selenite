@@ -5,12 +5,15 @@ Reads agent transcripts (read-only), finds user-authored lines that signal
 friction, and writes an aggregate report plus a private sample file.
 
 Adapters: claude-code (~/.claude/projects/**.jsonl), codex
-(~/.codex/sessions/**.jsonl), hermes (~/.hermes/state.db, read-only), and
-generic (any *.jsonl/*.md/*.txt path passed with --path).
+(~/.codex/sessions/**.jsonl), hermes ($HERMES_HOME/state.db, read-only), and
+generic (--path): *.jsonl rows whose role is "user", or a single text file
+you name directly, which is then read as your own words line by line.
 
-Privacy: the aggregate report holds only counts and category names. Raw
-excerpts go to the private samples file under $SELENITE_STATE (default
-~/.local/state/selenite), mode 0600, never into the repo.
+Privacy: the aggregate report holds only counts and category names, and no
+host name. Excerpts go to a private samples file under $SELENITE_STATE
+(default ~/.local/state/selenite), mode 0600, never into the repo. Samples
+are redacted (emails, IPs, URLs with credentials, long tokens, the home path)
+and only the newest SAMPLE_KEEP files are kept.
 
 Stdlib only. Run at low priority:  nice -n 19 python3 mine.py --days 45
 """
@@ -19,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -27,6 +31,22 @@ from pathlib import Path
 
 HOME = Path.home()
 STATE = Path(os.environ.get("SELENITE_STATE", HOME / ".local/state/selenite"))
+SAMPLE_KEEP = 3
+REPORT_KEEP = 10
+
+_REDACT = [
+    (re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+"), "<email>"),
+    (re.compile(r"\b\d{1,3}(\.\d{1,3}){3}\b"), "<ip>"),
+    (re.compile(r"://[^/\s:@]+:[^@\s]+@"), "://<cred>@"),
+    (re.compile(r"\b(?=[A-Za-z0-9_\-]*\d)[A-Za-z0-9_\-]{32,}\b"), "<token>"),
+]
+
+
+def redact(text: str) -> str:
+    text = text.replace(str(HOME), "~")
+    for pat, sub in _REDACT:
+        text = pat.sub(sub, text)
+    return text
 
 if __package__:  # loaded as selenite_frictionless.mine by a Hermes host
     from .signals import classify
@@ -98,12 +118,24 @@ def iter_hermes(db: Path, since: float):
 
 
 def iter_generic(path: Path, since: float):
-    files = [path] if path.is_file() else [p for p in path.rglob("*") if p.suffix in (".jsonl", ".md", ".txt")]
+    """Generic source. A folder yields only *.jsonl rows marked role=user; a
+    text file named directly is read as the human's own words."""
+    if path.is_file() and path.suffix != ".jsonl":
+        if path.stat().st_mtime >= since:
+            for line in path.open(errors="ignore"):
+                yield "generic", path.parent.name, line
+        return
+    files = [path] if path.is_file() else sorted(path.rglob("*.jsonl"))
     for f in files:
         if f.stat().st_mtime < since:
             continue
         for line in f.open(errors="ignore"):
-            yield "generic", f.parent.name, line
+            try:
+                o = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(o, dict) and o.get("role") == "user":
+                yield "generic", f.parent.name, _text_of(o.get("content"))
 
 
 def _write_private(path: Path, text: str) -> None:
@@ -113,11 +145,15 @@ def _write_private(path: Path, text: str) -> None:
         fh.write(text)
 
 
+def _prune(folder: Path, pattern: str, keep: int) -> None:
+    for old in sorted(folder.glob(pattern), key=lambda f: f.stat().st_mtime)[:-keep]:
+        old.unlink(missing_ok=True)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--days", type=int, default=45)
     ap.add_argument("--path", action="append", default=[], help="extra generic source")
-    ap.add_argument("--host", default=os.uname().nodename)
     ap.add_argument("--samples", type=int, default=8, help="private samples per category")
     ap.add_argument("--out", type=Path, default=STATE)
     a = ap.parse_args()
@@ -126,7 +162,7 @@ def main() -> int:
     sources = [
         iter_claude(HOME / ".claude/projects", since),
         iter_codex(HOME / ".codex/sessions", since),
-        iter_hermes(HOME / ".hermes/state.db", since),
+        iter_hermes(Path(os.environ.get("HERMES_HOME") or HOME / ".hermes") / "state.db", since),
         *[iter_generic(Path(p).expanduser(), since) for p in a.path],
     ]
     counts: Counter = Counter()
@@ -141,7 +177,7 @@ def main() -> int:
                     counts[cat] += 1
                     by_agent[agent][cat] += 1
                     if len(samples[cat]) < a.samples:
-                        samples[cat].append({"agent": agent, "scope": scope, "text": text[:300]})
+                        samples[cat].append({"agent": agent, "text": redact(text[:300])})
         except (OSError, sqlite3.Error) as e:
             print(f"selenite-mine: skipped a source: {e}", file=sys.stderr)
 
@@ -149,16 +185,18 @@ def main() -> int:
     stamp = time.strftime("%Y%m%dT%H%M%S")
     report = {
         "schema": "selenite.friction-report/1",
-        "host": a.host, "generated": stamp, "window_days": a.days,
+        "generated": stamp, "window_days": a.days,
         "user_messages_scanned": seen,
         "counts": dict(counts.most_common()),
         "by_agent": {k: dict(v) for k, v in by_agent.items()},
     }
-    _write_private(a.out / f"report-{a.host}-{stamp}.json", json.dumps(report, indent=2))
-    sp = a.out / f"samples-{a.host}-{stamp}.json"
+    _write_private(a.out / f"report-{stamp}.json", json.dumps(report, indent=2))
+    sp = a.out / f"samples-{stamp}.json"
     _write_private(sp, json.dumps(samples, indent=2))
+    _prune(a.out, "samples-*.json", SAMPLE_KEEP)
+    _prune(a.out, "report-*.json", REPORT_KEEP)
     print(json.dumps(report, indent=2))
-    print(f"private samples: {sp}", file=sys.stderr)
+    print(f"private samples: {redact(str(sp))}", file=sys.stderr)
     return 0
 
 

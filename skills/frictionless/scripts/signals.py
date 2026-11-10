@@ -32,11 +32,11 @@ CATEGORIES: dict[str, list[str]] = {
         r"\bfor the (nth|\d+(st|nd|rd|th)) time\b", r"\bevery ?time now\b",
     ],
     "stopping_short": [
-        r"\bwhy did(n'?t)? you (stop|finish)\b", r"\bkeep going\b", r"\byou stopped\b",
+        r"\bwhy did(n'?t)? you (stop|finish)\b", r"\byou stopped\b", r"\bwhy (did|are) you (stop|wait)",
         r"\bfinish (it|the job)\b", r"\barbitrar(il)?y waiting\b",
     ],
     "curse": [
-        r"\bwtf\b", r"\bf+u+c+k", r"\bshit\b", r"\bdamn\b", r"\bffs\b",
+        r"\bwtf\b", r"\bf+u+c+k", r"\bshit\b", r"\bdamn it\b", r"\bffs\b",
     ],
     "frustration": [
         r"\bugh\b", r"\bannoy(ing|ed)\b", r"\bfrustrat", r"\bwaste of time\b", r"\btedious\b",
@@ -57,11 +57,12 @@ NOISE = re.compile(
 # Categories that mean "switch to Calm mode now".
 OVERLOAD = {"curse", "frustration", "over_asking", "stopping_short", "repeat_work"}
 
-# Common transpositions, split words, stuck keys, ??? runs, and words glued
-# with a missing space ("an dplatform"). Rough on purpose: it measures load.
+# Whole-word transpositions, stuck keys and ??? runs. Whole words only:
+# "cannot", "robot" and "screenshot" must never count. It measures load, not
+# spelling, and one hit is never enough (see overload()).
 _TYPO = re.compile(
-    r"\b\w*(?:teh|adn|hte|taht|wiht|yoiu|tge|ahve|waht|thsi|jsut|ot)\b(?<!\bnot)(?<!\bgot)(?<!\blot)(?<!\bhot)(?<!\bdot)(?<!\bpot)(?<!\bbot)(?<!\bshot)(?<!\bspot)"
-    r"|(\w)\1{3,}|\?{3,}|\b(?:an|th|ot|fo|ti|si) [a-z]{3,}\b",
+    r"\b(?:teh|adn|hte|taht|wiht|yoiu|tge|ahve|waht|thsi|jsut|becuase|plese|pleae|thier)\b"
+    r"|([a-z])\1{3,}|\?{3,}",
     re.I,
 )
 
@@ -108,15 +109,29 @@ def classify(text: str) -> list[str]:
     return [c for c, pats in COMPILED.items() if any(p.search(text) for p in pats)]
 
 
+def typo_hits(text: str) -> int:
+    return len(_TYPO.findall(text))
+
+
 def typo_density(text: str) -> float:
     """Rough typo hits per 100 words. A load signal, not a spelling check."""
     words = max(1, len(text.split()))
-    return 100.0 * len(_TYPO.findall(text)) / words
+    return 100.0 * typo_hits(text) / words
 
 
 def overload(text: str) -> list[str]:
-    """Overload reasons for one message ([] when calm)."""
+    """Overload reasons for one message ([] when calm).
+
+    One reason is information, not overload. Callers switch to Calm only on
+    two distinct reasons in one message, or a reason in two messages in a row
+    (see calm_due()).
+    """
     reasons = [c for c in classify(text) if c in OVERLOAD]
-    if is_human_text(text) and len(text.split()) >= 8 and typo_density(text) >= 6:
+    if is_human_text(text) and len(text.split()) >= 8 and typo_hits(text) >= 2 and typo_density(text) >= 6:
         reasons.append("typo_burst")
     return reasons
+
+
+def calm_due(reasons: list[str], previous_had_reason: bool) -> bool:
+    """The two-signal rule: two reasons now, or one now and one last message."""
+    return len(set(reasons)) >= 2 or (bool(reasons) and previous_had_reason)

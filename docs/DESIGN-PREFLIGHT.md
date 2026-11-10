@@ -4,29 +4,33 @@ Before any pixel, this receipt ties the title, the stone and the purpose togethe
 
 ## 1. Purpose (the job)
 
-Selenite finds the human steps that your agents keep handing back to you: approvals, credentials, clicks and re-asks. It ranks them by how often they come back, then drafts the fix that removes the next one. It also improves itself from its own ledger.
+Selenite takes friction off the human. Friction means every effort a person spends that a tool could have spent: manual steps, logins, clicks, things to remember, read or decide. It is an accessibility problem as much as an agent-to-agent one. Selenite clears every other tool in the agent stack (skills, plugins, hooks, approval allowlists, runbooks, peer products), ranks what costs the human most, drafts the fix, and shrinks any step it can't remove to one accessible command. Overload detection is a small input that switches replies to Calm. It is not the product.
 
-- Outcome for the user: fewer interruptions and a calmer operator.
-- Core interaction: see the recurring gate, mark it fixed, or ask for a drafted fix.
+**Requirement: Selenite needs no cleansing.** It adds no upkeep: nothing to set up after install, state that trims itself, and a CI gate that keeps its own skill clean, so it never appears as the human's finding.
+
+- Outcome for the user: fewer and smaller human steps, because the rest of the stack was cleared first.
+- Core interaction: see what to clear next across the stack, clear it or mark it fixed, or ask for a drafted fix.
+- Scope confirmed by the owner on 2026-11-10. Accessibility framing and the needs-no-cleansing requirement added by the owner the same day.
 
 ## 2. Title, stone and purpose
 
 | Layer | Content | Evidence class |
 |---|---|---|
-| Title | **Selenite**. The product name is the mineral name, the same pattern as the org name Kyanite. The stone comes from the name. | Simon's naming, 2026-11-10 |
+| Title | **Selenite**. The product name is the mineral name, the same pattern as the org name Kyanite. The stone comes from the name. | The owner's naming, 2026-11-10 |
 | Mineral fact | Gypsum, CaSO4·2H2O, Mohs 2. "Selenite" is the transparent, cleavable crystal form. "Satin spar" is the silky, fibrous form. It is slightly soluble in water. The name comes from the Greek word for the Moon, after its pearly lustre. | Wikipedia (Gypsum); fetched 2026-11-10 |
 | Retail canon | "Commonly used to charge and cleanse other crystals". "Provides mental clarity". "A calming crystal". | Crystal Vaults selenite page, fetched 2026-11-10. This records what retailers believe, not a product claim. |
-| Product fit | Selenite is the stone used to clear the other stones. Selenite the product clears friction from the rest of the toolchain (every other agent and skill) and improves itself. Clarity means the ranked list, and calm means fewer interruptions. | Our metaphor, built on the retail canon above |
+| Product fit | Each retail belief maps to one product behaviour. **Charges and cleanses other crystals** → the cleanse pass clears every other tool, agent, skill and plugin in the stack, then recharges it with a fix. **Mental clarity** → one ranked view of what to clear next, across the whole stack. **Calming** → fewer interruptions reach the human, because the stack was cleared first; Calm mode is the small reply-style part of this. **Never needs cleansing itself** → a product requirement: no upkeep, self-trimming state, and a CI gate in place of self-findings. | Our metaphor, built on the retail canon above; mapping confirmed by the owner, 2026-11-10. The no-cleansing requirement is the owner's, 2026-11-10. |
 
 Rejected metaphors:
-- **Moon, tide or crescent.** The etymology is real, but Simon rejected this direction on 2026-11-10 because it was invented and ungrounded. Do not use crescents, tides or lunar phases.
+- **Moon, tide or crescent.** The etymology is real, but the owner rejected this direction on 2026-11-10 because it was invented and ungrounded. Do not use crescents, tides or lunar phases.
 - **Purple or lavender identity.** Selenite is white.
 
 ## 3. Material reference
 
 - Habit: **satin spar**, the fibrous form. That is the habit the KyaniteLabs family already renders as "selenite". The family references are:
-  - OpenGlaze C2, the upper-right field of the approved UMF triangle: `kanban/attachments/t_aadd970b/openglaze-c2.png`.
-  - Innerscape j2, the middle slab of the cairn: `kanban/attachments/t_aadd970b/innerscape-j2-512.png`.
+  - OpenGlaze C2, the upper-right field of the approved UMF triangle.
+  - Innerscape j2, the middle slab of the cairn. Innerscape uses selenite only as icon inspiration.
+  - Both renders are held in the KyaniteLabs design archive.
 - Appearance:
   - Pearly white to faintly warm white.
   - Dense straight fibres that run along the length.
@@ -34,7 +38,7 @@ Rejected metaphors:
   - Translucent edges.
   - No colour of its own.
 - Material-realism rule: "clear gypsum plates and fibrous satin spar are different habits". Do not call satin spar clear selenite.
-- **Assumption, open to Simon's eye-gate.** I chose satin spar because the family already renders selenite that way. If Simon prefers clear bladed selenite plates, only the material changes.
+- **Assumption, open to the owner's eye-gate.** I chose satin spar because the family already renders selenite that way. If the owner prefers clear bladed selenite plates, only the material changes.
 
 ## 4. Family law (icon)
 
@@ -49,7 +53,7 @@ Rejected metaphors:
 - The family-cohesion rule that "selenite can be pale" applies.
 - **Form proposal:** a single satin-spar blade, the classic selenite wand, set diagonally. It has a chisel-cut tip, with the fibres running its full length and one chatoyant band across them.
   - It is one object with one gesture, which suits a tool that clears things.
-  - The SVG in `assets/icon.svg` is a concept guide only. The family mark is a raster render made through the icon pipeline, and it needs Simon's eye-gate. That render can't run on the NucBox until 2026-11-17.
+  - The SVG in `assets/icon.svg` is a concept guide only. The family mark is a raster render made through the icon pipeline, and it needs the owner's eye-gate. The render is scheduled once the render host is free.
 
 ## 5. Typography (lockup law)
 
@@ -57,7 +61,7 @@ Rejected metaphors:
 - Endorsement: "by KyaniteLabs" in Chakra Petch Medium 500.
 - The OFL licence ships with every export.
 - On a dark canvas, invert only the ink. Never change the typeface, weights or metrics.
-- In-app UI uses the host's fonts. Chakra Petch is for identity surfaces only: the banner, the README hero and the page title.
+- In-app, Chakra Petch is limited to identity type on the Selenite page: the page title, section labels and the big numerals (weights 500 and 600, embedded as a Latin subset). Body text, rows, buttons and every other surface use the host's fonts. Off the page it appears only on the banner and the README hero.
 
 ## 6. Platform conventions (Hermes plugin catalog)
 

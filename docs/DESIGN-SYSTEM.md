@@ -1,6 +1,6 @@
 # Selenite design system
 
-Selenite runs inside Hermes. It takes the host's theme and adds three things of its own: the stone, a display typeface for identity surfaces, and one meaning per colour. Each choice cites `docs/DESIGN-PREFLIGHT.md` (shortened to **PF** below). Choices still waiting on Simon's eye-gate are marked **(A)**.
+Selenite runs inside Hermes. It takes the host's theme and adds three things of its own: the stone, a display typeface for identity surfaces, and one meaning per colour. Each choice cites `docs/DESIGN-PREFLIGHT.md` (shortened to **PF** below). Choices still waiting on the owner's eye-gate are marked **(A)**.
 
 ## Principles
 
@@ -19,7 +19,7 @@ Selenite runs inside Hermes. It takes the host's theme and adds three things of 
   - In the app it draws in `currentColor` with the identity ink (`--ui-text-primary`), so it renders white on dark chrome.
 - **App icon:** `assets/icon.svg` is a **concept guide only (A)**.
   - It follows the family law: crystal material, turquoise `#00FFE6` edge, magenta `#FF1A6E` and yellow `#FFD11A` catches, white specular, dark inner plane and a transparent background.
-  - The shipped `icon.png` (512) is a pipeline raster render behind Simon's eye-gate. That render can't run on the NucBox before 2026-11-17.
+  - The shipped `icon.png` (512) will be a pipeline raster render behind the owner's eye-gate. It is not rendered yet.
 - **Rejected:** the moon, crescents, tides, lunar phases and a purple identity (PF §2). The etymology is real, but it is not the product.
 
 ## Type

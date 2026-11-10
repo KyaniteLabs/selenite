@@ -1,0 +1,11 @@
+[project]
+name = "selenite"
+version = "0.4.0"
+description = "Clears friction out of the human's steps and every tool in an agent stack."
+requires-python = ">=3.10"
+license = "MIT"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+addopts = "-p no:cacheprovider"

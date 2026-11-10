@@ -1,0 +1,43 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+defaults:
+  run:
+    shell: bash
+jobs:
+  test:
+    runs-on: docker
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - python:3.10-bookworm@sha256:f72a86806f92fe13a49f49aeca1db0b19ea5cf4a0470b842a01b0e14314945b8
+          - python:3.12-bookworm@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735
+          - python:3.14-bookworm@sha256:3fe825da0a80fa8e2cd79baadeb76b03c0ddf3d6cdbc8346778a0208b9d6038c
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install checkout runtime (actions/checkout needs node + git)
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends git nodejs
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Unit tests (includes the needs-no-cleansing requirement)
+        run: python3 -m pip install --no-cache-dir pytest==8.4.2 fastapi==0.115.12 httpx==0.28.1 && python3 -m pytest -q
+      - name: install.sh into an empty HOME
+        run: |
+          H=$(mktemp -d) && mkdir "$H/.claude" && HOME="$H" sh install.sh && test -L "$H/.claude/skills/frictionless"
+          HOME="$H" sh install.sh | grep -q "^ok "   # idempotent
+      - name: Cleanse runs on an empty HOME with no findings
+        run: |
+          H=$(mktemp -d) && HOME="$H" HERMES_HOME="$H/.hermes" SELENITE_STATE="$H/s" python3 -I skills/frictionless/scripts/cleanse.py | tee out.txt
+          grep -q "0 finding" out.txt
