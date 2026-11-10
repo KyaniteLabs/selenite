@@ -14,10 +14,53 @@ C = sys.modules["antibeaurocracy_core.classify"]  # the package exports the func
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.fixture(autouse=True)
-def _reset():
-    yield
+@pytest.fixture(autouse=True, params=["library", "stdlib"])
+def reader(request, monkeypatch):
+    """Every test runs with a YAML library and again on a bare host with neither PyYAML nor ruamel."""
+    if request.param == "stdlib":
+        for mod in ("yaml", "ruamel", "ruamel.yaml"):
+            monkeypatch.setitem(sys.modules, mod, None)  # import raises ImportError
+    yield request.param
     settings.apply({})  # leave the classifier and audit at their defaults for other tests
+
+
+HERMES_LIKE = """# a config shaped like the one Hermes writes
+model:
+  default: some-model
+  prompt: |
+    multi-line text: with a colon
+      - and a dash
+  extra: {a: 1}
+plugins:
+  enabled:
+    - selenite
+  entries:
+    other: {}
+    selenite:
+      settings:
+        fake_gate_mode: "ask"   # a comment
+        min_confidence: 0.75
+        extra_seats:
+          - quartermaster
+          - 'scribe'
+        extra_ceremony: [attestation bundle, sign-off pack]
+        hooks: false
+"""
+
+
+def test_a_hermes_shaped_config_reads_the_same_either_way(tmp_path):
+    _config(tmp_path, HERMES_LIKE)
+    assert settings.read(tmp_path) == ({"fake_gate_mode": "ask", "min_confidence": 0.75,
+                                        "extra_seats": ["quartermaster", "scribe"],
+                                        "extra_ceremony": ["attestation bundle", "sign-off pack"],
+                                        "hooks": False}, None)
+
+
+@pytest.mark.parametrize("bad", ["a:\n   b: 1\n  c: 2\n", "\tkey: 1\n", "x: 'open\n", "- top\nkey: 1\n"])
+def test_a_config_it_cannot_read_is_reported(tmp_path, bad):
+    _config(tmp_path, bad)
+    got, err = settings.read(tmp_path)
+    assert got == {} and err
 
 
 def _config(home: Path, body: str) -> None:

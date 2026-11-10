@@ -28,6 +28,98 @@ def as_list(val) -> list[str]:
     return []
 
 
+def _scalar(raw: str):
+    v = raw.strip()
+    if v[:1] in "\"'":
+        if len(v) < 2 or v[-1] != v[0]:
+            raise ValueError("unclosed quote")
+        return v[1:-1]
+    if v[:1] == "[":
+        if not v.endswith("]"):
+            raise ValueError("unclosed flow list")
+        return [_scalar(x) for x in v[1:-1].split(",") if x.strip()]
+    if v == "{}":
+        return {}
+    if v[:1] in "{&*!%@`":
+        return v  # a flow map, anchor, alias or tag: kept as text, since only Selenite's own entry is used
+    low = v.lower()
+    if low in ("", "~", "null"):
+        return None
+    if low in ("true", "yes", "on"):
+        return True
+    if low in ("false", "no", "off"):
+        return False
+    for kind in (int, float):
+        try:
+            return kind(v)
+        except ValueError:
+            pass
+    return v
+
+
+def _strip_comment(line: str) -> str:
+    quote = None
+    for i, ch in enumerate(line):
+        if quote:
+            quote = None if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1] in " \t"):
+            return line[:i]
+    return line
+
+
+def _mini_yaml(text: str):
+    """The block mappings, lists and scalars a Hermes config.yaml uses, for hosts with no YAML library.
+    Anything else raises ValueError, so a config it can't read is reported instead of misread."""
+    root: dict = {}
+    stack: list[tuple[int, object]] = [(-1, root)]
+    pending: tuple[int, dict, str] | None = None  # a "key:" whose value is the next, deeper block
+    literal = -1  # inside a | or > block scalar opened at this indent; its lines are skipped
+    for n, raw in enumerate(text.splitlines(), 1):
+        if literal >= 0:
+            if not raw.strip() or len(raw) - len(raw.lstrip()) > literal:
+                continue
+            literal = -1
+        line = _strip_comment(raw).rstrip()
+        if not line.strip() or line.strip() in ("---", "..."):
+            continue
+        if "\t" in line[: len(line) - len(line.lstrip())]:
+            raise ValueError(f"tab indent on line {n}")
+        ind = len(line) - len(line.lstrip())
+        body = line.strip()
+        if pending:
+            p_ind, parent, key = pending
+            pending = None
+            if ind > p_ind:
+                parent[key] = [] if body.startswith("- ") or body == "-" else {}
+                stack.append((ind, parent[key]))
+        while stack and ind < stack[-1][0]:
+            stack.pop()
+        if not stack or ind != stack[-1][0] and not (ind > stack[-1][0] and stack[-1][0] == -1):
+            raise ValueError(f"bad indent on line {n}")
+        if stack[-1][0] == -1:
+            stack[-1] = (ind, root)
+        node = stack[-1][1]
+        if body.startswith("- ") or body == "-":
+            if not isinstance(node, list):
+                raise ValueError(f"list item outside a list on line {n}")
+            node.append(_scalar(body[1:]))
+            continue
+        key, sep, rest = body.partition(":")
+        if not sep or not key.strip() or isinstance(node, list) or rest[:1] not in ("", " "):
+            raise ValueError(f"not a mapping entry on line {n}")
+        key = _scalar(key)
+        if rest.strip()[:1] in ("|", ">"):
+            node[key], literal = None, ind  # multi-line text, never a Selenite setting
+        elif rest.strip():
+            node[key] = _scalar(rest)
+        else:
+            node[key] = None
+            pending = (ind, node, key)
+    return root
+
+
 def _load_yaml(text: str):
     try:
         import yaml  # type: ignore
@@ -35,8 +127,10 @@ def _load_yaml(text: str):
         return yaml.safe_load(text)
     except ImportError:
         pass
-    from ruamel.yaml import YAML  # type: ignore  # what Hermes itself ships
-
+    try:
+        from ruamel.yaml import YAML  # type: ignore  # what Hermes itself ships
+    except ImportError:
+        return _mini_yaml(text)  # the stdlib CLI on a host with neither library
     return YAML(typ="safe", pure=True).load(text)
 
 
@@ -48,8 +142,6 @@ def read(home: Path | None = None) -> tuple[dict, str | None]:
         cfg = _load_yaml(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}, None  # no config yet: every setting is its default
-    except ImportError:
-        return {}, "no YAML reader (PyYAML or ruamel.yaml) installed"
     except Exception as exc:  # unreadable or not YAML
         return {}, f"{type(exc).__name__} reading {path.name}"
     node = cfg
