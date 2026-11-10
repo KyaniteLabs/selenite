@@ -41,7 +41,7 @@ jobs:
           H=$(mktemp -d) && mkdir "$H/.claude" && HOME="$H" sh install.sh
           for n in frictionless antibeaurocracy antipedantry; do test -L "$H/.claude/skills/$n"; done
           test -L "$H/.local/bin/antibeaurocracy"
-          HOME="$H" sh install.sh | grep -q "^ok "   # idempotent
+          again=$(HOME="$H" sh install.sh) && printf '%s\n' "$again" | grep "^ok " >/dev/null   # idempotent; grep -q would SIGPIPE install.sh under pipefail
       - name: Cleanse runs on an empty HOME with no findings
         run: |
           H=$(mktemp -d) && HOME="$H" HERMES_HOME="$H/.hermes" SELENITE_STATE="$H/s" python3 -I skills/frictionless/scripts/cleanse.py | tee out.txt
