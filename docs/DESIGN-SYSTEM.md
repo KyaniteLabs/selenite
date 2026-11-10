@@ -1,0 +1,97 @@
+# Selenite design system
+
+Selenite runs inside Hermes. It takes the host's theme and adds three things of its own: the stone, a display typeface for identity surfaces, and one meaning per colour. Each choice cites `docs/DESIGN-PREFLIGHT.md` (shortened to **PF** below). Choices still waiting on Simon's eye-gate are marked **(A)**.
+
+## Principles
+
+1. **Quiet by default.** Selenite watches for overload, so its own UI must not add any. Nothing loops or animates, red appears only when something is broken, and no number ticks live.
+2. **One question per surface.**
+   - Status chip: *is anything waiting on me today?*
+   - Page: *which human step should we remove next?*
+   - Kanban badge: *is this card blocked on me?*
+3. **The host owns the chrome.** Panes, buttons, badges, empty states and colours all come from Hermes components and theme variables.
+
+## Stone and glyph
+
+- **The stone is white satin-spar selenite** (PF §2–3): pearly white, dense straight fibres along the length, one silky chatoyant band, translucent edges. Selenite has no colour of its own, and it is never shown as purple or lavender.
+- **Glyph:** one satin-spar wand set diagonally, with a chisel tip, its fibres running the length and a narrow dark bevel on the shadowed edge (PF §4).
+  - It is a static mark and never shows state.
+  - In the app it draws in `currentColor` with the identity ink (`--ui-text-primary`), so it renders white on dark chrome.
+- **App icon:** `assets/icon.svg` is a **concept guide only (A)**.
+  - It follows the family law: crystal material, turquoise `#00FFE6` edge, magenta `#FF1A6E` and yellow `#FFD11A` catches, white specular, dark inner plane and a transparent background.
+  - The shipped `icon.png` (512) is a pipeline raster render behind Simon's eye-gate. That render can't run on the NucBox before 2026-11-17.
+- **Rejected:** the moon, crescents, tides, lunar phases and a purple identity (PF §2). The etymology is real, but it is not the product.
+
+## Type
+
+| Role | Face | Size and weight | Notes |
+|---|---|---|---|
+| Lockup (banner, README hero) | Chakra Petch | **SELENITE** Bold 700 uppercase, with "by KyaniteLabs" in Medium 500 | Glyphs unmodified, native kerning, OFL shipped (PF §5) |
+| Page title and section labels | Chakra Petch | Title 600 at 20px uppercase with +0.06em tracking; labels 500 at 10.5px uppercase with +0.08em | Embedded as a Latin subset WOFF. Only weights 500 and 600 are embedded in the app (A) |
+| Big numerals | Chakra Petch | 600 at 28px | Values refresh every 30 s and never tick |
+| Body and rows | Host sans (`--font-sans`) | 13px at 400; meta text 11.5px | Long text stays in the app's face |
+| Ledger keys and counts | Host mono (`--font-mono`) | 12px, tabular figures | Counts line up down the column |
+
+## Colour (theme variables only)
+
+| Meaning | Variable | Always paired with |
+|---|---|---|
+| Identity: glyph, meter, wordmark | `--ui-text-primary` (white on dark, ink on light) | Not applicable; identity only |
+| Human gate | `--ui-orange` | A count and the label "Recurring gates"; the Kanban badge says "waiting on you" |
+| Approval prompt | `--ui-blue` | The label "Approval prompts" |
+| Calm trigger and high load | `--ui-yellow` | The words "Load: High" and the reason line |
+| Fix landed | `--ui-green` | The word "fixed" |
+| Everything else | `--ui-text-secondary/tertiary`, `--ui-stroke-*`, `--ui-bg-card` | Not applicable |
+
+- Colour never carries state on its own (PF §7).
+- The minimum text tone is `--ui-text-tertiary`. The quaternary tone is reserved for hairlines.
+- Tints use `color-mix(in srgb, var(--ui-x) N%, transparent)`, so every host theme re-skins Selenite automatically.
+
+## Load
+
+Load measures the human's overload over the last 24 hours, counted from Calm triggers. It shows as a three-bar meter plus a word.
+
+| State | Bars | When |
+|---|---|---|
+| **Clear** | 1 | No Calm triggers |
+| **Rising** | 2 | 1–2 triggers |
+| **High** | 3, yellow | 3 or more triggers, or 2 within 15 minutes |
+
+An unknown value from the backend renders as Clear.
+
+## Layout
+
+The page sits on a 4-px grid with gaps of 8, 12, 16 and 24, and content is capped at 1120px. From top to bottom:
+
+1. **Header:** the blade, the SELENITE title and the window switch (7d / 30d / 90d).
+2. **Error strip**, shown only on a failed refetch: it keeps the last good data visible and offers Retry.
+3. **Load strip:** the meter, "Load: *state*", a one-line reason, and the time of the last signal.
+4. **Four stat tiles:** Human gates, Approval prompts, Calm triggers and Fixes landed.
+5. **Two columns:**
+   - Recurring gates, ranked, each with its own "Mark *key* fixed" button. The confirmation toast offers Undo.
+   - Evolve (the latest proposal) and Signal health.
+6. **The ledger timeline.**
+
+Below 760px the layout drops to one column and the bars and notes are hidden.
+
+## Surfaces
+
+| Surface | Where | Content |
+|---|---|---|
+| Desktop page | `ROUTES_AREA` `/selenite`, plus `SIDEBAR_NAV_AREA` (`ruby` codicon) | Everything above |
+| Status chip | `STATUSBAR_AREAS.right` | The blade, plus the number of open gates today. Its tooltip and aria-label give the load and the gate count. Clicking it opens the page |
+| Kanban badge | `KANBAN_CARD_AREAS.badges` | "waiting on you" (`orange`) on tasks blocked on a human gate |
+| Palette | `PALETTE_AREA` | Open the friction ledger, or draft an evolve proposal |
+| Settings | `registerSettingsPage` | Chip toggle, chip style, Kanban badges and the privacy note |
+| Web dashboard tab | `dashboard/manifest.json` tab `after:sessions`, entry `dist/index.js` | Load, the four totals and recurring gates with Mark fixed. Uses only the dashboard SDK components |
+
+## Data and privacy
+
+- **Where the data lives:** the ledger is `~/.local/state/selenite/ledger.jsonl`. The directory is 0700 and the files are 0600, on the host that runs the agent.
+- **Who reads it:** both UIs read it only through the user's own Hermes gateway (`/api/plugins/selenite/`). Selenite makes no other network calls.
+- **What a row holds:** no host name, and no secrets. Notes are capped at 200 characters.
+
+## Errors
+
+- Every write (mark fixed, undo, draft proposal) reports a failure through `host.notifyError`.
+- A failed overview refetch never blanks the page.

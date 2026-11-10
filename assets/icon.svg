@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- CONCEPT GUIDE ONLY (docs/DESIGN-PREFLIGHT.md §4). The family mark is a
+       pipeline raster render behind Simon's eye-gate; this file fixes form only.
+       One satin-spar (fibrous gypsum) wand, diagonal, chisel tip, fibres along
+       its length, one chatoyant band across them. Transparent background. -->
+  <title>Selenite</title>
+  <defs>
+    <linearGradient id="body" gradientUnits="userSpaceOnUse" x1="185" y1="227" x2="285" y2="327">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset=".55" stop-color="#F3F0EA"/>
+      <stop offset="1" stop-color="#DDD8CE"/>
+    </linearGradient>
+    <linearGradient id="chat" gradientUnits="userSpaceOnUse" x1="128" y1="284" x2="188" y2="224">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="wand"><path d="M40 372 330 82 470 42 430 182 140 472Z"/></clipPath>
+  </defs>
+  <!-- body -->
+  <path d="M40 372 330 82 470 42 430 182 140 472Z" fill="url(#body)"/>
+  <g clip-path="url(#wand)">
+    <!-- fibres: dense, straight, along the length -->
+    <g stroke-linecap="round" fill="none">
+      <path d="M50 382 340 92" stroke="#B9B3A8" stroke-opacity=".55" stroke-width="2"/>
+      <path d="M62 394 352 104" stroke="#FFFFFF" stroke-width="3"/>
+      <path d="M72 404 362 114" stroke="#B9B3A8" stroke-opacity=".45" stroke-width="1.5"/>
+      <path d="M84 416 374 126" stroke="#FFFFFF" stroke-opacity=".8" stroke-width="2.5"/>
+      <path d="M95 427 385 137" stroke="#B9B3A8" stroke-opacity=".5" stroke-width="2"/>
+      <path d="M106 438 396 148" stroke="#FFFFFF" stroke-opacity=".7" stroke-width="2"/>
+      <path d="M116 448 406 158" stroke="#B9B3A8" stroke-opacity=".55" stroke-width="1.5"/>
+    </g>
+    <!-- one chatoyant band across the fibres -->
+    <path d="M110 302 210 402 246 366 146 266Z" fill="url(#chat)"/>
+    <!-- dark inner plane: a narrow bevel on the shadowed long edge -->
+    <path d="M124 456 414 166 430 182 140 472Z" fill="#3A3742" fill-opacity=".7"/>
+  </g>
+  <!-- chisel tip facet -->
+  <path d="M330 82 470 42 414 166Z" fill="#FFFFFF"/>
+  <path d="M414 166 470 42 430 182Z" fill="#CFC9BE"/>
+  <!-- family catches -->
+  <path d="M40 372 330 82" stroke="#00FFE6" stroke-width="7" stroke-linecap="round"/>
+  <path d="M470 42 430 182" stroke="#FF1A6E" stroke-width="7" stroke-linecap="round"/>
+  <path d="M432 53 470 42" stroke="#FFD11A" stroke-width="8" stroke-linecap="round"/>
+  <!-- white specular -->
+  <path d="M352 82 410 64" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/>
+</svg>

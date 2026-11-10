@@ -1,0 +1,13 @@
+{
+  "name": "selenite",
+  "label": "Selenite",
+  "description": "Friction ledger: the human steps your agents keep handing you, and what Selenite proposes to remove them.",
+  "icon": "Sparkles",
+  "version": "0.3.0",
+  "api": "plugin_api.py",
+  "tab": {
+    "path": "/selenite",
+    "position": "after:sessions"
+  },
+  "entry": "dist/index.js"
+}

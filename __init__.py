@@ -24,10 +24,26 @@ logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent
 SKILL_DIR = ROOT / "skills" / "frictionless"
-sys.path.insert(0, str(SKILL_DIR / "scripts"))
 
-import ledger  # noqa: E402
-import signals  # noqa: E402
+
+def _scripts(*names: str):
+    """Load the skill's scripts as `selenite_frictionless.<name>`.
+
+    A namespaced package keeps generic names (ledger, signals, evolve) out of
+    sys.modules and sys.path, so they cannot collide with other plugins.
+    """
+    import importlib
+    import importlib.util
+
+    pkg = "selenite_frictionless"
+    if pkg not in sys.modules:
+        mod = importlib.util.module_from_spec(importlib.util.spec_from_loader(pkg, loader=None, is_package=True))
+        mod.__path__ = [str(SKILL_DIR / "scripts")]
+        sys.modules[pkg] = mod
+    return [importlib.import_module(f"{pkg}.{n}") for n in names]
+
+
+ledger, signals = _scripts("ledger", "signals")
 
 MODES = ("gate", "audit", "calm", "evolve")
 
@@ -160,6 +176,6 @@ def register(ctx) -> None:
                          description="Selenite: shrink human steps, audit friction, calm mode, evolve",
                          args_hint="[gate|audit|calm|evolve] [context]")
     ctx.register_tool(name="selenite_ledger", toolset="selenite", schema=LEDGER_SCHEMA,
-                      handler=selenite_ledger, description=LEDGER_SCHEMA["description"], emoji="🌙")
+                      handler=selenite_ledger, description=LEDGER_SCHEMA["description"], emoji="🤍")
     for hook in (pre_llm_call, pre_approval_request, post_approval_response, kanban_task_blocked):
         ctx.register_hook(hook.__name__, hook)

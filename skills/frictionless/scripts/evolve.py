@@ -8,14 +8,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import ledger  # noqa: E402
-from signals import CATEGORIES  # noqa: E402
+if __package__:  # loaded as selenite_frictionless.evolve by a Hermes host
+    from . import ledger
+    from .signals import CATEGORIES
+else:  # run as a script
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import ledger  # noqa: E402
+    from signals import CATEGORIES  # noqa: E402
+
+KEEP = 10  # proposals kept on disk; older drafts are deleted
 
 
 def latest_reports(n: int = 10) -> list[dict]:
@@ -29,18 +36,16 @@ def latest_reports(n: int = 10) -> list[dict]:
     return out
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--days", type=int, default=30)
-    a = ap.parse_args()
-
-    rows = list(ledger.rows(a.days))
+def build(days: int = 30) -> Path:
+    """Write one proposal file and return its path."""
+    rows = list(ledger.rows(days))
     reports = latest_reports()
     gates = Counter(r["key"] for r in rows if r["kind"] in ("gate", "blocked"))
     approvals = Counter(r["key"] for r in rows if r["kind"] == "approval")
     misses = [r for r in rows if r["kind"] == "miss"]
     fps = [r for r in rows if r["kind"] == "fp"]
-    fixed = {r["key"] for r in rows if r["kind"] == "fix"}
+    held = ledger.fixed_keys()
+    tried = {r["key"] for r in ledger.rows() if r["kind"] == "fix"}
     fired = Counter()
     for rep in reports:
         fired.update(rep.get("counts", {}))
@@ -48,9 +53,10 @@ def main() -> int:
     silent = [c for c in CATEGORIES if fired[c] == 0]
 
     L = [f"# Selenite evolve proposal ({time.strftime('%Y-%m-%d')})", "",
-         f"Window: {a.days} days, {len(rows)} ledger rows, {len(reports)} miner reports.", ""]
+         f"Window: {days} days, {len(rows)} ledger rows, {len(reports)} miner reports.", ""]
     L += ["## Recurring human gates (eliminate or one-shot these)", ""]
-    L += [f"- `{k}` ×{n}" + (" (a fix is logged; check it held)" if k in fixed else "")
+    L += [f"- `{k}` ×{n}" + (" (fixed; no gate since)" if k in held
+                             else " (a fix was logged, but the gate came back)" if k in tried else "")
           for k, n in gates.most_common(10)] or ["- none logged"]
     L += ["", "## Repeating approval prompts (allowlist or hook candidates)", ""]
     L += [f"- `{k}` ×{n}" for k, n in approvals.most_common(10)] or ["- none logged"]
@@ -64,10 +70,20 @@ def main() -> int:
     L += [f"- {k}: {n}" for k, n in fired.most_common()] or ["- no reports; run mine.py"]
     L += ["", "Next: turn the accepted items into one PR. Fix the top gate with code first, prose last.", ""]
 
-    ledger.STATE.mkdir(parents=True, exist_ok=True)
+    ledger.STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
     out = ledger.STATE / f"proposal-{time.strftime('%Y%m%dT%H%M%S')}.md"
-    out.write_text("\n".join(L))
-    print(out)
+    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write("\n".join(L))
+    for old in sorted(ledger.STATE.glob("proposal-*.md"), key=lambda f: f.stat().st_mtime)[:-KEEP]:
+        old.unlink(missing_ok=True)
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--days", type=int, default=30)
+    print(build(ap.parse_args().days))
     return 0
 
 

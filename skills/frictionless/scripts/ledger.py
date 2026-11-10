@@ -4,7 +4,7 @@
   ledger.py add <kind> <key> [--note TEXT] [--agent NAME]
   ledger.py summary [--days N]
 
-kind: gate | calm | audit | approval | blocked | miss | fp | fix
+kind: gate | calm | audit | approval | blocked | miss | fp | fix | reopen
 key:  a short stable slug for the friction (e.g. gh-login, npm-otp).
 Notes must not contain secrets; they are truncated to 200 characters.
 """
@@ -20,34 +20,58 @@ from pathlib import Path
 
 STATE = Path(os.environ.get("SELENITE_STATE", Path.home() / ".local/state/selenite"))
 LEDGER = STATE / "ledger.jsonl"
-KINDS = {"gate", "calm", "audit", "approval", "blocked", "miss", "fp", "fix"}
+KINDS = {"gate", "calm", "audit", "approval", "blocked", "miss", "fp", "fix", "reopen"}
 
 
 def add(kind: str, key: str, note: str = "", agent: str = "") -> dict:
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {sorted(KINDS)}")
-    STATE.mkdir(parents=True, exist_ok=True)
+    STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
     row = {"ts": time.time(), "kind": kind, "key": key[:80], "note": note[:200],
-           "agent": agent or os.environ.get("SELENITE_AGENT", ""), "host": os.uname().nodename}
-    new = not LEDGER.exists()
-    with LEDGER.open("a") as fh:
+           "agent": agent or os.environ.get("SELENITE_AGENT", "")}
+    fd = os.open(LEDGER, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    with os.fdopen(fd, "a") as fh:
         fh.write(json.dumps(row) + "\n")
-    if new:
-        os.chmod(LEDGER, 0o600)
     return row
 
 
 def rows(days: int = 3650):
+    """Yield well-formed rows newer than `days`. Malformed lines are skipped."""
     since = time.time() - days * 86400
     if not LEDGER.exists():
         return
-    for line in LEDGER.open(errors="ignore"):
-        try:
-            r = json.loads(line)
-        except ValueError:
-            continue
-        if r.get("ts", 0) >= since:
-            yield r
+    with LEDGER.open(errors="ignore") as fh:
+        for line in fh:
+            try:
+                r = json.loads(line)
+            except ValueError:
+                continue
+            if not (isinstance(r, dict) and isinstance(r.get("kind"), str) and isinstance(r.get("key"), str)):
+                continue
+            ts = r.get("ts")
+            if not isinstance(ts, (int, float)) or isinstance(ts, bool):
+                continue
+            if ts >= since:
+                yield r
+
+
+def fixed_keys(gate_last: dict[str, float] | None = None, source=None) -> set[str]:
+    """Keys whose latest fix/reopen is a fix, and which no gate has hit since.
+
+    Reads all history, not a window: a fix logged 40 days ago still counts in a
+    7-day view, and a gate after the fix means the friction came back.
+    `source` is an optional iterable of already-read rows (all history).
+    """
+    latest: dict[str, tuple[float, str]] = {}
+    last_gate: dict[str, float] = dict(gate_last or {})
+    for r in (rows() if source is None else source):
+        k, key, ts = r["kind"], r["key"], r["ts"]
+        if k in ("fix", "reopen"):
+            if ts >= latest.get(key, (-1.0, ""))[0]:
+                latest[key] = (ts, k)
+        elif k in ("gate", "blocked"):
+            last_gate[key] = max(last_gate.get(key, 0.0), ts)
+    return {key for key, (ts, k) in latest.items() if k == "fix" and ts >= last_gate.get(key, 0.0)}
 
 
 def summary(days: int) -> dict:

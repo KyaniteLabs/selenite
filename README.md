@@ -11,6 +11,11 @@ When an agent needs you for a login, a token, an approval or a click, it usually
 | `skills/frictionless/` | The skill, in the open [Agent Skills](https://agentskills.io) format. It works with any agent that loads `SKILL.md`: Claude Code, Codex, OpenCode, Hermes and others. |
 | `__init__.py`, `plugin.yaml` | A Hermes plugin. It registers the skill, a `/frictionless` command, a `selenite_ledger` tool, and observe-only hooks. |
 | `install.sh` | Links the skill into each agent it finds and the plugin into Hermes. It is idempotent and only creates links. |
+| `desktop/` | The Hermes Desktop page, status chip and Kanban badges (`plugin.js`), plus the Chakra Petch subsets it embeds. |
+| `dashboard/` | The web dashboard tab and its backend routes (`plugin_api.py`), served by Hermes under `/api/plugins/selenite/`. |
+| `assets/` | The icon and the Chakra Petch font license (OFL). |
+| `docs/` | The design system and the design preflight receipt. |
+| `tools/` | `embed-fonts.py`, which rebuilds the font subsets embedded in `desktop/plugin.js`. |
 
 ## The four modes
 
@@ -30,6 +35,13 @@ Hermes picks up the plugin on its next gateway restart. Set `SELENITE_HOOKS=0` t
 ## Privacy
 
 Everything Selenite learns stays on your machine, in `~/.local/state/selenite` (mode 0700). Reports hold only counts. Raw excerpts go to a private sample file that is never committed. Personal tuning lives in `~/.config/selenite/` (`profile.md`, `signals.txt`), outside the repo.
+
+## What it reads and writes
+
+- **Reads**, only when you run `mine.py`: your user messages in Claude Code (`~/.claude/projects`), Codex (`~/.codex/sessions`) and Hermes (`~/.hermes/state.db`, opened read-only), plus any path you pass with `--path`.
+- **Hooks**: `pre_llm_call`, `pre_approval_request`, `post_approval_response` and `kanban_task_blocked`. They only log an event or add context. They never block, approve or edit anything.
+- **Writes** only to `~/.local/state/selenite`.
+- **Network**: none. The desktop app reads the ledger through your own Hermes gateway.
 
 ## Try it
 

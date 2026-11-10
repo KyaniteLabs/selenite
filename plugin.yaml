@@ -1,6 +1,7 @@
 name: selenite
 label: Selenite
-version: 0.1.0
+version: 0.3.0
+requires_hermes: ">=0.21"
 description: >
   Selenite removes friction between people and their agents. It ships the
   provider-agnostic `frictionless` skill, a /frictionless command, a ledger

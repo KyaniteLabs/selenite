@@ -28,8 +28,11 @@ from pathlib import Path
 HOME = Path.home()
 STATE = Path(os.environ.get("SELENITE_STATE", HOME / ".local/state/selenite"))
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from signals import classify  # noqa: E402  (shared detector)
+if __package__:  # loaded as selenite_frictionless.mine by a Hermes host
+    from .signals import classify
+else:  # run as a script
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from signals import classify  # noqa: E402  (shared detector)
 
 
 def _text_of(content) -> str:
@@ -103,6 +106,13 @@ def iter_generic(path: Path, since: float):
             yield "generic", f.parent.name, line
 
 
+def _write_private(path: Path, text: str) -> None:
+    """Create the file 0600 from the start; samples quote private transcripts."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(text)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--days", type=int, default=45)
@@ -135,7 +145,7 @@ def main() -> int:
         except (OSError, sqlite3.Error) as e:
             print(f"selenite-mine: skipped a source: {e}", file=sys.stderr)
 
-    a.out.mkdir(parents=True, exist_ok=True)
+    a.out.mkdir(mode=0o700, parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%dT%H%M%S")
     report = {
         "schema": "selenite.friction-report/1",
@@ -144,10 +154,9 @@ def main() -> int:
         "counts": dict(counts.most_common()),
         "by_agent": {k: dict(v) for k, v in by_agent.items()},
     }
-    (a.out / f"report-{a.host}-{stamp}.json").write_text(json.dumps(report, indent=2))
+    _write_private(a.out / f"report-{a.host}-{stamp}.json", json.dumps(report, indent=2))
     sp = a.out / f"samples-{a.host}-{stamp}.json"
-    sp.write_text(json.dumps(samples, indent=2))
-    os.chmod(sp, 0o600)
+    _write_private(sp, json.dumps(samples, indent=2))
     print(json.dumps(report, indent=2))
     print(f"private samples: {sp}", file=sys.stderr)
     return 0
