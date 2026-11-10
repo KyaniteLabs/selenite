@@ -38,14 +38,14 @@ Fix each gate at its owning source. If you don't own the file, give the owner th
 
 ## 3. The conversation
 
-The Hermes plugin writes `plugin-data/antibeaurocracy/ledger.jsonl`, which records block attempts, refusals and fail-opens (metadata only, never the reason text). A card that fails open after refusals is worth reading: either the classifier is wrong, or the agent kept insisting on a fake gate.
+The Hermes plugin writes `plugin-data/antibeaurocracy/ledger.jsonl`, which records block attempts, declared kinds, questions asked and fail-opens (metadata only, never the reason text). A card that fails open after refusals is worth reading: either the classifier is wrong, or the agent kept insisting on a fake gate.
 
 ## 4. Other machines
 
 Copy the repo or `pip install` it on each machine, run the same commands there, and merge the JSON. Over SSH:
 
 ```bash
-ssh host 'cd ~/antibeaurocracy && ./bin/antibeaurocracy audit --json' > audit-host.json
+ssh host 'antibeaurocracy audit --json' > audit-host.json   # after `pip install` of this repo on that host
 ```
 
 Keep each machine's output private. It contains card titles and paths.

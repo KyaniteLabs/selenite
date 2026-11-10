@@ -57,7 +57,7 @@ def test_state_stays_bounded_without_a_human(tmp_path, monkeypatch):
     for i in range(40):
         for _ in range(20):
             plugin.pre_llm_call(session_id=f"s{i}", user_message="wtf why did you stop")
-            plugin.pre_approval_request(pattern_key=f"k{i}", surface="cli")
+            plugin.post_approval_response(pattern_key=f"k{i}", surface="cli", choice="once", decided_by="user")
         cleanse.write(cleanse.run())
         evolve.build(30)
         monkeypatch.setattr(sys, "argv", ["mine", "--days", "1", "--path", str(src), "--out", str(ledger.STATE)])

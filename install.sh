@@ -5,7 +5,8 @@
 #   ./install.sh             link the skills and CLI wherever a harness exists
 #   ./install.sh --hermes    also install the Hermes plugin (it registers all three skills itself)
 #   ./install.sh --dry-run   show what would be linked
-# Idempotent. It only creates symlinks and never overwrites a real file or folder.
+# Idempotent. It creates symlinks and the state folder, and with --hermes runs
+# `hermes plugins enable selenite`. It never overwrites a real file or folder.
 set -eu
 ROOT=$(cd "$(dirname "$0")" && pwd)
 SKILL="$ROOT/skills/frictionless"
@@ -20,6 +21,10 @@ done
 
 link() {  # link <target> <link-path>
   if [ -L "$2" ] && [ "$(readlink -f "$2")" = "$(readlink -f "$1")" ]; then echo "ok    $2"; return; fi
+  if [ -d "$2" ] && [ ! -L "$2" ]; then
+    echo "warn  $2 is a real folder, not a link, so that agent loads it instead of Selenite."
+    echo "      Move it aside and run install.sh again."; return
+  fi
   if [ -e "$2" ] || [ -L "$2" ]; then echo "skip  $2 (exists, not a Selenite link)"; return; fi
   if [ "$DRY" = 1 ]; then echo "would $2 -> $1"; return; fi
   mkdir -p "$(dirname "$2")"; ln -s "$1" "$2"; echo "link  $2"

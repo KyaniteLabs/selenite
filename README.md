@@ -23,7 +23,7 @@ Walls always stand: credentials, spend, publishing or deploying, destructive ste
 | `skills/` | The three facet skills (`frictionless`, `antibeaurocracy`, `antipedantry`) in the open [Agent Skills](https://agentskills.io) format. They work with any agent that loads `SKILL.md`: Claude Code, Codex, OpenCode, Hermes and others. |
 | `antibeaurocracy_core/`, `bin/` | The fake-gate classifier and board audit: stdlib Python 3.10+, no dependencies, and the `antibeaurocracy` CLI. |
 | `__init__.py`, `plugin.yaml` | A Hermes plugin. It registers the three skills, the `/frictionless`, `/antibeaurocracy` and `/fake-gate` commands, the `selenite_ledger`, `bureaucracy_classify` and `bureaucracy_audit` tools, and eight hooks. |
-| `install.sh` | Links the skills into each agent it finds and the CLI into `~/.local/bin`. Add `--hermes` to link and enable the Hermes plugin. Idempotent; it only creates links. |
+| `install.sh` | Links the skills into each agent it finds and the CLI into `~/.local/bin`, creates the state folder (0700) and checks the ledger works. Add `--hermes` to also link the plugin and enable it in Hermes. Idempotent; it never overwrites a real file or folder, and warns when a real folder hides a skill link. |
 | `desktop/` | The Hermes Desktop page, status chip and Kanban badges (`plugin.js`), plus the Chakra Petch subsets it embeds. |
 | `dashboard/` | The web dashboard tab and its backend routes (`plugin_api.py`, plus `fake_gates_api.py` for the fake-gate card), served by Hermes under `/api/plugins/selenite/`. |
 | `assets/` | The icon concept and the Chakra Petch font license (OFL). |
@@ -38,7 +38,7 @@ One product: **Selenite** is the product, and its three skills are its facets. T
 
 - **Cleanse**: sweep the other stones (skills, plugins, hooks, approvals, gates, runbooks, fake gates on the boards), rank what to clear by how often it interrupts you, and clear the top one with a reviewable change. Code first, prose last.
 - **Gate**: a step needs you. Eliminate it, automate it, or shrink it to one idempotent, self-checking command that works by keyboard and screen reader. Guided steps come last.
-- **Calm**: two overload signals show up. The agent fixes the rule it skipped, asks nothing, acts, and replies in one line. Authority walls still stand.
+- **Calm**: two overload signals show up. The agent fixes the rule it skipped, asks nothing else, acts, and replies in one line. Walls still stand and still get one short question. Calm stays off inside a Kanban worker, where no person is reading.
 - **Evolve** (optional): sharpen Selenite. It mines your transcripts, reads its ledger and the latest cleanse, and writes a proposal for better signals. Skip it and nothing degrades.
 
 ## Install
@@ -50,7 +50,9 @@ git clone <this repo> ~/src/selenite && ~/src/selenite/install.sh            # t
 
 Hermes picks up the plugin on its next gateway restart. In Hermes, the `hooks` setting (or `SELENITE_HOOKS=0`) turns every hook off and keeps everything else. If you ran the standalone antibeaurocracy plugin before, disable it: running both doubles the fake-gate hooks, and the installer warns when it finds one.
 
-Fake-gate settings live under `plugins.entries.selenite.settings`: `fake_gate_mode` (`observe`, `nudge` by default, or `ask`), `max_refusals`, `refusal_ttl_hours`, `min_confidence`, `extra_seats`, `extra_ceremony`, `doctrine_section`, `fake_gate_ledger` and `snapshot_minutes`. `plugin.yaml` says what each does. Start in `observe` or `nudge` and read the ledger before trying `ask`.
+Fake-gate settings live under `plugins.entries.selenite.settings`: `fake_gate_mode` (`observe`, `nudge` by default, or `ask`), `max_refusals`, `refusal_ttl_hours`, `min_confidence`, `extra_seats`, `extra_ceremony`, `doctrine_section`, `fake_gate_ledger` and `snapshot_minutes`. `plugin.yaml` says what each does. Start in `observe` or `nudge` and read the ledger before trying `ask`. The CLI and the dashboard card read the same `extra_seats`, `extra_ceremony` and `min_confidence`; `antibeaurocracy audit --seat NAME` adds to the configured seats.
+
+The plugin also offers a **weekly-audit** automation blueprint in Hermes: once a week, counts only, it reports blocked vs running cards, the evidenced fake share and any shared cause blocking two or more cards. It never names cards or people and never changes a card.
 
 ## Try it
 
@@ -74,9 +76,9 @@ antibeaurocracy audit --judge "llm -m some-model"   # optional second opinion, s
   - `kanban.db` files under `$HERMES_HOME`, opened with SQLite `mode=ro`, for the fake-gate audit, tool and dashboard card. The CLI audit also scans every `~/.hermes*` directory.
   - The CLI audit (not the plugin hooks or tools) reads the agent rule files it finds, such as `~/.claude/CLAUDE.md`, `~/AGENTS.md`, `~/.agents/rules/*.md` and each Hermes home's `SOUL.md`, and prints up to eight example gate lines from each. Selenite's own skills are skipped. Use `--no-rules` to skip this, or `--counts` for numbers only.
 - **Writes:**
-  - The ledger, reports and proposals in `~/.local/state/selenite` (folder 0700, files 0600).
+  - The ledger, reports and proposals in `~/.local/state/selenite` (folder 0700, files 0600). Each `cleanse.py` run writes a report there and one ledger row with its finding count. Ledger notes are redacted before they are written.
   - `$HERMES_HOME/plugin-data/antibeaurocracy/`: `ledger.jsonl` (0600, rotating at 4 MB: event, tool, card id, verdict, declared kind, confidence, mode and session id, never reason or prompt text), `refusals.json` (per-card question counts in `ask` mode, expiring after `refusal_ttl_hours`) and `snapshot.json` (counts only).
-  - The installer creates symlinks only: the skills in each agent's skills folder, the CLI in `~/.local/bin`, and with `--hermes` the plugin in `$HERMES_HOME/plugins`.
+  - The installer creates symlinks (the skills in each agent's skills folder, the CLI in `~/.local/bin`, and with `--hermes` the plugin in `$HERMES_HOME/plugins`) and the state folder. With `--hermes` it also runs `hermes plugins enable selenite`, which changes Hermes's config.
   - Selenite never edits another tool, card or rule file. Every fix is a proposal or a change you review.
 - **Changes agent behaviour:**
   - In Calm mode, when two overload signals appear, `pre_llm_call` adds a short context note telling the agent to ask nothing and reply in one line.
@@ -84,14 +86,14 @@ antibeaurocracy audit --judge "llm -m some-model"   # optional second opinion, s
   - In `ask`, an evidenced fake block is handed back once with a question: what kind of wait is it? Any declared kind goes through. Text with a wall word is only nudged, never asked. It asks at most `max_refusals` times per card, and any error fails open.
   - Approvals are never skipped, and no card is ever unblocked, closed or edited.
 - **System prompt:** unchanged unless you turn on `doctrine_section`.
-- **Hooks:** besides the above, they only log an event. Approval rows count only prompts a human saw: the smart approver's own decisions and folded follower prompts are skipped.
+- **Hooks:** besides the above, they only log an event. An approval is logged only when a person granted it once or for a session on a safe command, as an allowlist candidate. Denials, timeouts, the smart approver's own decisions, payment and MCP prompts, and Hermes's own dangerous-command keys (recursive delete, force push, SQL drop and the like) are never logged. Choosing "always" marks it fixed; a later prompt for the same key reopens it.
 - **Network:** none from the plugin. The desktop app and dashboard read through your own Hermes gateway. The CLI's opt-in `--judge` runs whatever command you give it, which may.
-- **Env:** `SELENITE_STATE`, `SELENITE_HOME`, `SELENITE_HOOKS`, `HERMES_HOME`, and inside a Kanban worker `HERMES_KANBAN_TASK` and `HERMES_KANBAN_BOARD` to key refusals per card.
+- **Env:** `SELENITE_STATE`, `SELENITE_HOME`, `SELENITE_HOOKS`, `SELENITE_AGENT` (the agent name on ledger rows you add by hand), `HERMES_HOME`, and inside a Kanban worker `HERMES_KANBAN_TASK` and `HERMES_KANBAN_BOARD` to key refusals per card.
 - **Credentials:** none.
 
 ## Privacy
 
-What Selenite learns stays on your machine. Reports hold counts and category names, never a host name. Miner samples quote your own messages, so they are redacted (emails, IPs, credentials in URLs, long tokens, your home path), kept at 0600, and only the newest three are kept. The ledger stores task ids, never Kanban block reasons. It rotates at 4 MB. Personal tuning lives in `~/.config/selenite/` (`signals.txt`, `profile.md`), outside the repo. In shared chats, set `calm_senders` so only your own messages count toward Calm.
+What Selenite learns stays on your machine. Reports hold counts and category names, never a host name. Miner samples quote your own messages, so they are redacted (emails, IPs, credentials in URLs and headers, key=value secrets, known token prefixes, long tokens, your home path), kept at 0600, and only the newest three are kept. The ledger stores task ids, never Kanban block reasons. It rotates at 4 MB. Personal tuning lives in `~/.config/selenite/` (`signals.txt`, `profile.md`), outside the repo. In shared chats, set `calm_senders` so only your own messages count toward Calm.
 
 ## Tests
 

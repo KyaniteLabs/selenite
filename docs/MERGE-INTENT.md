@@ -14,9 +14,9 @@ Selenite takes friction off the human, treated as accessibility, and clears it a
 
 **Walls always stand:** credentials, spend, publishing or deploying, destructive steps, legal, a named freeze, and questions only a person can answer. A wall is asked once, as a decision. No facet routes around one.
 
-**One ranked view:** Cleanse ranks findings from all three facets by how often they land on the person. **One ledger** records what cleared. **One off switch:** the `hooks` setting or `SELENITE_HOOKS=0`.
+**One ranked view:** Cleanse ranks findings from the Gate and fake-gate facets by how often they land on the person. Pedantry is not in Cleanse yet (see Missed opportunities). **Two ledgers, one reader:** Selenite's ledger records gates, approvals, blocked cards and what cleared; the fake-gate facet keeps its own metadata ledger. Cleanse reads both. **One off switch:** the `hooks` setting or `SELENITE_HOOKS=0`. **One list of walls:** `WALLS` in `antibeaurocracy_core/classify.py` feeds Calm, the doctrine, the nudge and the question, and a test holds the skill text to it.
 
-**One routing rule for a blocked card** (`lands_on_a_human` in `__init__.py`): an evidenced verdict decides. WALL and HUMAN wait on a person. FAKE, DEPENDENCY and MACHINERY don't, because a fake gate is an agent's job to dissolve. With no evidence, the classifier's fallback isn't a finding, so Selenite's own human-step words decide.
+**One routing rule for a blocked card** (`lands_on_a_human` in `__init__.py`): a declared kind decides first. Hermes's `needs_input` and `capability` wait on a person; `dependency` and `transient` don't. Without one, an evidenced verdict decides: WALL and HUMAN wait on a person, DEPENDENCY and MACHINERY don't, and FAKE does only when the text also names a human step. With no evidence, the classifier's fallback isn't a finding, so Selenite's own human-step words decide.
 
 ## Conflicts and contradictions
 
@@ -39,7 +39,7 @@ Selenite takes friction off the human, treated as accessibility, and clears it a
 | The dashboard manifest version was stale at 0.3.0. | Fixed: every version is 0.5.0 and a test checks they agree. |
 | The fake-gate ledger was unbounded. | Fixed: rotates at 4 MB, written 0600. |
 | The antibeaurocracy skill pointed to a separate human-queue product, which overlapped with the Gate facet. | Fixed: removed. |
-| A Selenite blocked badge clears only on `kanban_task_completed`, so an archived or reassigned card stays "blocked". | Open. |
+| A Selenite blocked badge clears only on `kanban_task_completed`, so an archived or reassigned card stays "blocked". | Fixed: `on_kanban_task_updated` clears it on any status change, and the badge set reseeds from the ledger after a restart. |
 
 ## Silent errors and swallowed failures
 
@@ -54,9 +54,11 @@ Selenite takes friction off the human, treated as accessibility, and clears it a
 
 ## Implicit state machines
 
-- **Selenite ledger key:** gate, approval or blocked, then fix, then possibly reopened. The last event wins. There is no enum. Open.
+- **Selenite ledger key:** gate, approval or blocked, then fix, then possibly reopened. The last event wins. An `approval` row after an `always` reopens `approval:<key>`. There is no enum. Open.
+- **Fake-gate card in Cleanse:** the latest event wins. A fake block marks the card, an ask or a declared kind clears it, a fail-open leaves it as it was.
 - **Calm streak:** in memory, per session, capped at 256 sessions. Lost on restart by design.
-- **Fake-gate echo window:** `_recent_attempts` suppresses a duplicate ledger row for 60 seconds after `pre_tool_call` saw the same block.
+- **Fake-gate echo window:** `_recent_attempts` suppresses a duplicate ledger row for 60 seconds after `pre_tool_call` saw the same block, and carries the declared kind to `kanban_task_blocked`, which Hermes calls without one. A block Hermes rejects (`{"error": ...}`) drops its entry, so a later real block is still ledgered.
+- **Evolve silence:** a category's silent-cycle count moves only when it was measured that cycle (a new miner report, or Calm rows for the Calm categories). A damaged state file resets.
 - **Refusals:** explicit. `RefusalStore` counts per card on disk with a TTL.
 
 ## Bottlenecks

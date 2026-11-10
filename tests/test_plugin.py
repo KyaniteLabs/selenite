@@ -1,3 +1,4 @@
+import pytest
 import json
 
 from conftest import REPO, ledger, plugin
@@ -72,7 +73,9 @@ def test_one_signal_is_not_calm():
 
 def test_two_signals_bring_calm_with_the_wall_caveat():
     out = plugin.pre_llm_call(session_id="s", user_message="wtf why did you stop")
-    assert out and "Authority walls still stand" in out["context"]
+    assert out and "Walls still stand" in out["context"]
+    from antibeaurocracy_core import WALLS
+    assert all(w in out["context"] for w in WALLS)
     assert ("calm", "curse+stopping_short") in _kinds()
 
 
@@ -101,16 +104,51 @@ def test_hooks_can_be_turned_off(monkeypatch):
     assert plugin.pre_llm_call(session_id="s", user_message="wtf why did you stop") is None
     plugin._ctx = None
     monkeypatch.setenv("SELENITE_HOOKS", "0")
-    plugin.pre_approval_request(pattern_key="k", surface="cli")
+    plugin.post_approval_response(pattern_key="k", surface="cli", choice="once", decided_by="user")
     assert _kinds() == []
 
 
-def test_approvals_count_only_prompts_a_human_saw():
-    plugin.pre_approval_request(pattern_key="rm", surface="cli")
-    plugin.pre_approval_request(pattern_key="rm", surface="smart")
-    plugin.pre_approval_request(pattern_key="rm", surface="gateway", coalesced=True)
-    plugin.post_approval_response(pattern_key="rm", choice="once")
-    assert _kinds() == [("approval", "rm")]
+def test_calm_never_fires_inside_a_kanban_worker(monkeypatch):
+    monkeypatch.setenv("HERMES_KANBAN_TASK", "t_1")
+    assert plugin.pre_llm_call(session_id="s", user_message="wtf why did you stop") is None
+
+
+@pytest.mark.parametrize("key,surface,choice,decided_by,row", [
+    ("pip install from a lockfile", "cli", "once", "user", True),
+    ("pip install from a lockfile", "gateway", "session", "user", True),
+    ("pip install from a lockfile", "cli", "deny", "user", False),          # denied: never a candidate
+    ("pip install from a lockfile", "cli", "timeout", None, False),         # never seen
+    ("pip install from a lockfile", "cli", "cancelled", None, False),
+    ("pip install from a lockfile", "cli", "notify_failed", None, False),
+    ("pip install from a lockfile", "smart", "once", "aux_llm", False),     # the smart approver, not a person
+    ("pay the invoice", "vault-payment", "accept", "user", False),
+    ("pay the invoice", "vault-payment", "once", "user", False),
+    ("trust server", "mcp-trust/docs", "once", "user", False),
+    ("ask for input", "mcp-elicitation/docs", "session", "user", False),
+    ("SQL DROP", "cli", "once", "user", False),                             # Hermes's own wall keys
+    ("recursive delete", "cli", "once", "user", False),
+    ("format filesystem", "cli", "session", "user", False),
+    ("kill all processes", "cli", "once", "user", False),
+    ("git push --force", "cli", "once", "user", False),
+])
+def test_only_a_persons_safe_approval_is_an_allowlist_candidate(key, surface, choice, decided_by, row):
+    plugin.post_approval_response(pattern_key=key, surface=surface, choice=choice, decided_by=decided_by)
+    assert _kinds() == ([("approval", key)] if row else [])
+
+
+def test_an_approval_after_always_reopens_it():
+    plugin.post_approval_response(pattern_key="pip install", choice="always", decided_by="user")
+    assert "approval:pip install" in ledger.fixed_keys()
+    plugin.post_approval_response(pattern_key="pip install", choice="once", decided_by="user", surface="cli")
+    assert "approval:pip install" not in ledger.fixed_keys()
+
+
+def test_long_approval_keys_truncate_to_one_length():
+    long = "x" * 200
+    plugin.post_approval_response(pattern_key=long, choice="once", decided_by="user", surface="cli")
+    plugin.post_approval_response(pattern_key=long, choice="always", decided_by="user")
+    keys = [k for _, k in _kinds()]
+    assert keys == ["x" * ledger.APPROVAL_KEY, "approval:" + "x" * ledger.APPROVAL_KEY] and len(keys[1]) == 80
 
 
 def test_human_always_is_a_fix_but_the_smart_approver_is_not():

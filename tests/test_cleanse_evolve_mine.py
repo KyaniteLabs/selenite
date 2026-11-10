@@ -143,15 +143,23 @@ def test_evolve_uses_newest_report_only():
     assert "- curse: 7" in text and "- curse: 12" not in text
 
 
+def _fresh_report(n):
+    ledger.STATE.mkdir(mode=0o700, exist_ok=True)
+    f = ledger.STATE / f"report-{n}.json"
+    f.write_text(json.dumps({"counts": {"over_asking": 1}})); os.utime(f, (time.time() + n,) * 2)
+
+
 def test_evolve_prune_needs_two_real_cycles(monkeypatch):
     clock = [1_000_000.0]
     monkeypatch.setattr(evolve.time, "time", lambda: clock[0])
+    _fresh_report(1)
     evolve.build(30)
     first = json.loads((ledger.STATE / "evolve-state.json").read_text())["silent"]
     assert first["curse"] == 1
     evolve.build(30)  # a re-draft the same day is not a new cycle
     assert json.loads((ledger.STATE / "evolve-state.json").read_text())["silent"]["curse"] == 1
     clock[0] += 2 * 86400
+    _fresh_report(2)
     text = evolve.build(30).read_text()
     assert "Category `curse` silent for 2 cycle(s): move it to references/compost.md" in text
     assert stat.S_IMODE((ledger.STATE / "evolve-state.json").stat().st_mode) == 0o600

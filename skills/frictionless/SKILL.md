@@ -63,7 +63,7 @@ Climb this ladder from the top and stop at the first rung that works. Never skip
 
 Then **verify it yourself** and resume without being asked. Batch every human step in the effort into one ask, never a drip. Log the gate: `scripts/ledger.py add gate <key>`. A gate that repeats becomes a cleanse finding.
 
-Authority walls stay walls. Spending money, deleting things, publishing, changing visibility and minting credentials still need explicit approval. Frictionless means fewer clicks for the human, never fewer checks.
+Walls stay walls. The walls are credentials, spending money, publishing, deploying or changing visibility, deleting or other irreversible steps, legal, a named freeze, and a question only a person can answer. Each still gets one short question to a person. Frictionless means fewer clicks for the human, never fewer checks.
 
 ## Calm: the human is overloaded
 
@@ -76,16 +76,16 @@ A curse is a **late** marker. By then the human's stated rules have usually been
 - No apology paragraphs, lectures or option menus.
 - Reply with a one-line result or blocker, then one next action. Park the rest.
 - Verify against live state before claiming anything.
-- Authority walls still stand in Calm. Calm drops questions, not approvals.
+- Walls still stand in Calm and still get one short question. Calm drops the other questions, never the walls.
 
 ## Evolve (optional): sharpen Selenite
 
 Evolve improves Selenite's signals. It is optional: Selenite needs no cleansing, so skipping Evolve degrades nothing and never creates a task for the human. It never rewrites itself silently.
 
-1. **Collect.** Gate, Calm and Cleanse append to the ledger in `$SELENITE_STATE` (default `~/.local/state/selenite`, outside the repo). The Hermes plugin also logs approval prompts the human saw, Kanban tasks blocked on a human, and overload. Record mistakes with `ledger.py add miss <key>` and `ledger.py add fp <key>`.
-2. **Sweep.** Run `scripts/mine.py` and `scripts/cleanse.py`. Selenite's own skill is held clean by CI (`needs_no_cleansing()`), not by the sweep.
-3. **Propose.** Run `scripts/evolve.py`. It writes a proposal from the ledger, the newest miner report and the newest cleanse report. It also counts how many cycles in a row each signal category stayed silent.
-4. **Review.** Turn the proposal into a branch and PR against this repo. A human merges it. There is no auto-merge, and the installed copy is never edited.
+1. **Collect.** Gate, Calm and Cleanse append to the ledger in `$SELENITE_STATE` (default `~/.local/state/selenite`, outside the repo). The Hermes plugin also logs approvals a person granted once or for a session on a safe command (allowlist candidates; denials, timeouts, the smart approver, payments, MCP prompts and Hermes's own dangerous-command keys are never logged), Kanban tasks blocked on a person, and overload. Calm stays off inside a Kanban worker, where no person is reading. Record mistakes with `ledger.py add miss <key>` and `ledger.py add fp <key>`.
+2. **Sweep.** Run `scripts/mine.py` and `scripts/cleanse.py`. Selenite's own skills are held clean by CI (`needs_no_cleansing()`); the sweep scans them like any other stone, so drift on one machine still shows up. Each cleanse run writes a report and one ledger row with its finding count.
+3. **Propose.** Run `scripts/evolve.py`. It writes a proposal from the ledger, the newest miner report and the newest cleanse report. It also counts how many cycles in a row each signal category stayed silent. Silence only counts when it was measured: every category when a new miner report arrived, the Calm categories when Calm logged anything.
+4. **Review.** Draft the accepted changes on a local branch of this repo. Opening a PR is the human's decision, and a human merges it. There is no auto-merge, and the installed copy is never edited.
 5. **Prune.** A category silent for two cycles is proposed for `references/compost.md`. Rules have to keep earning their place. Selenite's own files (ledger, reports, samples, proposals) trim themselves and never need a human.
 
 ## Personal tuning

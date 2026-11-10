@@ -8,11 +8,12 @@ Selenite's three provider-agnostic facet skills and registers:
   commands /frictionless [cleanse|gate|calm|evolve] [text]
            /antibeaurocracy [audit|check|mode|ledger], /fake-gate <reason>
   tools    selenite_ledger (add, summary, cleanse), bureaucracy_classify, bureaucracy_audit
-  hooks    pre_llm_call            -> Calm-mode context on the two-signal rule
-           pre_approval_request    -> one row per human approval prompt
-           post_approval_response  -> a human "always" logs that approval as fixed
+  hooks    pre_llm_call            -> Calm-mode context on the two-signal rule (never inside a kanban worker)
+           post_approval_response  -> a human "once"/"session" on a safe, non-wall prompt logs an approval row;
+                                      a human "always" logs that approval as fixed
            kanban_task_blocked     -> one observer: fake-gate verdict, plus a row when the wait lands on a human
-           kanban_task_completed   -> clears that task's blocked badge
+           kanban_task_completed,
+           on_kanban_task_updated  -> clear that task's blocked badge
            pre_tool_call, transform_tool_result, on_kanban_dispatch_tick
                                    -> the fake-gate facet (antibeaurocracy_core/plugin.py)
 
@@ -56,7 +57,7 @@ def _scripts(*names: str):
 cleanse, ledger, signals = _scripts("cleanse", "ledger", "signals")
 
 # Hermes and the tests both load this file as a package, so the facet imports relatively.
-from .antibeaurocracy_core import HUMAN, WALL  # noqa: E402
+from .antibeaurocracy_core import FAKE, HUMAN, WALL, WALLS_TEXT  # noqa: E402
 from .antibeaurocracy_core import plugin as fake_gates  # noqa: E402
 
 SKILLS = {  # one product, three facets of one intent: fewer steps, waits and checks reach the human
@@ -70,17 +71,29 @@ ALIASES = {"audit": "cleanse"}  # the 0.3 name for the same pass
 
 CALM_CONTEXT = (
     "[selenite] Overload signals in the human's messages ({reasons}). Use the "
-    "frictionless skill's Calm mode: find and fix the skipped rule first, ask no "
-    "clarifying questions, pick the sensible default and act, reply with a "
-    "one-line result plus one next action, and verify against live state. "
-    "Authority walls still stand: spending, deleting, publishing, changing "
-    "visibility and new credentials still need explicit approval."
+    "frictionless skill's Calm mode: find and fix the skipped rule first, pick the "
+    "sensible default and act instead of asking, reply with a one-line result plus "
+    "one next action, and verify against live state. Walls still stand and still "
+    "get one short question: " + WALLS_TEXT.replace("{", "{{").replace("}", "}}") + "."
 )
+
+# Approval prompts that must never become allowlist candidates: payments, MCP trust and elicitation,
+# and any Hermes pattern key that names a wall or a destructive step.
+_NO_ALLOWLIST_SURFACE = re.compile(r"^(vault-payment|mcp-)", re.I)
+_WALL_KEY = re.compile(
+    r"delet|drop|truncat|wipe|format|kill|destruct|disk|block device|secret|ssh key|chown|writable|boot|"
+    r"backup|shadow|registry|partition|remote content|force|overwrite|stop|fork bomb|payment|"
+    r"credential|token|password|publish|deploy|visib|spend|purchas", re.I)
 
 # A blocked Kanban task counts as waiting on a human only on these whole words.
 _GATE_RE = re.compile(
     r"\b(human|approv(al|e|ed)|log ?in|sign ?in|2fa|otp|credentials?|api key|"
     r"manual(ly)?|needs? (the )?(owner|user|operator|ceo))\b", re.I)
+_HUMAN_KINDS = frozenset({"needs_input", "capability"})  # Hermes: both surface to a person
+# Kanban keys with an open blocked badge. Completion checks this set, and rereads the ledger only when
+# another process (a worker) has written to it since the last read.
+_blocked_now: set[str] = set()
+_blocked_seen_mtime = [None]
 
 STREAK_MAX = 256  # sessions remembered for the two-signal rule
 _streak: "OrderedDict[str, bool]" = OrderedDict()  # session -> previous message had a reason
@@ -130,7 +143,8 @@ def _safe(fn):
 
 @_safe
 def pre_llm_call(session_id=None, user_message=None, parent_session_id=None, sender_id=None, **_kw):
-    if not _hooks_on() or parent_session_id or not isinstance(user_message, str):
+    # A kanban worker's "user message" is its card, not a person, so Calm never fires inside one.
+    if not _hooks_on() or parent_session_id or not isinstance(user_message, str) or os.environ.get("HERMES_KANBAN_TASK"):
         return None
     if not _calm_sender_ok(sender_id):
         return None
@@ -142,50 +156,89 @@ def pre_llm_call(session_id=None, user_message=None, parent_session_id=None, sen
     return {"context": CALM_CONTEXT.format(reasons=", ".join(sorted(set(reasons))))}
 
 
+def allowlist_candidate(pattern_key, surface, choice, decided_by) -> bool:
+    """Only a person's own once/session approval of a safe, reversible prompt is a candidate to allowlist.
+    Denials, timeouts, cancels, the smart (aux LLM) approver, payments, MCP trust and any wall or
+    destructive pattern are never offered: allowlisting those would remove a real wall."""
+    if choice not in ("once", "session") or decided_by == "aux_llm" or not pattern_key:
+        return False
+    if _NO_ALLOWLIST_SURFACE.match(str(surface or "")):
+        return False
+    return not _WALL_KEY.search(str(pattern_key))
+
+
 @_safe
-def pre_approval_request(pattern_key=None, surface=None, coalesced=False, **_kw):
-    # One row per prompt a human actually sees: the smart approver and
-    # follower prompts folded into another one are not human interruptions.
-    if not _hooks_on() or coalesced or surface == "smart":
+def post_approval_response(pattern_key=None, choice=None, decided_by=None, surface=None, **_kw):
+    if not _hooks_on() or not pattern_key or decided_by == "aux_llm":
         return
-    ledger.add("approval", str(pattern_key or "unknown")[:80], note=f"surface={surface}", agent="hermes")
+    key = str(pattern_key)[:ledger.APPROVAL_KEY]
+    if choice == "always":  # the person allowlisted it by hand: that approval stops interrupting
+        ledger.add("fix", f"approval:{key}", note="allowlisted by the human", agent="hermes")
+    elif allowlist_candidate(pattern_key, surface, choice, decided_by):
+        ledger.add("approval", key, note=f"surface={surface}", agent="hermes")
 
 
-@_safe
-def post_approval_response(pattern_key=None, choice=None, decided_by=None, **_kw):
-    # A human "always" allowlisted it by hand: that approval stops interrupting.
-    if _hooks_on() and choice == "always" and decided_by != "aux_llm" and pattern_key:
-        ledger.add("fix", f"approval:{str(pattern_key)[:70]}", note="allowlisted by the human", agent="hermes")
-
-
-def lands_on_a_human(reason: str, verdict) -> bool:
-    """One routing rule for every block. An evidenced verdict decides: WALL and HUMAN wait on a person,
-    FAKE, DEPENDENCY and MACHINERY do not (a fake gate is an agent's job to dissolve). With no evidence,
-    the classifier's default is not a finding, so Selenite's own human-step words decide."""
+def lands_on_a_human(reason: str, verdict, kind: str | None = None) -> bool:
+    """One routing rule for every block. A declared needs_input or capability kind lands on a person
+    (Hermes surfaces both to one). Otherwise an evidenced verdict decides: WALL and HUMAN wait on a
+    person, DEPENDENCY and MACHINERY do not, and FAKE does not unless the reason also names a human
+    step (a login, an OTP, an approval), which a person still has to do. With no evidence, the
+    classifier's default is not a finding, so Selenite's own human-step words decide."""
+    if kind in _HUMAN_KINDS:
+        return True
+    words = bool(_GATE_RE.search(reason)) or "human_gate" in signals.classify(reason)
     if verdict is not None and verdict.evidenced:
-        return verdict.cls in (WALL, HUMAN)
-    return bool(_GATE_RE.search(reason)) or "human_gate" in signals.classify(reason)
+        return verdict.cls in (WALL, HUMAN) or (verdict.cls == FAKE and words)
+    return words
 
 
 @_safe
 def kanban_task_blocked(task_id=None, reason=None, assignee=None, board=None, **_kw):
     """The one observer for blocked cards: classify once, ledger the fake-gate verdict, and log the
-    task on Selenite's ledger when the wait lands on a person. Never keeps the reason text."""
+    task on Selenite's ledger when the wait lands on a person. Never keeps the reason text.
+    Hermes passes no kind here, so the facet recovers it (see observe_block)."""
     if not _hooks_on() or not task_id:
         return
     reason = reason if isinstance(reason, str) else ""
-    verdict = fake_gates.observe_block(task_id=str(task_id), board=board, reason=reason, kind=_kw.get("kind"))
-    if reason and lands_on_a_human(reason, verdict):
-        ledger.add("blocked", f"kanban:{task_id}", note="waiting on a human", agent=str(assignee or "hermes")[:40])
+    verdict, kind = fake_gates.observe_block(task_id=str(task_id), board=board, reason=reason, kind=_kw.get("kind"))
+    if (reason or kind) and lands_on_a_human(reason, verdict, kind):
+        key = f"kanban:{task_id}"
+        ledger.add("blocked", key, note="waiting on a human", agent=str(assignee or "hermes")[:40])
+        _blocked_now.add(key)
+
+
+def _open_badges() -> set[str]:
+    try:
+        mtime = ledger.LEDGER.stat().st_mtime_ns
+    except OSError:
+        mtime = 0
+    if mtime != _blocked_seen_mtime[0]:
+        _blocked_seen_mtime[0] = mtime
+        rows = list(ledger.rows(90))
+        fixed = ledger.fixed_keys(source=rows)
+        _blocked_now.clear()
+        _blocked_now.update(r["key"] for r in rows if r["kind"] == "blocked" and r["key"] not in fixed)
+    return _blocked_now
+
+
+def _clear_badge(task_id, note: str) -> None:
+    key = f"kanban:{task_id}"
+    if key in _blocked_now or key in _open_badges():
+        _blocked_now.discard(key)
+        ledger.add("fix", key, note=note, agent="hermes")
 
 
 @_safe
 def kanban_task_completed(task_id=None, **_kw):
-    if not _hooks_on() or not task_id:
-        return
-    key = f"kanban:{task_id}"
-    if any(r["kind"] == "blocked" and r["key"] == key for r in ledger.rows(90)):
-        ledger.add("fix", key, note="task completed", agent="hermes")
+    if _hooks_on() and task_id:
+        _clear_badge(task_id, "task completed")
+
+
+@_safe
+def on_kanban_task_updated(task_id=None, changed_fields=None, **_kw):
+    """A status change on a card blocked on a person means someone moved it on (unblocked or archived)."""
+    if _hooks_on() and task_id and "status" in (changed_fields or ()):
+        _clear_badge(task_id, "task unblocked")
 
 
 # --- command ---------------------------------------------------------------
@@ -200,8 +253,8 @@ def frictionless_command(raw_args: str) -> str:
     if mode == "evolve":
         return head + (
             "Run Evolve mode: run skills/frictionless/scripts/mine.py and cleanse.py at low priority, "
-            "then evolve.py, read the proposal, and open one PR against the Selenite repo "
-            "with the accepted changes. Never edit the installed copy directly.\n"
+            "then evolve.py, read the proposal, and draft the accepted changes on a local branch of "
+            "the Selenite repo. Opening a PR is the human's decision. Never edit the installed copy directly.\n"
             f"Plugin root: {ROOT}\n" + (f"Focus: {rest}\n" if rest else "")
         )
     if mode == "cleanse":
@@ -265,8 +318,8 @@ def register(ctx) -> None:
                          args_hint="[cleanse|gate|calm|evolve] [context]")
     ctx.register_tool(name="selenite_ledger", toolset="selenite", schema=LEDGER_SCHEMA,
                       handler=selenite_ledger, description=LEDGER_SCHEMA["description"], emoji="🤍")
-    for hook in (pre_llm_call, pre_approval_request, post_approval_response,
-                 kanban_task_blocked, kanban_task_completed):
+    for hook in (pre_llm_call, post_approval_response,
+                 kanban_task_blocked, kanban_task_completed, on_kanban_task_updated):
         ctx.register_hook(hook.__name__, hook)
     fake_gates.HOOKS_ON = _hooks_on  # one off switch for every hook Selenite runs
     fake_gates.register(ctx)

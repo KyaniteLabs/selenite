@@ -256,7 +256,7 @@ def test_question_offers_every_legitimate_kind_and_never_says_safe(tmp_path, mon
     msg = ctx.hooks["pre_tool_call"](tool_name="kanban_block", args={"task_id": "t", "reason": RELAY}, session_id="s")["message"]
     for kind in ("kind=needs_input", "kind=dependency", "kind=capability"):
         assert kind in msg
-    assert "credentials" in msg and "deletion" in msg and "safe" not in msg.lower()
+    assert "credentials" in msg and "deleting" in msg and "safe" not in msg.lower()
 
 
 @pytest.mark.parametrize("kind", ["needs_input", "dependency", "capability", "transient", "NEEDS_INPUT"])
@@ -380,11 +380,15 @@ def test_extra_seats_from_config(tmp_path, monkeypatch):
     configure()
 
 
-def test_needs_input_is_never_refused(tmp_path, monkeypatch):
-    _, ctx = _load_plugin(tmp_path, monkeypatch, {"fake_gate_mode": "ask"})
+@pytest.mark.parametrize("mode", ["observe", "nudge", "ask"])
+def test_a_declared_kind_is_never_refused_or_nudged(tmp_path, monkeypatch, mode):
+    _, ctx = _load_plugin(tmp_path, monkeypatch, {"fake_gate_mode": mode})
     args = {"task_id": "t", "reason": "Product must record the ruling", "kind": "needs_input"}
     assert ctx.hooks["pre_tool_call"](tool_name="kanban_block", args=args, session_id="s", tool_call_id="c") is None
-    assert "F3" in ctx.hooks["transform_tool_result"](tool_name="kanban_block", args=args, result="ok", session_id="s", tool_call_id="c")
+    assert ctx.hooks["transform_tool_result"](tool_name="kanban_block", args=args, result="ok", session_id="s", tool_call_id="c") is None
+    rows = [json.loads(l) for l in (tmp_path / "plugin-data/antibeaurocracy/ledger.jsonl").read_text().splitlines()]
+    assert rows[0]["event"] == "block_attempt" and rows[0]["declared"] == "needs_input"
+    assert rows[1]["event"] == "declared"
 
 
 # ---------------------------------------------------------------- round-2 hardening
@@ -429,7 +433,10 @@ def test_refusal_store_lock_times_out(tmp_path):
     ("Awaiting approval from Platform before I run the tests", True),     # F1: asked
     ("Platform must record the ruling on the export format", True),       # F3: asked
     ("HOLD: keep the old export until further notice", True),             # F5: asked
-    ("Awaiting approval from Product before I run the tests", False),     # "Product" is in the wall net: nudge only
+    ("Awaiting approval from Product before I run the tests", True),      # a seat name is not a wall word
+    ("Awaiting approval from Security before I run the tests", True),
+    ("pending ACK from the board agent", True),
+    ("Awaiting approval from Platform to spend on the GPU box", False),   # spend: nudge only
     ("Awaiting ACK from the CEO", False),                                 # HUMAN
     ("Awaiting ACK from Platform to run terraform apply", False),         # WALL
 ])
@@ -641,3 +648,95 @@ def test_judge_failures_are_no_answer(tmp_path):
     assert judge.runner(f"{sys.executable} -c 'import sys; sys.exit(3)'")("x") == ""
     with pytest.raises(ValueError):
         judge.runner("   ")
+
+
+# ---------------------------------------------------------------- second-roast regressions
+
+def _selenite(name):
+    return sys.modules[name]
+
+
+def test_real_hermes_blocked_kwargs_recover_the_declared_kind(tmp_path, monkeypatch):
+    """Hermes's kanban_task_blocked passes no kind; the facet recovers it from the kanban_block call."""
+    _, ctx = _load_plugin(tmp_path, monkeypatch, name="sel_kind")
+    led = _selenite("sel_kind").ledger
+    args = {"task_id": "t_k", "reason": "pick between the two designs", "kind": "needs_input"}
+    assert ctx.hooks["pre_tool_call"](tool_name="kanban_block", args=args, session_id="s") is None
+    ctx.hooks["kanban_task_blocked"](task_id="t_k", board="demo", assignee="eng", run_id=1,
+                                     profile_name="x", reason=args["reason"])
+    events = [r["event"] for r in _ledger(tmp_path)]
+    assert events == ["block_attempt", "declared"]  # the echo is not ledgered twice
+    assert ("blocked", "kanban:t_k") in [(r["kind"], r["key"]) for r in led.rows()]
+
+
+def test_a_rejected_block_clears_its_echo(tmp_path, monkeypatch):
+    mod, ctx = _load_plugin(tmp_path, monkeypatch, name="sel_reject")
+    args = {"task_id": "t_r", "reason": RELAY}
+    ctx.hooks["pre_tool_call"](tool_name="kanban_block", args=args, session_id="s", tool_call_id="c")
+    assert "t_r" in mod._recent_attempts
+    ctx.hooks["transform_tool_result"](tool_name="kanban_block", args=args, result='{"error": "no such task"}',
+                                       session_id="s", tool_call_id="c")
+    assert "t_r" not in mod._recent_attempts
+    ctx.hooks["kanban_task_blocked"](task_id="t_r", board="demo", reason=RELAY)
+    assert _ledger(tmp_path)[-1]["event"] == "blocked_observed"
+
+
+def test_a_status_change_clears_the_badge(tmp_path, monkeypatch):
+    _, ctx = _load_plugin(tmp_path, monkeypatch, name="sel_badge")
+    led = _selenite("sel_badge").ledger
+    ctx.hooks["kanban_task_blocked"](task_id="t_b", board="demo", reason="manual approval needed")
+    ctx.hooks["on_kanban_task_updated"](task_id="t_b", changed_fields=["title"])
+    assert "kanban:t_b" not in led.fixed_keys()
+    ctx.hooks["on_kanban_task_updated"](task_id="t_b", changed_fields=["status"])
+    assert "kanban:t_b" in led.fixed_keys()
+
+
+def test_one_list_of_walls_on_every_surface(tmp_path, monkeypatch):
+    from antibeaurocracy_core import WALLS
+    from antibeaurocracy_core.classify import classify
+    mod, _ = _load_plugin(tmp_path, monkeypatch, name="sel_walls")
+    v = classify(RELAY)
+    docs = (ROOT / "skills/frictionless/SKILL.md").read_text()
+    surfaces = {"calm": _selenite("sel_walls").CALM_CONTEXT, "doctrine": mod.DOCTRINE,
+                "explain": mod._explain(v), "question": mod._question(v), "frictionless skill": docs}
+    for name, text in surfaces.items():
+        missing = [w for w in WALLS if w not in text]
+        assert not missing, f"{name} is missing {missing}"
+
+
+def _kind_db(path, task, kind):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(path)
+    con.execute("create table tasks (id text primary key, block_kind text)")
+    con.execute("insert into tasks values (?, ?)", (task, kind))
+    con.commit(); con.close()
+
+
+@pytest.mark.parametrize("where,board", [("kanban/boards/demo/kanban.db", "demo"),
+                                         ("kanban.db", None),
+                                         ("kanban/boards/other/kanban.db", "demo")])  # a wrong board name still finds it
+def test_the_stored_kind_is_read_without_private_imports(tmp_path, monkeypatch, where, board):
+    monkeypatch.delenv("HERMES_KANBAN_DB", raising=False)
+    monkeypatch.delenv("HERMES_KANBAN_HOME", raising=False)
+    monkeypatch.delenv("HERMES_KANBAN_BOARD", raising=False)
+    _kind_db(tmp_path / where, "t_s", "capability")
+    _, ctx = _load_plugin(tmp_path, monkeypatch, name="sel_stored")
+    ctx.hooks["kanban_task_blocked"](task_id="t_s", board=board, reason="cannot reach the registry")
+    rec = _ledger(tmp_path)[-1]
+    assert rec["event"] == "blocked_observed" and rec["declared"] == "capability"
+
+
+def test_a_pinned_kanban_db_wins(tmp_path, monkeypatch):
+    pinned = tmp_path / "elsewhere" / "k.db"
+    _kind_db(pinned, "t_p", "needs_input")
+    monkeypatch.setenv("HERMES_KANBAN_DB", str(pinned))
+    _, ctx = _load_plugin(tmp_path, monkeypatch, name="sel_pin")
+    ctx.hooks["kanban_task_blocked"](task_id="t_p", board="demo", reason="x")
+    assert _ledger(tmp_path)[-1]["declared"] == "needs_input"
+
+
+def test_no_private_hermes_imports():
+    import re as _re
+    for f in [*ROOT.glob("*.py"), *ROOT.glob("antibeaurocracy_core/*.py"), *ROOT.glob("dashboard/*.py"),
+              *ROOT.glob("skills/*/scripts/*.py")]:
+        assert not _re.search(r"^\s*(from|import) hermes_cli\b", f.read_text(), _re.M), f

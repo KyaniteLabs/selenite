@@ -45,4 +45,31 @@ jobs:
       - name: Cleanse runs on an empty HOME with no findings
         run: |
           H=$(mktemp -d) && HOME="$H" HERMES_HOME="$H/.hermes" SELENITE_STATE="$H/s" python3 -I skills/frictionless/scripts/cleanse.py | tee out.txt
-          grep -q "0 finding" out.txt
+          grep -q "^Selenite cleanse: 0 finding" out.txt
+  hermes-validate:
+    runs-on: docker
+    timeout-minutes: 20
+    container:
+      image: python:3.14-bookworm@sha256:3fe825da0a80fa8e2cd79baadeb76b03c0ddf3d6cdbc8346778a0208b9d6038c
+    steps:
+      - name: Install checkout runtime (actions/checkout needs node + git)
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends git nodejs
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          path: plugin
+          persist-credentials: false
+      - name: Fetch the tested Hermes runtime (v0.23.0, pinned by commit)
+        run: |
+          git init -q .hermes-runtime
+          git -C .hermes-runtime fetch -q --depth 1 https://github.com/NousResearch/hermes-agent 2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19
+          git -C .hermes-runtime checkout -q FETCH_HEAD
+      - name: Install Hermes from its own lockfile
+        run: python3 -m pip install --no-cache-dir uv==0.11.22 && uv sync --frozen --python 3.14 --directory .hermes-runtime
+      - name: Plugin tests under the Hermes runtime
+        run: |
+          uv pip install --python .hermes-runtime/.venv/bin/python pytest==8.4.2
+          cd plugin && ../.hermes-runtime/.venv/bin/python -m pytest -q
+      - name: The real validator passes with no warnings (no credentials)
+        run: |
+          HERMES_HOME=$(mktemp -d) .hermes-runtime/.venv/bin/hermes plugins validate plugin --json > validate.json
+          python3 -c 'import json,sys; r=json.load(open("validate.json")); print(json.dumps(r, indent=1)); sys.exit(0 if r.get("ok") is True and not r.get("warnings") else 1)'

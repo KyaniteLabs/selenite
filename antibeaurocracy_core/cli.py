@@ -9,7 +9,8 @@ from pathlib import Path
 
 from . import audit as _audit
 from . import judge as _judge
-from .classify import classify, configure
+from . import settings as _settings
+from .classify import classify
 
 
 def add_arguments(p: argparse.ArgumentParser) -> None:
@@ -34,9 +35,14 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
         sp.add_argument("--seat", action="append", default=[], help="a seat or agent-role name your team uses (repeatable)")
 
 
-def handle(args: argparse.Namespace) -> int:
-    if getattr(args, "seat", None):
-        configure(seats=args.seat)
+def handle(args: argparse.Namespace, settings: dict | None = None) -> int:
+    """``settings`` comes from the plugin context inside Hermes; outside it, from $HERMES_HOME/config.yaml.
+    --seat adds to the configured extra_seats."""
+    if settings is None:
+        settings, err = _settings.read()
+        if err:
+            print(f"antibeaurocracy: Selenite settings unreadable ({err}); using defaults.", file=sys.stderr)
+    _settings.apply(settings, extra_seats=getattr(args, "seat", None) or ())
     if args.cmd == "classify":
         text = " ".join(args.text) if args.text else sys.stdin.read()
         v = classify(text, kind=args.kind, age_hours=args.age_hours)

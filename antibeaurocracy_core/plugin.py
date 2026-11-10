@@ -2,8 +2,7 @@
 
 Part of Selenite, whose one intent is to take friction off the human. A wait between agents that
 is not a real wall ends up on a person's desk as a stale board to untangle, so Selenite treats it
-as human friction caught early. Walls always stand: credentials, spend, publishing or deploying,
-destructive, legal, a named freeze, or a question only a person can answer.
+as human friction caught early. Walls always stand (classify.WALLS is the one list).
 
 Selenite's ``register`` calls :func:`register` here. This module adds:
 - hooks ``pre_tool_call`` / ``transform_tool_result`` on ``kanban_block`` and a throttled
@@ -23,6 +22,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+import sqlite3
 import threading
 import time
 from pathlib import Path
@@ -30,8 +31,8 @@ from pathlib import Path
 from . import FAKE, __version__, classify
 from . import audit as _audit
 from . import cli as _cli
-from . import configure as _configure
-from .classify import WALL_FAMILY
+from . import settings as _settings
+from .classify import WALLS_TEXT, wall_family
 from .gates import GateState, NudgeBox, RefusalStore, atomic_write, decide
 
 logger = logging.getLogger(__name__)
@@ -45,13 +46,14 @@ _MODE_ALIASES = {"enforce": "ask"}
 _GATED_TOOLS = frozenset({"kanban_block"})
 # The kinds an agent can declare on kanban_block. A declared kind is trusted and ledgered, never argued with.
 _DECLARABLE = frozenset({"dependency", "needs_input", "capability", "transient"})
-# kanban_task_blocked fires for a block the pre_tool_call hook already ledgered; skip that echo.
+# kanban_task_blocked fires for a block the pre_tool_call hook already ledgered; skip that echo. Each entry
+# also keeps the kind the agent declared, because Hermes does not pass the kind to kanban_task_blocked.
 _ECHO_WINDOW_S = 60.0
-_recent_attempts: dict[str, float] = {}
+_recent_attempts: dict[str, tuple[float, str]] = {}
 
-DOCTRINE = """## Waits between agents (antibeaurocracy plugin)
+DOCTRINE = f"""## Waits between agents (antibeaurocracy plugin)
 Before you block a card on another agent, check what the wait is for.
-- Still stop for: credentials, spend, publishing/deploying/sending, destructive or irreversible steps, legal, a named freeze, a machinery fault, a real task dependency, or a question only a person can answer.
+- Still stop for a wall: {WALLS_TEXT}. Also for a machinery fault or a real task dependency.
 - Don't stop just to get another agent's OK, relay, ruling or ceremony for a step that is in your scope and can be undone. Do it and note how to undo it.
 - If you're unsure which it is, treat it as a wall and ask once: one line, the options, your default."""
 
@@ -72,6 +74,12 @@ def _cfg(key: str, default):
     except Exception:  # pragma: no cover - host without settings
         val = default
     return default if val is None else val
+
+
+def _ctx_settings() -> dict:
+    """The settings the classifier and audit read, as the plugin context reports them."""
+    return {k: _cfg(k, None) for k in ("extra_seats", "extra_ceremony", "min_confidence", "fake_gate_mode")
+            if _cfg(k, None) is not None}
 
 
 def _mode() -> str:
@@ -122,12 +130,21 @@ def _ledger(event: str, **fields) -> None:
     rec = {"ts": round(time.time(), 3), "event": event, **{k: v for k, v in fields.items() if v not in (None, "")}}
     path = data_dir() / "ledger.jsonl"
     try:
-        # Selenite needs no cleansing: past LEDGER_ROTATE_BYTES the ledger becomes ledger.1.jsonl (one kept).
-        if path.exists() and path.stat().st_size >= LEDGER_ROTATE_BYTES:
-            os.replace(path, path.with_name("ledger.1.jsonl"))
-        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-        with os.fdopen(fd, "a") as fh:
-            fh.write(json.dumps(rec, default=str) + "\n")
+        lock = os.open(path.with_name(".ledger.lock"), os.O_WRONLY | os.O_CREAT, 0o600)
+        try:
+            try:
+                import fcntl
+                fcntl.flock(lock, fcntl.LOCK_EX)  # two writers never rotate the same file twice
+            except (ImportError, OSError):
+                pass
+            # Selenite needs no cleansing: past LEDGER_ROTATE_BYTES the ledger becomes ledger.1.jsonl (one kept).
+            if path.exists() and path.stat().st_size >= LEDGER_ROTATE_BYTES:
+                os.replace(path, path.with_name("ledger.1.jsonl"))
+            fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+            with os.fdopen(fd, "a") as fh:
+                fh.write(json.dumps(rec, default=str) + "\n")
+        finally:
+            os.close(lock)
     except OSError as exc:  # never let bookkeeping break a turn
         logger.warning("antibeaurocracy ledger write failed: %s", exc)
 
@@ -158,18 +175,20 @@ def _nudge_key(tool_name: str, args: dict, session_id: str, tool_call_id: str) -
 
 def _explain(v) -> str:
     return (f"antibeaurocracy: this block reads as {v.label} ({v.reason}), a wait on another agent rather than a wall. "
-            f"{v.action} If something here does need credentials, money, publishing, deletion, legal sign-off or a "
-            "named freeze, it's a wall: stop and ask the person once.")
+            f"{v.action} If it touches a wall ({WALLS_TEXT}), it is one: stop and ask the person once.")
 
 
 def _question(v) -> str:
-    """Ask mode: the block is returned once with a question, not a verdict. Any declared kind is trusted."""
+    """Ask mode: the block is returned once with a question, not a verdict. Any declared kind is trusted.
+    The kinds are Hermes's own (tools/kanban_tools_schemas.py)."""
     return (f"antibeaurocracy: before this card blocks, say what kind of wait it is. It reads like {v.label} "
             f"({v.reason}), a wait on another agent, but the check is a pattern match and you know the work.\n"
-            "- A wall (credentials, spend, publishing or deploying, deletion, legal, a named freeze) or a question "
-            "only a person can answer: call kanban_block again with kind=needs_input and name the wall in the reason.\n"
+            f"- A person has to answer or decide (a wall: {WALLS_TEXT}): call kanban_block again with "
+            "kind=needs_input and name the wall in the reason.\n"
+            "- A hard wall no agent can get past (no access, missing credentials, an action no agent can do): "
+            "kind=capability.\n"
             "- Another task has to land first: kind=dependency, with its task id in the reason.\n"
-            "- A tool or permission is broken or missing: kind=capability (or transient if it should clear on its own).\n"
+            "- A fault that should clear on its own (rate limit, outage, flaky tool): kind=transient.\n"
             f"- None of these: it is only another agent's OK, relay, ruling or ceremony. {v.action}\n"
             "Whatever kind you declare goes through and is recorded as you declared it.")
 
@@ -191,19 +210,20 @@ def _gate(tool_name: str, args: dict, session_id: str, tool_call_id: str):
     kind = str(args.get("kind") or "").strip().lower()
     v = classify(reason, kind=kind or None)
     mode = _mode()
-    over = v.cls == FAKE and v.evidenced and v.confidence >= _num("min_confidence", 0.6)
+    over = v.cls == FAKE and v.evidenced and v.confidence >= _settings.min_confidence(_ctx_settings())
     card = _card_id(args)
+    declared = kind if kind in _DECLARABLE else None
     _ledger("block_attempt", tool=tool_name, task=card, verdict=v.label, conf=v.confidence,
-            mode=mode, session=session_id)
+            mode=mode, session=session_id, declared=declared)
     max_ask = _count("max_refusals", 1)
-    if mode == "ask" and kind in _DECLARABLE:
-        # The agent declared what the wait is. Trust it, and ledger it next to the verdict so the audit
-        # can show where declarations and the classifier disagree.
+    if declared:
+        # The agent declared what the wait is. Trust it in every mode: no question and no nudge. Ledger it
+        # next to the verdict so the audit can show where declarations and the classifier disagree.
         _ledger("declared", tool=tool_name, task=card, declared=kind, verdict=v.label, mode=mode, session=session_id)
-        mode = "nudge"
-    elif mode == "ask" and WALL_FAMILY.search(reason):
-        # A wall-family word anywhere (money, infra, deletion, credentials, publishing, legal, freezes, a
-        # person's role) means no question at all, only the nudge. A missed wall then costs nothing.
+        mode = "observe"
+    elif mode == "ask" and wall_family(reason):
+        # A wall-family word (money, infra, deletion, credentials, publishing, legal, freezes, a person's
+        # role; agent and seat names are not counted) means no question at all, only the nudge.
         mode = "nudge"
     if mode == "ask" and over:
         state, n = _refusal_store().transition(_refusal_key(args, session_id), lambda p: decide(mode, over, p, max_ask))
@@ -215,9 +235,9 @@ def _gate(tool_name: str, args: dict, session_id: str, tool_call_id: str):
     if card:  # the block goes through, so kanban_task_blocked will echo it; remember to skip that echo
         with _state_lock:
             now = time.time()
-            for k in [k for k, t in _recent_attempts.items() if now - t > _ECHO_WINDOW_S]:
+            for k in [k for k, (t, _) in _recent_attempts.items() if now - t > _ECHO_WINDOW_S]:
                 del _recent_attempts[k]
-            _recent_attempts[str(card)] = now
+            _recent_attempts[str(card)] = (now, declared or "")
     if state is GateState.FAIL_OPEN:
         _ledger("fail_open", tool=tool_name, task=card, verdict=v.label)
     elif state is GateState.NUDGE:
@@ -225,35 +245,90 @@ def _gate(tool_name: str, args: dict, session_id: str, tool_call_id: str):
     return None
 
 
+def _rejected(obj) -> bool:
+    """Hermes's tool_error shape: {"error": ...}. A rejected block never reaches kanban_task_blocked."""
+    return isinstance(obj, dict) and bool(obj.get("error"))
+
+
 def on_transform_tool_result(tool_name: str = "", args: dict | None = None, result=None, session_id: str = "",
                              tool_call_id: str = "", **_kw):
     if tool_name not in _GATED_TOOLS:
         return None
-    note = _nudges.pop(_nudge_key(tool_name, args or {}, session_id, tool_call_id))
-    if not note or not isinstance(result, str):
-        return None
+    args = args if isinstance(args, dict) else {}
+    note = _nudges.pop(_nudge_key(tool_name, args, session_id, tool_call_id))
     try:
-        obj = json.loads(result)
+        obj = json.loads(result) if isinstance(result, str) else None
     except ValueError:
         obj = None
+    if _rejected(obj):  # no echo is coming, so a real block on this card a moment later must still be ledgered
+        with _state_lock:
+            _recent_attempts.pop(_card_id(args), None)
+        return None
+    if not note or not isinstance(result, str):
+        return None
     if isinstance(obj, dict):
         obj["antibeaurocracy"] = note
         return json.dumps(obj)
     return result + "\n\n" + note
 
 
+_SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+
+def _kanban_dbs(board: str | None) -> list[Path]:
+    """Where Hermes keeps kanban.db, from its documented layout (no private imports): HERMES_KANBAN_DB
+    pins one file; otherwise the root is HERMES_KANBAN_HOME or the Hermes home, the default board's DB
+    is <root>/kanban.db and a named board's is <root>/kanban/boards/<slug>/kanban.db. The named board
+    comes first, then every other board, since task ids are unique across boards."""
+    pin = os.environ.get("HERMES_KANBAN_DB", "").strip()
+    if pin:
+        return [Path(pin).expanduser()]
+    root = Path(os.environ.get("HERMES_KANBAN_HOME", "").strip() or _hermes_home()).expanduser()
+    slug = str(board or os.environ.get("HERMES_KANBAN_BOARD") or "default").strip().lower()
+    first = []
+    if slug == "default":
+        first = [root / "kanban.db"]
+    elif _SLUG.match(slug):
+        first = [root / "kanban" / "boards" / slug / "kanban.db"]
+    rest = [db for db in _audit.find_boards([root]) if db not in first]
+    return first + rest
+
+
+def _stored_kind(task_id: str, board: str | None) -> str | None:
+    """The block_kind Hermes stored on the card, read-only. Hermes does not pass it to the hook."""
+    for db in _kanban_dbs(board)[:32]:
+        if not db.is_file():
+            continue
+        try:
+            con = sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True, timeout=1.0)
+            try:
+                row = con.execute("SELECT block_kind FROM tasks WHERE id = ?", (str(task_id),)).fetchone()
+            finally:
+                con.close()
+        except sqlite3.Error:
+            continue
+        if row:
+            return row[0] if row[0] in _DECLARABLE else None
+    return None
+
+
 def observe_block(task_id: str = "", board: str | None = None, reason: str | None = None, kind: str | None = None):
-    """Classify one block once and ledger its verdict, never the reason text. Returns the verdict so
-    Selenite's single ``kanban_task_blocked`` observer can route it: WALL and HUMAN land on a person,
-    FAKE is a wait between agents. A block the pre_tool_call hook saw in the last minute is classified
-    but not ledgered twice. Raises nothing it can avoid; the caller still guards it."""
-    v = classify(str(reason or ""), kind=kind)
+    """Classify one block once and ledger its verdict, never the reason text. Returns ``(verdict, kind)``
+    so Selenite's single ``kanban_task_blocked`` observer can route it. The kind is the one passed in,
+    else the one the agent declared on its kanban_block call a moment ago, else the card's stored
+    block_kind. A block the pre_tool_call hook saw in the last minute is classified but not ledgered
+    twice. Raises nothing it can avoid; the caller still guards it."""
     key = str(task_id)  # task ids are unique across boards; the board name differs between surfaces
     with _state_lock:
-        seen = time.time() - _recent_attempts.pop(key, 0.0) <= _ECHO_WINDOW_S
+        t, echoed_kind = _recent_attempts.pop(key, (0.0, ""))
+    seen = time.time() - t <= _ECHO_WINDOW_S
+    kind = kind if kind in _DECLARABLE else (echoed_kind if seen and echoed_kind else None)
+    if kind is None and task_id:
+        kind = _stored_kind(key, board)
+    v = classify(str(reason or ""), kind=kind)
     if not seen:
-        _ledger("blocked_observed", task=task_id, board=board, verdict=v.label, conf=v.confidence)
-    return v
+        _ledger("blocked_observed", task=task_id, board=board, verdict=v.label, conf=v.confidence, declared=kind)
+    return v, kind
 
 
 # ---------------------------------------------------------------- dispatcher snapshot
@@ -270,7 +345,7 @@ def on_kanban_dispatch_tick(dry_run: bool = False, **_kw):
         return None
     home = _hermes_home()  # resolved on the hook's thread, before handing off
     key = str(home)
-    interval = _num("snapshot_minutes", 60) * 60
+    interval = max(1.0, _num("snapshot_minutes", 60)) * 60  # at least a minute, so 0 or junk never runs every tick
     with _state_lock:
         if key in _snapshot_running or time.time() - _snapshot_at.get(key, 0.0) < interval:
             return None
@@ -383,21 +458,15 @@ def _cli_handler(args) -> int:
     if not getattr(args, "cmd", None):
         print(HELP)
         return 2
-    return _cli.handle(args)
+    return _cli.handle(args, settings=_ctx_settings())
 
 
 # ---------------------------------------------------------------- register
 
-def _as_list(val) -> list[str]:
-    if isinstance(val, str):
-        return [s for s in (x.strip() for x in val.split(",")) if s]
-    return [str(x) for x in (val or [])]
-
-
 def register(ctx) -> None:
     global _ctx
     _ctx = ctx
-    _configure(seats=_as_list(_cfg("extra_seats", [])), ceremony_phrases=_as_list(_cfg("extra_ceremony", [])))
+    _settings.apply(_ctx_settings())
     if str(_cfg("fake_gate_mode", "")).strip().lower() == "enforce":
         logger.warning("antibeaurocracy: mode 'enforce' is now called 'ask'; treating it as 'ask'.")
     if _mode() == "ask":

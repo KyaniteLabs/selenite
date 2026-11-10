@@ -2,7 +2,7 @@
 
 from .classify import (  # noqa: F401
     ACK, ACTIONS, CEREMONY, DEPENDENCY, FAKE, HUMAN, LIMBO, MACHINERY, PARKING, RELAY, STALE, WALL,
-    Verdict, classify, configure,
+    WALLS, WALLS_TEXT, Verdict, classify, configure, wall_family,
 )
 
 __version__ = "0.5.0"

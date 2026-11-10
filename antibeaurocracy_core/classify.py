@@ -25,6 +25,13 @@ DEPENDENCY = "DEPENDENCY"
 FAKE = "FAKE"
 CLASSES = (WALL, HUMAN, DEPENDENCY, MACHINERY, FAKE)
 
+# The one wall list. Calm mode, the doctrine, the nudge, ask mode's question and the docs all quote it,
+# so no facet carries a narrower list than another (a test checks every surface).
+WALLS = ("credentials", "spending money", "publishing, deploying or changing visibility",
+         "deleting or other irreversible steps", "legal", "a named freeze",
+         "a question only a person can answer")
+WALLS_TEXT = ", ".join(WALLS[:-1]) + ", and " + WALLS[-1]
+
 # FAKE subtypes
 ACK = "F1-ack"  # one agent asking another agent for an OK
 RELAY = "F2-relay"  # work done; another agent must carry/create/merge it
@@ -64,7 +71,7 @@ _ABSENCE = re.compile(r"(approv|sign-?off|subscription|seat|plan|tier|key|token|
 _WALL = [
     ("credentials", re.compile(
         r"(ENEEDAUTH|E401|HTTP 40[13]|\b401 unauthori[sz]ed|push=false|READ permission|permission denied \(publickey|login required|"
-        r"\b(missing|expired|invalid|revoked|no(?! (output|input|context|more) )|no working|needs? (a |new )?|rotate|share|paste) (\w+ ){0,2}(credentials?|tokens?|api[ -]?keys?|passwords?|secrets?|2fa|otp)\b|"
+        r"\b(missing|expired|invalid|revoked|no(?! (output|input|context|more) )|no working|needs? (a |new )?|rotat\w*|share|paste) (\w+ ){0,2}(credentials?|tokens?|api[ -]?keys?|passwords?|secrets?|2fa|otp)\b|"
         r"\bre-?auth(enticate)?\b|oauth (flow|login|consent)|sudo password)", _I)),
     ("spend", re.compile(
         r"(\$\s?\d|\b\d+ ?(usd|eur|dollars?)\b|\b(spend(ing)?|billing|payment|pay (for|the)|invoice|purchas\w*|buy(ing)?|top[- ]?up|refund\w*|"
@@ -187,6 +194,16 @@ def _build_fake() -> list[tuple[str, re.Pattern]]:
 
 _FAKE = _build_fake()
 
+
+def wall_family(text: str) -> bool:
+    """Ask mode's loose wall net, tested on the text with agent names removed. Seat names such as
+    "Product", "Security" or "the board agent" name who is waited on, not a wall, so they must not
+    stop the question that a wait on another agent is meant to get."""
+    t = re.sub(r"\b[\w-]+[ -](agent|seat|bot|lane|worker)s?\b", " ", str(text or ""), flags=_I)
+    t = re.sub(rf"\b{_seats_rx()}\b", " ", t, flags=_I)
+    return bool(WALL_FAMILY.search(t))
+
+
 _HOLD_WITH_EXPIRY = re.compile(r"\b(until|expires?|through|till)\s+\d{4}-\d{2}-\d{2}|\buntil \d{1,2}[/-]\d{1,2}\b", _I)
 
 
@@ -273,9 +290,13 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
         return Verdict(DEPENDENCY, "", 0.8, "waits on another task, auto-resumes", ACTIONS[DEPENDENCY],
                        _hits(_DEPENDENCY, t) or ["kind=dependency"])
 
-    # 4. The agent declared a capability or transient gap: trust the declared kind.
-    if kind in ("capability", "transient"):
-        return Verdict(MACHINERY, "", 0.6, f"declared {kind} gap", ACTIONS[MACHINERY], [f"kind={kind}"])
+    # 4. The agent declared its kind: trust it. Hermes defines capability as a hard wall (no access, missing
+    # credentials, an action no agent can do) that surfaces to a person; transient is a fault that may clear.
+    if kind == "capability":
+        return Verdict(WALL, "declared-capability", 0.6, "declared a hard wall (kind=capability)", ACTIONS[WALL],
+                       ["kind=capability"])
+    if kind == "transient":
+        return Verdict(MACHINERY, "", 0.6, "declared transient gap", ACTIONS[MACHINERY], ["kind=transient"])
 
     mach = _hits(_MACHINERY, t)
 
@@ -323,7 +344,7 @@ RULES = (
     "1 WALL: a credential, spend, publish/deploy/send, destructive, legal or named-freeze phrase, unless a negator sits directly before it",
     "2 HUMAN: the text asks a person a question",
     "3 DEPENDENCY: kind=dependency, or the text names another task",
-    "4 MACHINERY: kind=capability or kind=transient",
+    "4 WALL: kind=capability (Hermes: a hard wall that surfaces to a person); MACHINERY: kind=transient",
     "5 HUMAN: a wait or gate phrase whose source is a person with authority ('from the CEO', 'per the owner', "
     "'the founder's OK', 'the CEO must sign'); a bare role noun, or an agent named after a role, does not count",
     "6 DEPENDENCY: a HOLD with an explicit expiry date",

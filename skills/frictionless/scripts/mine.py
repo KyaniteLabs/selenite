@@ -12,7 +12,8 @@ you name directly, which is then read as your own words line by line.
 Privacy: the aggregate report holds only counts and category names, and no
 host name. Excerpts go to a private samples file under $SELENITE_STATE
 (default ~/.local/state/selenite), mode 0600, never into the repo. Samples
-are redacted (emails, IPs, URLs with credentials, long tokens, the home path)
+are redacted by ledger.redact (emails, IPv4 and IPv6, URLs with credentials,
+key=value secrets, bearer and prefixed tokens, long token runs, the home path)
 and only the newest SAMPLE_KEEP files are kept.
 
 Stdlib only. Run at low priority:  nice -n 19 python3 mine.py --days 45
@@ -22,7 +23,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sqlite3
 import sys
 import time
@@ -34,24 +34,12 @@ STATE = Path(os.environ.get("SELENITE_STATE", HOME / ".local/state/selenite"))
 SAMPLE_KEEP = 3
 REPORT_KEEP = 10
 
-_REDACT = [
-    (re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+"), "<email>"),
-    (re.compile(r"\b\d{1,3}(\.\d{1,3}){3}\b"), "<ip>"),
-    (re.compile(r"://[^/\s:@]+:[^@\s]+@"), "://<cred>@"),
-    (re.compile(r"\b(?=[A-Za-z0-9_\-]*\d)[A-Za-z0-9_\-]{32,}\b"), "<token>"),
-]
-
-
-def redact(text: str) -> str:
-    text = text.replace(str(HOME), "~")
-    for pat, sub in _REDACT:
-        text = pat.sub(sub, text)
-    return text
-
 if __package__:  # loaded as selenite_frictionless.mine by a Hermes host
+    from .ledger import redact
     from .signals import classify
 else:  # run as a script
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from ledger import redact  # noqa: E402  (one redaction rule for the ledger and the samples)
     from signals import classify  # noqa: E402  (shared detector)
 
 

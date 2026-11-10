@@ -2,18 +2,18 @@
 
 A check is **rigor** when its result can change the decision, when it applies to every option, and when its cost fits the stakes. Failing any one of the three makes it **pedantry**. Safety stays even then: a check can be pedantic in *how* it decides and still find a real hazard. In that case keep the finding and fix the procedure.
 
-Each class below lists a typical case, the move, and when the same pattern is rigor after all. The cases come from a real audit of an eval and review pipeline, with names and numbers simplified. When you audit, label each finding MEASURED (read in a file or a command output), INFERRED (follows from measured facts) or UNVERIFIED (claimed but not checked).
+Each class below lists a typical case, the move, and when the same pattern is rigor after all. The cases are illustrative composites of an eval and review pipeline; no real system, team or result is described. When you audit, label each finding MEASURED (read in a file or a command output), INFERRED (follows from measured facts) or UNVERIFIED (claimed but not checked).
 
 ## P1 one-sample veto
 
 - **Case.** A challenger model was vetoed on one greedy answer to one prompt, with the model raters split 2-1 on severity. Its quality estimates were positive under both raters, and the plan allowed one attempt per prompt per arm.
 - **Move.** Record the answer as a finding, then mitigate it. Measure frequency on varied prompts for both arms. Decide on frequency × severity × mitigability.
-- **Rigor after all.** A clear, unmitigated, severe hazard in the intended use blocks deployment even when it was found once. In this case the challenger's answer (a home-canning time and pressure below the published safe values) was a real hazard, and an independent audit confirmed it.
+- **Rigor after all.** A clear, unmitigated, severe hazard in the intended use blocks deployment even when it was found once. Here the challenger's answer (a home-canning time and pressure below the published safe values) would be a real hazard.
 - **Never.** "A failure counts only if it reproduces." Identical greedy reruns repeat the same output; they are not new samples.
 
 ## P2 asymmetric scrutiny
 
-- **Case.** The plan vetoed "any challenger response that breaks a safety anchor the incumbent met", so the incumbent could never fail by construction. On the same canning item, the incumbent gave the low-altitude pressure for every altitude. One rater scored that as a moderate hazard and the other as none, and nothing followed until a human asked. At the org level, several serving changes shipped with no eval while candidates paid the full gate.
+- **Case.** The plan vetoed "any challenger response that breaks a safety anchor the incumbent met", so the incumbent could never fail by construction. On the same canning item, the incumbent gave the low-altitude pressure for every altitude. One rater scored that as a moderate hazard and the other as none, and nothing followed until a human asked. The same pattern shows up when serving changes ship with no eval while candidates pay the full gate.
 - **Move.** Use one standard for both arms. A finding on the incumbent opens a fix. "Keep what we serve" has to clear the same bar as the candidate.
 - **Rigor after all.** A deliberately higher bar for a change is fine when switching costs are real and named. It has to be stated and sized; it can't be implicit.
 
@@ -25,7 +25,7 @@ Each class below lists a typical case, the move, and when the same pattern is ri
 
 ## P4 model judgment where code fits
 
-- **Case.** The safety anchor stated only the low-altitude canning values, so the model raters missed the incumbent's altitude error. A checker coded from the published tables would have flagged both arms. A claim that "most of the pipeline is deterministic" was also wrong: prompts, anchors, quality dimensions and severity bands were all judgment.
+- **Case.** The safety anchor stated only the low-altitude canning values, so the model raters missed the incumbent's altitude error. A checker coded from the published tables would have flagged both arms. A claim that "most of the pipeline is deterministic" would also be wrong: prompts, anchors, quality dimensions and severity bands are all judgment.
 - **Move.** Use code for tables, numbers and formats. Use classic ML for classification with labelled data. Use LLMs for semantics only. A checker must also handle the variables that change the answer (here: gauge type, altitude, jar size), plus omissions and contradictions.
 - **Rigor after all.** Semantic harm (is this a usable scam script or an awareness article?) needs judgment, and a blinded human for consequential disputes.
 
@@ -37,25 +37,25 @@ Each class below lists a typical case, the move, and when the same pattern is ri
 
 ## P6 ceremony on exploratory work
 
-- **Case (rule measured, cost inferred).** Full firing gates were applied to a load smoke test. Post-hoc custody records were written for preregistrations labelled exploratory and advisory. An independent audit found no proof that this ceremony stopped those experiments, only that it added work around them.
+- **Case.** Full release gates are applied to a load smoke test. Post-hoc custody records are written for preregistrations labelled exploratory and advisory. The ceremony cannot stop those experiments; it only adds work around them.
 - **Move.** Consequential tests keep a short pre-declared decision rule, the data and a change log. Exploratory work gets labelled and run. Never turn a clerical amendment into a governance project.
 - **Rigor after all.** If a human owner named the gate as a standing rule, propose a smoke-class scope to that owner; don't skip it.
 
 ## P7 re-checking unchanged things
 
-- **Case.** After an account suspension, more than a dozen pull requests were reopened from the same commits with "re-review before merging". A governance countersign bound a pull-request description's hash days after the pull request was published.
+- **Case.** After an account is restored, a dozen pull requests are reopened from the same commits with "re-review before merging". A countersign binds a pull-request description's hash days after the pull request was published.
 - **Move.** Compare commit and tree hashes in code. If they are identical, the old verdict carries over. Run a post-decision check only if it names the rollback it could trigger.
 - **Rigor after all.** After a credential compromise, re-verifying that the commits *are* the same commits is rigor. It takes one hash compare, not a full review.
 
 ## P8 wording pedantry
 
-- **Case (thin evidence).** A registry swapped retired vocabulary words with no value changed. A closed verdict vocabulary was enforced by a linter. That is legitimate if machines parse those words, and pedantic if only people read them. No blocking review on pure wording was found in the sample.
+- **Case.** A registry swaps retired vocabulary words with no value changed. A closed verdict vocabulary is enforced by a linter. That is legitimate if machines parse those words, and pedantic if only people read them.
 - **Move.** Block only when the wording changes a claim a reader would act on. Fix everything else inline.
 - **Rigor after all.** "No worse" versus "non-inferior within a −0.20 margin", or "slightly better" versus "a positive estimate whose interval includes zero", change the claim. Corrections like those are right.
 
 ## P9 escalating in-domain calls
 
-- **Case (rule measured, cost inferred).** The plan said that if the third rater was unavailable, the dispute went to a human executive "as a blocked input; no self-resolution". It sent several items to that human "regardless of outcome", and needed the same human's word for a routine maintenance window. A governance rule named one auditor model with no substitute, and that model was unavailable that day.
+- **Case.** A plan says that if the third rater is unavailable, the dispute goes to a person "as a blocked input; no self-resolution". It sends several items to that person "regardless of outcome", and needs the same person's word for a routine maintenance window. A rule names one auditor model with no substitute, and that model is unavailable that day.
 - **Move.** Decide inside the charter with a default and a revert path. A machinery outage reroutes; it never goes to a human. Settle a recurring policy call once as a standing delegation.
 - **Rigor after all.** New model classes, policy instruments and walls are escalations a charter rightly requires.
 

@@ -159,8 +159,14 @@ def test_lowercase_on_hold_is_not_evidence():
     assert not v.evidenced
 
 
-def test_capability_kind_is_machinery_even_with_gate_words():
-    assert classify("Product must reconcile the scope", kind="capability").cls == MACHINERY
+def test_capability_kind_is_a_wall_as_hermes_defines_it():
+    assert classify("Product must reconcile the scope", kind="capability").cls == WALL
+    assert classify("Product must reconcile the scope", kind="transient").cls == MACHINERY
+
+
+def test_rotating_keys_is_a_credentials_wall():
+    v = classify("Blocked until someone is rotating the prod API keys")
+    assert v.cls == WALL and v.subtype == "credentials"
 
 
 def test_kind_of_any_type_does_not_raise():

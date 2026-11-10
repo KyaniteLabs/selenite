@@ -138,13 +138,16 @@ def audit_board(db: Path, now: float | None = None) -> dict:
     return {"board": str(db), "statuses": statuses, "blocked": cards}
 
 
-def is_fake(card: dict, threshold: float = FAKE_THRESHOLD) -> bool:
+def is_fake(card: dict, threshold: float | None = None) -> bool:
+    """None reads FAKE_THRESHOLD at call time, so min_confidence set after import still applies."""
+    threshold = FAKE_THRESHOLD if threshold is None else threshold
     v = card["verdict"]
     return (v["cls"] == FAKE and bool(v.get("matched")) and v["confidence"] >= threshold
             and card.get("bucket") not in ("auto_blocked", "created_blocked"))
 
 
-def summarize(boards: list[dict], threshold: float = FAKE_THRESHOLD) -> dict:
+def summarize(boards: list[dict], threshold: float | None = None) -> dict:
+    threshold = FAKE_THRESHOLD if threshold is None else threshold
     by_bucket: Counter = Counter()
     by_seat: dict[str, Counter] = defaultdict(Counter)
     causes: dict[str, list[str]] = defaultdict(list)

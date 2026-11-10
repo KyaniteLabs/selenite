@@ -9,6 +9,13 @@ Selenite, antibeaurocracy and antipedantry are now one product, Selenite, with t
 - **One observer for blocked cards:** `kanban_task_blocked` classifies once. A wait that lands on a person (a wall or a human question) is logged on Selenite's ledger; an approval an agent asks of another agent no longer counts as a human step.
 - **Cleanse reads the boards:** the fake-gate stone counts distinct cards with evidenced fake verdicts (confidence 0.6 or more) from both ledger files.
 - **Bounded and loud:** the fake-gate ledger rotates at 4 MB and is written 0600. The rules audit reports a file it can't read instead of skipping it, and skips Selenite's own skills. The dashboard caches the board audit for 30 seconds and logs config or ledger read failures.
+- **One list of walls:** `WALLS` in `classify.py` feeds Calm, the doctrine, the nudge, the question and the skill text, and a test holds them together. A capability gap and rotated credentials count as walls.
+- **Approvals:** only a person's once or session approval of a safe command is logged, as an allowlist candidate. Denials, timeouts, the smart approver, payment and MCP prompts, and Hermes's dangerous-command keys are not. "Always" marks the key fixed; a later prompt reopens it. Long keys truncate to one length. Calm stays off inside a Kanban worker.
+- **Blocked cards:** a declared kind decides the route first, and the kind an agent declared in `pre_tool_call` carries over to `kanban_task_blocked`. A block Hermes rejects no longer hides the next real one. Any status change clears the badge, not only completion.
+- **Cleanse:** a fake-gate card counts by its latest event, so an ask or a declared kind clears it and a later fake block reopens it. Runbook lines that only mention 2FA, OTP or friction are not counted as steps. Each run writes a report and one ledger row.
+- **Evolve:** a category's silence counts only in cycles that measured it, a damaged state file resets, notes are redacted, and the proposal leaves opening a PR to the human.
+- **Settings without private imports:** the plugin, the CLI and the dashboard read `extra_seats`, `extra_ceremony`, `min_confidence` and `fake_gate_mode` through `settings.py`, from `$HERMES_HOME/config.yaml` outside Hermes. A bad config is reported, not hidden. `audit --seat` adds to the configured seats. The stored block kind is read from the documented Kanban DB layout. `hermes plugins validate` passes with no warnings, and both CI workflows now fail on any warning.
+- **Ledger redaction** covers more secret shapes; plain words are left alone. `install.sh` warns when a real folder hides a skill link.
 - **Imported from** antibeaurocracy main @a564f2c, whose tree is identical to 0.3.0 below.
 
 ## 0.3.0 (antibeaurocracy)

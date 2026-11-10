@@ -32,7 +32,20 @@ def _core():
         sys.modules[name] = mod
         spec.loader.exec_module(mod)
         importlib.import_module(f"{name}.audit")  # submodules aren't attributes until imported
+        importlib.import_module(f"{name}.settings")
     return sys.modules[name]
+
+
+def _settings() -> dict:
+    """Selenite's settings from $HERMES_HOME/config.yaml, applied to the classifier and audit so the
+    tab counts what the plugin counts (extra_seats, extra_ceremony, min_confidence). A read failure
+    shows the defaults and is logged, not hidden."""
+    core = _core()
+    settings, err = core.settings.read(_home())
+    if err:
+        logger.warning("selenite settings unreadable, showing defaults: %s", err)
+    core.settings.apply(settings)
+    return settings
 
 
 def _home() -> Path:
@@ -75,34 +88,21 @@ def _count_file(path: Path, since: float, c: Counter) -> None:
 router = APIRouter()
 
 
-def _mode() -> str:
-    """The configured fake_gate_mode from the Hermes config, with the 0.2 "enforce" read as "ask"; "nudge"
-    (the default) when it can't be read, and the failure is logged rather than hidden."""
-    try:
-        from hermes_cli import config as _hc  # type: ignore
-        cfg = (getattr(_hc, "load_config_readonly", None) or _hc.load_config)() or {}
-        m = (((cfg.get("plugins") or {}).get("entries") or {}).get("selenite") or {}).get("settings", {}).get("fake_gate_mode")
-    except Exception as exc:
-        logger.warning("selenite fake_gate_mode unreadable, showing the default: %s", exc)
-        return "nudge"
-    m = str(m or "nudge").strip().lower()
-    m = "ask" if m == "enforce" else m
-    return m if m in ("observe", "nudge", "ask") else "nudge"
-
-
-def _boards() -> list:
+def _boards(settings: dict) -> list:
     home = _home()
+    key = (str(home), repr(sorted(settings.items())))  # a settings change re-audits, like a home change
     with _audit_lock:
-        if _audit_cache["home"] != home or _audit_cache["boards"] is None or time.time() - _audit_cache["ts"] > AUDIT_TTL:
+        if _audit_cache["home"] != key or _audit_cache["boards"] is None or time.time() - _audit_cache["ts"] > AUDIT_TTL:
             audit = _core().audit
-            _audit_cache.update(ts=time.time(), home=home, boards=[audit.audit_board(db) for db in audit.find_boards([home])])
+            _audit_cache.update(ts=time.time(), home=key, boards=[audit.audit_board(db) for db in audit.find_boards([home])])
         return _audit_cache["boards"]
 
 
 @router.get("/overview")
 def overview(top: int = Query(15, ge=1, le=100), days: int = Query(7, ge=1, le=90)):
+    settings = _settings()
     audit = _core().audit
-    boards = _boards()
+    boards = _boards(settings)
     summary = audit.summarize(boards)
     fakes = sorted((c for b in boards for c in b.get("blocked", []) if audit.is_fake(c)),
                    key=lambda c: (-(c.get("age_h") or 0), -c["verdict"]["confidence"]))
@@ -113,4 +113,5 @@ def overview(top: int = Query(15, ge=1, le=100), days: int = Query(7, ge=1, le=9
              for c in fakes[:top]]
     out = audit.counts_only(summary)
     out["headline"] = audit.headline(summary)
-    return {"summary": out, "cards": cards, "ledger": _ledger_counts(days), "days": days, "mode": _mode()}
+    return {"summary": out, "cards": cards, "ledger": _ledger_counts(days), "days": days,
+            "mode": _core().settings.mode(settings)}

@@ -54,6 +54,7 @@ jobs:
         run: |
           mkdir -p receipts
           HERMES_HOME="$RUNNER_TEMP/hermes-home" .hermes-runtime/.venv/bin/hermes plugins validate plugin --json > receipts/validate.json
+          python3 -c 'import json,sys; r=json.load(open("receipts/validate.json")); sys.exit(0 if r.get("ok") is True and not r.get("warnings") else 1)'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

@@ -14,7 +14,8 @@ changed: the fixes are proposals for a reviewable change.
   cleanse.py --days N           window for ledger-measured findings (default 30)
 
 Read-only apart from its own report under $SELENITE_STATE (0600, newest 10
-kept). Paths in the report are shown with the home prefix as ~. Stdlib only.
+kept) and, when run from the command line, one ledger row with the finding
+count. Paths in the report are shown with the home prefix as ~. Stdlib only.
 
 Stones are checked by small adapters in CHECKS. The fake-gate facet keeps
 its own metadata ledger; it is read as one more stone, by counts only.
@@ -225,9 +226,15 @@ def check_ledger(ctx: dict) -> list[dict]:
     return out
 
 
+# Runbooks are scanned only for imperative human steps. The chat signals also
+# match words like "2fa", "otp" or "friction-free", which a runbook mentions
+# without telling anyone to do anything.
+RUNBOOK_SKIP = ("2fa", "otp", "friction")
+
+
 def check_runbooks(ctx: dict) -> list[dict]:
     out: list[dict] = []
-    pats = COMPILED.get("human_gate", [])
+    pats = [p for p in COMPILED.get("human_gate", []) if not any(w in p.pattern for w in RUNBOOK_SKIP)]
     for root in ctx["paths"]:
         files = [root] if root.is_file() else sorted(root.rglob("*.md"))
         for f in files[:2000]:
@@ -246,6 +253,7 @@ def check_runbooks(ctx: dict) -> list[dict]:
 
 
 FAKE_EVENTS = ("block_attempt", "blocked_observed")  # a card blocked or about to be; not asks or declarations
+CLEARS = ("asked", "declared")  # the agent answered the question, or Hermes declared a real kind: not a fake wait
 FAKE_MIN_CONF = 0.6  # the facet's own nudge floor: under it the classifier is guessing, not finding
 
 
@@ -254,10 +262,11 @@ def check_fake_gates(ctx: dict) -> list[dict]:
     out: list[dict] = []
     d = hermes_home() / "plugin-data/antibeaurocracy"
     since = time.time() - ctx["days"] * 86400
-    cards: set[str] = set()
-    for f in (d / "ledger.1.jsonl", d / "ledger.jsonl"):
+    last: dict[str, bool] = {}  # card -> is its latest event a fake wait
+    for f in (d / "ledger.1.jsonl", d / "ledger.jsonl"):  # oldest first, so later events win
         if f.exists():
-            _fake_cards(f, since, cards)
+            _fake_cards(f, since, last)
+    cards = [c for c, fake in last.items() if fake]
     if cards:
         out.append(finding("fake-gate", "kanban", "fake-waits",
                            f"{len(cards)} card(s) waited on another agent with no real wall",
@@ -265,7 +274,10 @@ def check_fake_gates(ctx: dict) -> list[dict]:
     return out
 
 
-def _fake_cards(f: Path, since: float, cards: set[str]) -> None:
+def _fake_cards(f: Path, since: float, last: dict[str, bool]) -> None:
+    """Track each card's latest event. A fake block marks it; an ask or a
+    declared kind clears it; a fail-open leaves it as it was. A row that
+    carries a declared kind is Hermes's own wall, never a fake wait."""
     with f.open(errors="ignore") as fh:
         for line in fh:
             try:
@@ -274,16 +286,22 @@ def _fake_cards(f: Path, since: float, cards: set[str]) -> None:
                 continue
             if not (isinstance(r, dict) and isinstance(r.get("ts"), (int, float)) and r["ts"] >= since):
                 continue
-            conf = r.get("conf")
-            if r.get("event") in FAKE_EVENTS and re.match(r"(FAKE|F[1-6])\b", str(r.get("verdict", "")).upper()) \
-                    and isinstance(conf, (int, float)) and conf >= FAKE_MIN_CONF:
-                cards.add(str(r.get("task") or f"row{len(cards)}"))
+            card = str(r.get("task") or f"row{len(last)}")
+            event, conf = r.get("event"), r.get("conf")
+            if event in CLEARS:
+                last[card] = False
+            elif event in FAKE_EVENTS:
+                last[card] = (not r.get("declared")
+                              and bool(re.match(r"(FAKE|F[1-6])\b", str(r.get("verdict", "")).upper()))
+                              and isinstance(conf, (int, float)) and not isinstance(conf, bool)
+                              and conf >= FAKE_MIN_CONF)
 
 
 def needs_no_cleansing() -> list[dict]:
     """Selenite needs no cleansing: this must return []. CI runs it on every
     change, so a dirty Selenite never ships and never shows up as the human's
-    finding. The runtime sweep does not list Selenite."""
+    finding. The runtime sweep skips nothing: if Selenite ever drifts on a
+    machine, it shows up there like any other stone."""
     return [f for name in SELF_SKILLS for f in _check_one_skill(SELF_SKILL.parent / name, name)]
 
 

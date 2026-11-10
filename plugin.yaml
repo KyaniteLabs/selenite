@@ -13,8 +13,8 @@ description: >
   still delay or escalate it. Walls always stand: credentials, spend, publishing
   or deploying, destructive, legal, a named freeze, or a question only a person
   can answer. A read-only cleanse pass ranks what to clear across skills,
-  plugins, hooks, approvals, runbooks and boards; one ledger records what
-  cleared. Selenite needs no upkeep itself. Disclosure: the hooks add context to
+  plugins, hooks, approvals, runbooks and boards from Selenite's ledger and
+  the fake-gate ledger (pedantry is not in it yet). Selenite needs no upkeep itself. Disclosure: the hooks add context to
   the agent's prompt in Calm mode, and in fake_gate_mode "nudge" or "ask" they
   add a note to, or hand back with a question, a kanban block that reads as
   agent bureaucracy. They never approve, delete or edit a card.
@@ -25,10 +25,10 @@ tags: [workflow, ergonomics, accessibility, human-in-the-loop, kanban, governanc
 provides_tools: [selenite_ledger, bureaucracy_classify, bureaucracy_audit]
 provides_hooks:
   - pre_llm_call
-  - pre_approval_request
   - post_approval_response
   - kanban_task_blocked
   - kanban_task_completed
+  - on_kanban_task_updated
   - pre_tool_call
   - transform_tool_result
   - on_kanban_dispatch_tick

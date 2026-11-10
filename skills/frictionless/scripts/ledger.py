@@ -6,13 +6,15 @@
 
 kind: gate | calm | audit | cleanse | approval | blocked | miss | fp | fix | reopen
 key:  a short stable slug for the friction (e.g. gh-login, npm-otp).
-Notes must not contain secrets; they are truncated to 200 characters.
+Keys and notes are redacted when written (emails, IPs, tokens, secrets, the
+home path) and truncated: keys to 80 characters, notes to 200.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from collections import Counter
@@ -23,6 +25,46 @@ LEDGER = STATE / "ledger.jsonl"
 ROTATED = STATE / "ledger.1.jsonl"
 ROTATE_BYTES = 4 * 1024 * 1024  # one rotated file is kept; older history is dropped
 KINDS = {"gate", "calm", "audit", "cleanse", "approval", "blocked", "miss", "fp", "fix", "reopen"}
+APPROVAL_KEY = 71  # approval keys are cut here, so "approval:" + key fits the 80-character key limit
+
+# Redaction runs on every key and note the ledger writes, and on miner samples. Order matters:
+# whole secrets first, then the generic long-run rule.
+_REDACT = [
+    (re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+"), "<email>"),
+    (re.compile(r"://[^/\s:@]+:[^@\s]+@"), "://<cred>@"),
+    (re.compile(r"(?i)\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 <token>"),
+    (re.compile(r"(?i)\b([\w-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|auth)[\w-]*)"
+                r"(\s*[=:]\s*)(\"[^\"]*\"|'[^']*'|\S+)"), r"\1\2<secret>"),
+    (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "<token>"),
+    (re.compile(r"\b(?:sk-proj-|sk-|ghp_|gho_|ghs_|ghu_|github_pat_|xox[abprs]-|glpat-)[A-Za-z0-9_\-]{8,}"), "<token>"),
+    (re.compile(r"(?<![\w/+=])(?=[A-Za-z0-9_\-/+=]*\d)(?=[A-Za-z0-9_\-/+=]*[A-Za-z])[A-Za-z0-9_\-/+=]{32,}"), "<token>"),
+    (re.compile(r"\b\d{1,3}(\.\d{1,3}){3}\b"), "<ip>"),
+    # IPv6: needs "::" or a hex letter, so clock times like 12:30:45 stay readable.
+    (re.compile(r"(?i)(?<![\w:.])(?=[0-9a-f:]*(?:::|[a-f]))[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}(?![\w:])"), "<ip>"),
+]
+
+
+def redact(text: str) -> str:
+    text = str(text).replace(str(Path.home()), "~")
+    for pat, sub in _REDACT:
+        text = pat.sub(sub, text)
+    return text
+
+
+class _Lock:
+    """An advisory lock around rotate-and-append, so two writers never rotate the same file twice."""
+
+    def __enter__(self):
+        self.fd = os.open(STATE / ".ledger.lock", os.O_WRONLY | os.O_CREAT, 0o600)
+        try:
+            import fcntl
+            fcntl.flock(self.fd, fcntl.LOCK_EX)
+        except (ImportError, OSError):  # no fcntl (Windows): appends are still atomic, rotation is best effort
+            pass
+        return self
+
+    def __exit__(self, *exc):
+        os.close(self.fd)  # closing releases the lock
 
 
 def _rotate() -> None:
@@ -37,12 +79,13 @@ def add(kind: str, key: str, note: str = "", agent: str = "") -> dict:
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {sorted(KINDS)}")
     STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
-    _rotate()
-    row = {"ts": time.time(), "kind": kind, "key": key[:80], "note": note[:200],
-           "agent": agent or os.environ.get("SELENITE_AGENT", "")}
-    fd = os.open(LEDGER, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-    with os.fdopen(fd, "a") as fh:
-        fh.write(json.dumps(row) + "\n")
+    row = {"ts": time.time(), "kind": kind, "key": redact(key)[:80], "note": redact(note)[:200],
+           "agent": redact(agent or os.environ.get("SELENITE_AGENT", ""))[:40]}
+    with _Lock():
+        _rotate()
+        fd = os.open(LEDGER, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        with os.fdopen(fd, "a") as fh:
+            fh.write(json.dumps(row) + "\n")
     return row
 
 
@@ -75,7 +118,8 @@ def fixed_keys(gate_last: dict[str, float] | None = None, source=None) -> set[st
     """Keys whose latest fix/reopen is a fix, and which no gate has hit since.
 
     Reads all history, not a window: a fix logged 40 days ago still counts in a
-    7-day view, and a gate after the fix means the friction came back.
+    7-day view, and a gate after the fix means the friction came back. An
+    `approval` row after an `approval:<key>` fix reopens it the same way.
     `source` is an optional iterable of already-read rows (all history).
     """
     latest: dict[str, tuple[float, str]] = {}
@@ -87,6 +131,9 @@ def fixed_keys(gate_last: dict[str, float] | None = None, source=None) -> set[st
                 latest[key] = (ts, k)
         elif k in ("gate", "blocked"):
             last_gate[key] = max(last_gate.get(key, 0.0), ts)
+        elif k == "approval":
+            akey = "approval:" + key[:APPROVAL_KEY]
+            last_gate[akey] = max(last_gate.get(akey, 0.0), ts)
     return {key for key, (ts, k) in latest.items() if k == "fix" and ts >= last_gate.get(key, 0.0)}
 
 
