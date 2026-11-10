@@ -369,9 +369,18 @@ def main() -> int:
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
     report = run(a.days, [Path(p).expanduser() for p in a.path])
-    path = write(report)
-    ledger.add("cleanse", "run", note=f"{len(report['findings'])} findings")
+    path = None
+    try:
+        path = write(report)
+        ledger.add("cleanse", "run", note=f"{len(report['findings'])} findings")
+    except OSError as exc:
+        print(f"Selenite: cannot write the state folder ({exc}). "
+              f"Point SELENITE_STATE at a writable folder and re-run; the findings follow anyway:",
+              file=sys.stderr)
     print(json.dumps(report, indent=2) if a.json else render(report))
+    if path is None:
+        print("report: not saved (state folder unwritable)", file=sys.stderr)
+        return 2
     print(f"report: {tilde(path)}", file=sys.stderr)
     return 0
 

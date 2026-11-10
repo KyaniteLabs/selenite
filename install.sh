@@ -19,6 +19,7 @@ for a in "$@"; do
   esac
 done
 
+FAILED=0
 link() {  # link <target> <link-path>
   if [ -L "$2" ] && [ "$(readlink -f "$2")" = "$(readlink -f "$1")" ]; then echo "ok    $2"; return; fi
   if [ -d "$2" ] && [ ! -L "$2" ]; then
@@ -27,7 +28,14 @@ link() {  # link <target> <link-path>
   fi
   if [ -e "$2" ] || [ -L "$2" ]; then echo "skip  $2 (exists, not a Selenite link)"; return; fi
   if [ "$DRY" = 1 ]; then echo "would $2 -> $1"; return; fi
-  mkdir -p "$(dirname "$2")"; ln -s "$1" "$2"; echo "link  $2"
+  # One unwritable agent dir must not abort the rest of the install (a read-only
+  # ~/.claude on a locked-down host once stopped every later link silently).
+  if mkdir -p "$(dirname "$2")" 2>/dev/null && ln -s "$1" "$2" 2>/dev/null; then
+    echo "link  $2"
+  else
+    echo "FAIL  $2 ($(dirname "$2") not writable or link refused)" >&2
+    FAILED=$((FAILED + 1))
+  fi
 }
 
 # Agent Skills-format homes. Hermes is not listed: its plugin registers the skills,
@@ -60,5 +68,9 @@ if [ "$DRY" = 0 ]; then
   STATE=${SELENITE_STATE:-$HOME/.local/state/selenite}
   mkdir -p "$STATE" && chmod 700 "$STATE"
   if python3 -I "$SKILL/scripts/ledger.py" summary --days 1 >/dev/null; then echo "PASS: ledger works"; else echo "FAIL: ledger"; exit 1; fi
+fi
+if [ "$FAILED" -gt 0 ]; then
+  echo "install finished with $FAILED failure(s) — see the FAIL lines above. Fix or unlock those agent dirs and re-run: install.sh is idempotent." >&2
+  exit 1
 fi
 echo "Try: python3 $SKILL/scripts/cleanse.py   (and: antibeaurocracy audit)"

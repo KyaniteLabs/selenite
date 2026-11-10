@@ -2,6 +2,18 @@
 
 ## 0.5.0 (unreleased)
 
+### Dogfood fixes (growth-comms QA, 2026-11-10)
+
+- **install.sh:** one unwritable agent dir no longer aborts the install mid-flow or exits 0 on a
+  partial install. Failures are counted per link, printed as `FAIL` lines, other agents still get
+  their links, and the script exits 1 with a summary. (D1/D2)
+- **cleanse.py:** an unwritable state folder no longer tracebacks. The findings still print, the
+  error names `SELENITE_STATE` as the fix, and the script exits 2. (D3)
+- **classify.py:** catalog/marketplace/store/registry submissions are now publishing walls
+  ("Needs Simon to approve the catalog entry" is a WALL, not F6), and the infinitive form after a
+  role ("needs the CEO to approve", "waiting on the owner to sign off") reads as a person's
+  approval. Proper names are deliberately still not matched (product names are not people). (D4)
+
 Selenite, antibeaurocracy and antipedantry are now one product, Selenite, with three facets of one test: does this step, wait or check earn its cost to the person? See `docs/MERGE-INTENT.md` for the intent and what the merge surfaced.
 
 - **One plugin:** the fake-gate hooks, tools, commands and dashboard card now load from the `selenite` Hermes plugin. Disable a standalone antibeaurocracy plugin, or its hooks run twice.

@@ -82,7 +82,8 @@ _WALL = [
         r"post(ing)? (to|on) (x|twitter|linkedin|reddit|bluesky|mastodon|hacker ?news|social)|tweet\w*|press release|"
         r"send\w* (an? |the )?(\w+ ){0,3}(email|newsletter|message|dm|sms|invite)s?|email (the )?(customers?|users?|list|clients?)|"
         r"in (the ceo|the user|the operator|the owner)'?s voice|external(ly)? (communicat|send|post)|"
-        r"deploy\w* (to )?(prod\w*|live)|terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall)|roll\w* out to (prod\w*|users|customers)|ship(ping)? to (prod\w*|customers|users)|merg\w* (\w+ ){0,3}(to|into) (main|master|prod\w*|release))", _I)),
+        r"deploy\w* (to )?(prod\w*|live)|terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall)|roll\w* out to (prod\w*|users|customers)|ship(ping)? to (prod\w*|customers|users)|merg\w* (\w+ ){0,3}(to|into) (main|master|prod\w*|release)|"
+        r"submi\w* (\w+ ){0,3}(catalog|marketplace|store|registry)s?\b|(catalog|marketplace|store|registry) (entry|submission|listing)s?\b)", _I)),
     ("destructive", re.compile(
         r"\b(irreversibl\w*|destructive|drop (table|database|schema)|truncate|rm -rf|force[- ]push|push (-f|--force)|git push --force|delete everything|"
         r"delet\w* (the |all |a |production |prod |user |customer )*(\w+ ){0,2}(repo|repository|database|db|rows?|tables?|buckets?|account|data|history|backups?|branch|records?|files?|users?|namespaces?|clusters?|volumes?|disks?|tenants?)|"
@@ -131,9 +132,11 @@ _HUMAN_AUTHORITY = re.compile(
     rf"(\b(from|per|by) (the |my |our )?{_ROLE}\b{_NOT_A_PERSON}|"
     # the person's own word: "the founder's OK"
     rf"\b(the |my |our )?{_ROLE}'s (approval|ok|okay|sign-?off|go-?ahead|decision|call|ack)\b|"
-    # the person as the subject: "the CEO must countersign", "CEO has not signed", "until the CEO approves"
+    # the person as the subject: "the CEO must countersign", "CEO has not signed", "until the CEO approves",
+    # and the infinitive form after the role: "needs the CEO to approve", "waiting on the owner to sign off"
     rf"\b{_ROLE} (must|has to|needs to|has not|hasn't|has yet to|approves?|approved|signs?|signed|"
-    rf"decides?|countersigns?|ratif\w*|sign(s|ed)? off)\b)", _I)
+    rf"decides?|countersigns?|ratif\w*|sign(s|ed)? off)\b|"
+    rf"\b{_ROLE} to (approv\w*|sign(s|ed)? off|decide|ratif\w*|countersign\w*|green-?light)\b)", _I)
 
 _WAIT_WORD = re.compile(r"\b(await\w*|waiting|approv\w*|ack|ok|okay|sign-?off|go-?ahead|hold|decision|decide|ruling|call)\b", _I)
 
