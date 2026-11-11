@@ -27,8 +27,8 @@ Why it's a plugin and not an MCP server: the value is at the hook. It acts while
 - [x] Unattended runs: nothing waits for a person; Calm is off inside Kanban workers.
 - [x] Capabilities in this entry match `plugin.yaml` and what `register()` calls.
 - [x] `requires_hermes: ">=0.23.0"`, full 40-character pin.
-- [x] `hermes plugins validate` at the pinned SHA: ok, no warnings ([hermes-validate job](https://github.com/KyaniteLabs/selenite/actions/runs/42948930805)).
-- [x] Tests at the pinned SHA, Python 3.10–3.14 and against Hermes: [CI run](https://github.com/KyaniteLabs/selenite/actions/runs/42948930805).
+- [x] `hermes plugins validate` at the pinned SHA: ok, no warnings ([hermes-validate job](https://github.com/KyaniteLabs/selenite/actions/runs/42949372006)).
+- [x] Tests at the pinned SHA, Python 3.10–3.14 and against Hermes: [CI run](https://github.com/KyaniteLabs/selenite/actions/runs/42949372006).
 - [x] Live install: `hermes plugins install` of the pinned SHA into a clean Hermes home enables headlessly. At the previous pin (`51e7804`), real `kanban_block` calls on a throwaway board: a relay or ceremony block goes through with a note (nudge) or is handed back once and passes with a declared kind (ask); a credential block and `kanban_complete` are untouched; Calm fires on two overload signals and not on one; Selenite's files hold no block reason or prompt text, and all are 0600. Since then the hook code changed in one place (open Kanban badges now re-read every state folder), covered by the test suite.
 - [ ] Demo video: REPLACE with link.
 

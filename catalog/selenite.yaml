@@ -3,7 +3,7 @@
 name: selenite
 title: Selenite
 repo: https://github.com/KyaniteLabs/selenite
-sha: 715cf1e212312e20db32d2af2f7930871d252482
+sha: 6bc413e9cd4497f966eec905a1f61106cd0708a4
 description: >-
   Takes friction off the person, treated as accessibility: one test, "does this
   step, wait or check earn its cost to you?", applied to steps handed to a person,
@@ -26,9 +26,9 @@ tier: community
 category: automation
 requires_hermes: ">=0.23.0"
 version: "0.5.0"
-docs_url: https://github.com/KyaniteLabs/selenite/blob/715cf1e212312e20db32d2af2f7930871d252482/README.md
+docs_url: https://github.com/KyaniteLabs/selenite/blob/6bc413e9cd4497f966eec905a1f61106cd0708a4/README.md
 readme: true
-image: https://raw.githubusercontent.com/KyaniteLabs/selenite/715cf1e212312e20db32d2af2f7930871d252482/docs/banner.png
+image: https://raw.githubusercontent.com/KyaniteLabs/selenite/6bc413e9cd4497f966eec905a1f61106cd0708a4/docs/banner.png
 platforms: [linux]  # add macos once the Mac capture runs it
 known_issues:
   - "Loads on the next gateway restart. Disable a standalone antibeaurocracy plugin first, or the fake-gate hooks run twice."
