@@ -47,7 +47,7 @@ One product: **Selenite** is the product, and its three skills are its facets. T
 ## Install
 
 ```bash
-git clone <this repo> ~/src/selenite && ~/src/selenite/install.sh            # the skill, for every agent found
+git clone https://github.com/KyaniteLabs/selenite.git ~/src/selenite && ~/src/selenite/install.sh            # the skill, for every agent found
 ~/src/selenite/install.sh --hermes                                          # and the Hermes plugin
 ```
 
