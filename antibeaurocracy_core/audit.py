@@ -89,6 +89,31 @@ def card_statuses(task_ids: Iterable[str], dbs: Iterable[Path], mark_missing: bo
     return out
 
 
+def card_titles(task_ids: Iterable[str], dbs: Iterable[Path]) -> dict[str, str]:
+    """Each card's title, read-only, for showing a person a name instead of a ``kanban:t_...`` key.
+    Ids on no readable board are left out."""
+    want = {str(t) for t in task_ids if t}
+    out: dict[str, str] = {}
+    for db in dbs:
+        todo = sorted(want - out.keys())
+        if not todo:
+            break
+        if not Path(db).is_file():
+            continue
+        try:
+            con = _ro(Path(db))
+            try:
+                for i in range(0, len(todo), 500):
+                    part = todo[i:i + 500]
+                    q = f"SELECT id, title FROM tasks WHERE id IN ({','.join('?' * len(part))})"
+                    out.update({str(r["id"]): str(r["title"] or "")[:140] for r in con.execute(q, part)})
+            finally:
+                con.close()
+        except sqlite3.Error:
+            continue
+    return out
+
+
 def find_boards(roots: Iterable[Path]) -> list[Path]:
     out: list[Path] = []
     for root in roots:

@@ -16,6 +16,21 @@
 
 ## 0.5.0 (in catalog review; not yet merged)
 
+### Dogfood fixes on real board snapshots (2026-11-11)
+
+- **A plain freeze is a wall.** "frozen: no repins until the deadline", "repin freeze" and "merge freeze
+  is in effect" now read as a named freeze, not a stale wait.
+- **Credentials walls, wider.** "blocked on the owner's AWS credentials" and "waiting for the npm
+  token" are walls too; a possessive or a dotted name no longer hides the credential word.
+- **A needs_input card that names a person is that person's step.** "the CEO's explicit word",
+  "CEO hands required", "Owner adjudication" and similar are HUMAN, and a HOLD offered as one of
+  the answers is no longer read as a parked card.
+- **Long ledger keys say so.** A key over 80 characters keeps a hash suffix so two long keys stay
+  distinct, the row is marked `truncated`, and `add` warns.
+- **The dashboard shows only recurring gates** (asked at least twice), names Kanban cards by title,
+  drops cards that no longer exist, and counts the one-off gates. Rows wrap on narrow screens, and
+  fake-gate rows show what to do instead of a raw code.
+
 ### Dogfood fixes (2026-11-11)
 
 - **More credential walls stand.** On top of round two: a possessive or up to three words before the

@@ -58,6 +58,11 @@ def test_harness_text_is_ignored():
     assert signals.overload("<system-reminder>wtf just do it</system-reminder>") == []
 
 
+def test_quoted_line_does_not_hide_following_own_words():
+    text = "> A previous neutral message\nwtf this is frustrating, stop asking"
+    assert set(signals.overload(text)) == {"over_asking", "curse", "frustration"}
+
+
 def test_two_signal_rule():
     assert signals.calm_due(["curse"], previous_had_reason=False) is False
     assert signals.calm_due(["curse", "over_asking"], previous_had_reason=False) is True

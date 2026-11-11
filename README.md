@@ -53,6 +53,8 @@ git clone <this repo> ~/src/selenite && ~/src/selenite/install.sh            # t
 
 Hermes picks up the plugin on its next gateway restart. In Hermes, the `hooks` setting (or `SELENITE_HOOKS=0`) turns every hook off and keeps everything else. If you ran the standalone antibeaurocracy plugin before, disable it: running both doubles the fake-gate hooks, and the installer warns when it finds one.
 
+The `/frictionless` command starts an agent turn through the Hermes gateway. Enable Hermes's `allow_gateway_injection` setting for the gateway to accept that handoff; otherwise Selenite prints the instructions for you to send manually.
+
 One Selenite per machine: if `~/.local/share/selenite` or another Hermes home already has the plugin, `--hermes` reuses that copy instead of adding a second checkout of the same plugin name, which Hermes refuses to admit (`Two workspace members are both named 'selenite'`).
 
 In a sandbox or a seat with a read-only home, the installer skips the folders it cannot write and still links the rest. `--hermes` ends with `hermes plugins enable selenite`; on a source checkout that command may first finish a pending Hermes update and rebuild its desktop app, so pass `--no-enable` when a caller has its own timeout and run the printed command yourself.

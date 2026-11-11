@@ -111,8 +111,9 @@ def _card_statuses(ids: list[str]) -> dict[str, str]:
         if _status_cache["ids"] == key and time.time() - _status_cache["ts"] < STATUS_TTL:
             return _status_cache["statuses"]
     try:
-        audit = _fake_gates._core().audit
-        statuses = audit.card_statuses(ids, audit.find_boards([_fake_gates._home()]), mark_missing=True)
+        core = _fake_gates._core()
+        plugin = importlib.import_module(f"{core.__name__}.plugin")
+        statuses = core.audit.card_statuses(ids, plugin._kanban_dbs(None), mark_missing=True)
     except Exception:  # a missing or locked board never hides a badge, it just can't clear one
         statuses = {}
     with _lock:
@@ -127,6 +128,31 @@ def _blocked(rows: list[dict], fixed: set[str]) -> list[str]:
                   if r["kind"] == "blocked" and r["key"].startswith("kanban:") and r["key"] not in fixed})
     statuses = _card_statuses(ids) if ids else {}
     return [i for i in ids if statuses.get(i, "blocked") == "blocked"]
+
+
+def _name_cards(gates: list[dict]) -> list[dict]:
+    """Give each ``kanban:<id>`` gate its card title, and drop gates whose card no longer exists.
+    A board that can't be read keeps the gate under its key: unknown is not deleted."""
+    ids = [g["key"].split(":", 1)[1] for g in gates if g["key"].startswith("kanban:")]
+    if not ids:
+        return gates
+    try:
+        core = _fake_gates._core()
+        plugin = importlib.import_module(f"{core.__name__}.plugin")
+        dbs = plugin._kanban_dbs(None)
+        statuses = core.audit.card_statuses(ids, dbs, mark_missing=True)
+        titles = core.audit.card_titles(ids, dbs)
+    except Exception:
+        return gates
+    out = []
+    for g in gates:
+        if g["key"].startswith("kanban:"):
+            cid = g["key"].split(":", 1)[1]
+            if statuses.get(cid) == core.audit.MISSING:
+                continue
+            g = {**g, "title": titles.get(cid) or ""}
+        out.append(g)
+    return out
 
 
 @router.get("/status")
@@ -169,6 +195,8 @@ def overview(days: int = Days) -> dict:
     fixed = ledger.fixed_keys(source=_all_rows())
     for g in ranked:
         g["fixed"] = g["key"] in fixed
+    ranked = _name_cards(ranked)
+    recurring = [g for g in ranked if g["n"] >= 2]
     series = []
     for i in range(days - 1, -1, -1):
         d = time.strftime("%Y-%m-%d", time.localtime(now - i * DAY))
@@ -183,7 +211,8 @@ def overview(days: int = Days) -> dict:
         "load": load,
         "calm_24h": calm_24h,
         "last_calm": last_calm or None,
-        "gates": ranked[:25],
+        "gates": recurring[:25],
+        "one_off_gates": len(ranked) - len(recurring),
         "approvals": [{"key": k, "n": n} for k, n in approvals.most_common(10)],
         "signals": {c: calm_reasons.get(c, 0) for c in sorted(signals.OVERLOAD | {"typo_burst"})},
         "categories": sorted(signals.CATEGORIES),
