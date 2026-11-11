@@ -71,8 +71,16 @@ _ABSENCE = re.compile(r"(approv|sign-?off|subscription|seat|plan|tier|key|token|
 _WALL = [
     ("credentials", re.compile(
         r"(ENEEDAUTH|E401|HTTP 40[13]|\b401 unauthori[sz]ed|push=false|READ permission|permission denied \(publickey|login required|"
-        r"\b(missing|expired|invalid|revoked|no(?! (output|input|context|more) )|no working|needs? (a |new )?|rotat\w*|share|paste) (\w+ ){0,2}(credentials?|tokens?|api[ -]?keys?|passwords?|secrets?|2fa|otp)\b|"
-        r"\bre-?auth(enticate)?\b|oauth (flow|login|consent)|sudo password)", _I)),
+        # "needs credentials", "needs Ana's credentials", "requires the npm token", "missing npm token":
+        # up to three words (possessives included) between the verb and the secret.
+        r"\b(missing|expired|invalid|revoked|no(?! (output|input|context|more) )|no working|needs?(?! no\b| zero\b)|"
+        r"requir(e|es|ed|ing)(?! no\b| zero\b)|rotat\w*|share|paste|only \w+ (has|holds|knows)) ([\w'’-]+ ){0,3}"
+        r"(credentials?|tokens?|api[ -]?keys?|passwords?|secrets?|2fa|otp)\b(?!-)|"  # not "credential-free"
+        # a person has to sign in: "waiting on Ana to log in to npm", "needs to authenticate with PyPI"
+        r"\b(to|must|has to|needs? to|have to) (log ?in|sign ?in|authenticate|re-?auth\w*)\b|"
+        r"\bre-?auth(enticate)?\b|oauth (flow|login|consent)|sudo password|"
+        # only the person's own account will do: "fill the Typeform with his own login"
+        r"\b(his|her|their|my|\w+['’]s) own (login|account|sign-?in|credentials?)\b)", _I)),
     ("spend", re.compile(
         r"(\$\s?\d|\b\d+ ?(usd|eur|dollars?)\b|\b(spend(ing)?|billing|payment|pay (for|the)|invoice|purchas\w*|buy(ing)?|top[- ]?up|refund\w*|"
         r"balance exhausted|402 payment|paid (plan|tier)|subscription|budget (approval|cap|exceeded|sign-?off)|billing approv\w*|cost(s|ing)? (us )?(about |around |roughly |over |up to |~ ?)?\$?\d[\d,.]*k?\b|(\$\s?\d[\d,.]*k?|\b\d[\d,.]*k|\b\d{3,}[\d,.]*|\b\d[\d,.]* ?(usd|eur|dollars?)) ?(per|a|/) ?(month|year|mo|yr)\b|"
@@ -83,7 +91,9 @@ _WALL = [
         r"send\w* (an? |the )?(\w+ ){0,3}(email|newsletter|message|dm|sms|invite)s?|email (the )?(customers?|users?|list|clients?)|"
         r"in (the ceo|the user|the operator|the owner)'?s voice|external(ly)? (communicat|send|post)|"
         r"deploy\w* (to )?(prod\w*|live)|terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall)|roll\w* out to (prod\w*|users|customers)|ship(ping)? to (prod\w*|customers|users)|merg\w* (\w+ ){0,3}(to|into) (main|master|prod\w*|release)|"
-        r"submi\w* (\w+ ){0,3}(catalog|marketplace|store|registry)s?\b|(catalog|marketplace|store|registry) (entry|submission|listing)s?\b)", _I)),
+        r"submi\w* (\w+ ){0,3}(catalog|marketplace|store|registry)s?\b|(catalog|marketplace|store|registry) (entry|submission|listing)s?\b|"
+        # "before posting publicly", "the upstream catalog PR": outside readers see it
+        r"(post|open|fil|submit|comment)\w* (\w+ ){0,2}publicly|upstream (\w+ ){0,2}(pr|pull request|issue)s?\b)", _I)),
     ("destructive", re.compile(
         r"\b(irreversibl\w*|destructive|drop (the |a |an |all |our |\w+ ){0,3}(tables?|databases?|schemas?|collections?|indexes|indices)\b|(prod\w*|production|live) (\w+ ){0,2}migrations?\b|truncate|rm -rf|force[- ]push|push (-f|--force)|git push --force|delete everything|"
         r"delet\w* (the |all |a |production |prod |user |customer )*(\w+ ){0,2}(repo|repository|database|db|rows?|tables?|buckets?|account|data|history|backups?|branch|records?|files?|users?|namespaces?|clusters?|volumes?|disks?|tenants?)|"
@@ -205,7 +215,8 @@ def _build_fake() -> list[tuple[str, re.Pattern]]:
             r"which (seat|agent|team) owns|ownership (unclear|unresolved|dispute))", _I)),
         (ACK, re.compile(
             rf"(\bACK (from|by)\b|\bawait(ing)? ACK\b|acknowledg(e|ment) (from|by) {seats}|sign-?off (from|by) {seats}|(approval|go-?ahead|ok) (from|by) {seats}|"
-            rf"(awaiting|await|wait(ing)? (for|on)) {seats}('s)? (approval|go-?ahead|green light|ok\b|okay|confirmation|sign-?off|ack))", _I)),
+            rf"(awaiting|await|wait(ing)? (for|on)) {seats}('s)? (approval|go-?ahead|green light|ok\b|okay|confirmation|sign-?off|ack)|"
+            rf"\buntil (the )?{seats} (reviews?|approves?|signs? off|acks?|confirms?|okays?|clears? it)\b)", _I)),
         (CEREMONY, re.compile(
             r"\b(attest(ation)?|receipt (card|chain|required)|re-?verify the (verification|receipt)|"
             r"review of (the )?review|countersign|ratif(y|ied|ication)|"
@@ -227,6 +238,16 @@ def wall_family(text: str) -> bool:
     t = re.sub(rf"\b{_seats_rx()}\b", " ", t, flags=_I)
     return bool(WALL_FAMILY.search(t))
 
+
+# An approval or review from a named party this plugin does not know ("approval from CoS", "until
+# Compliance reviews"). The next actor is named, so "name the next actor or close the card" is wrong.
+# It may be a person or an agent; safety bias reads it as a person's queue until the team adds the
+# name to ``seats``.
+_NAMED_APPROVER = re.compile(
+    r"\b(approval|sign-?off|go-?ahead|ok|okay|ack|review|decision|ruling|confirmation)s? (from|by) (the )?[\w-]+|"
+    r"\buntil (the )?[\w-]+ (reviews?|approves?|signs? off|acks?|confirms?|decides?|okays?)\b", _I)
+NAMED_APPROVER_ACTION = ("A named approver this plugin does not know. If it is a person, it is their queue. "
+                         "If it is an agent, add the name to seats so the plugin can judge the wait.")
 
 _HOLD_WITH_EXPIRY = re.compile(r"\b(until|expires?|through|till)\s+\d{4}-\d{2}-\d{2}|\buntil \d{1,2}[/-]\d{1,2}\b", _I)
 
@@ -363,7 +384,13 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
         return Verdict(FAKE, sub, round(conf, 2), f"bureaucratic wait ({sub})", ACTIONS[sub],
                        hits + [h for _, hs in fakes[1:] for h in hs] + mach)
 
-    # 10. Defaults: no phrase matched. These are low-confidence and never "evidenced".
+    # 10. An approval from a named party the plugin does not know: a person until configured otherwise.
+    named = _hits(_NAMED_APPROVER, t)
+    if named:
+        return Verdict(HUMAN, "", 0.5, "an approval from a named party this plugin does not know",
+                       NAMED_APPROVER_ACTION, named)
+
+    # 11. Defaults: no phrase matched. These are low-confidence and never "evidenced".
     if created_blocked:
         return Verdict(FAKE, PARKING, 0.5, "created blocked with no reason of its own", ACTIONS[PARKING], [])
     if not t:
@@ -384,5 +411,6 @@ RULES = (
     "7 HUMAN: kind=needs_input with no gate or fault phrase in the text",
     "8 MACHINERY: a fault phrase with no gate phrase",
     "9 FAKE F1-F5: an agent-to-agent gate phrase (confidence 0.7-0.95, less when mixed with a fault or filed as needs_input)",
-    "10 FAKE default, not evidenced: created blocked or empty (0.5), older than 24h (0.5), anything else (0.3)",
+    "10 HUMAN (0.5): an approval or review from a named party that is not a configured seat ('approval from CoS')",
+    "11 FAKE default, not evidenced: created blocked or empty (0.5), older than 24h (0.5), anything else (0.3)",
 )

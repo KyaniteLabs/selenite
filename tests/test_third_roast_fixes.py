@@ -191,8 +191,10 @@ def test_evolve_falls_back_and_is_found(monkeypatch, tmp_path):
         monkeypatch.setattr(ledger, "STATE", ro / "selenite")
         monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
         out = evolve.build(30)
-        assert out is not None and out.parent == tmp_path / "xdg" / "selenite"
-        assert (tmp_path / "xdg" / "selenite" / "evolve-state.json").exists()
+        # a user-wide fallback keeps this home's files in its own by-home subfolder
+        mine = tmp_path / "xdg" / "selenite" / "by-home" / ledger._home_tag()
+        assert out is not None and out.parent == mine
+        assert (mine / "evolve-state.json").exists()
         assert ledger.newest("proposal-*.md")[0] == out
     finally:
         ro.chmod(0o700)

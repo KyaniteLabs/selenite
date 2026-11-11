@@ -15,10 +15,16 @@ $HERMES_HOME/plugin-data/selenite, then ~/.local/state/selenite. An agent seat
 normally has a read-only home and a writable Hermes home, so the third choice is
 what keeps it working there. Every write tries each folder in that order and
 gives up quietly instead of failing the caller.
+
+A user-wide fallback (XDG or ~/.local/state) is shared by every Hermes home on
+the machine, so when it is only a fallback Selenite keeps its state in a
+subfolder named for the preferred folder (by-home/<hash>). One home's gates,
+fixes and reports never show up in, or get cleared from, another home.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -52,12 +58,22 @@ def state_dirs() -> list[Path]:
     out = [STATE]
     xdg = os.environ.get("XDG_STATE_HOME")
     hermes = os.environ.get("HERMES_HOME")
-    for extra in (Path(xdg).expanduser() / "selenite" if xdg else None,
-                  Path(hermes).expanduser() / "plugin-data/selenite" if hermes else None,
-                  Path.home() / ".local/state/selenite"):
-        if extra is not None and extra not in out:
+    shared = [Path(xdg).expanduser() / "selenite" if xdg else None, Path.home() / ".local/state/selenite"]
+    own = Path(hermes).expanduser() / "plugin-data/selenite" if hermes else None
+    for extra in (shared[0], own, shared[1]):
+        if extra is None or extra == STATE:
+            continue
+        if extra in shared:  # user-wide: keep this home's fallback state apart from every other home's
+            extra = extra / "by-home" / _home_tag()
+        if extra not in out:
             out.append(extra)
     return out
+
+
+def _home_tag() -> str:
+    """A short, stable name for this home's fallback subfolder: a hash of the preferred folder,
+    so no path or user name is written into the folder name."""
+    return hashlib.sha256(os.path.abspath(os.fspath(STATE)).encode()).hexdigest()[:12]
 
 
 def writable_state() -> Path | None:
