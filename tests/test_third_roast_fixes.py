@@ -10,11 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from conftest import REPO, cleanse, evolve, ledger, mine
+from conftest import NON_ROOT_ONLY, REPO, cleanse, evolve, ledger, mine
 from test_fake_gate_audit_plugin import RELAY, _load_plugin, _selenite
-
-ROOT_ONLY = pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores read-only folders")
-
 
 def _status_db(home: Path, cards: dict[str, str], kinds: dict[str, str] | None = None) -> Path:
     db = home / "kanban" / "boards" / "demo" / "kanban.db"
@@ -97,7 +94,7 @@ def test_the_stored_kind_wins_over_the_echoed_kind(tmp_path, monkeypatch):
 
 # 6. Bookkeeping never breaks a turn, even on a read-only home.
 
-@ROOT_ONLY
+@NON_ROOT_ONLY
 def test_a_read_only_home_never_raises_from_the_facet(tmp_path, monkeypatch):
     mod, _ = _load_plugin(tmp_path, monkeypatch, name="sel_ro")
     ro = tmp_path / "ro"
@@ -166,7 +163,7 @@ def test_miner_reports_land_in_the_state_chain(monkeypatch, capsys):
     assert evolve.latest_report() is not None
 
 
-@ROOT_ONLY
+@NON_ROOT_ONLY
 def test_miner_on_a_read_only_home_exits_cleanly(monkeypatch, tmp_path, capsys):
     ro = tmp_path / "ro"
     ro.mkdir()
@@ -182,7 +179,7 @@ def test_miner_on_a_read_only_home_exits_cleanly(monkeypatch, tmp_path, capsys):
 
 # 5. Evolve and the dashboard follow the same fallback.
 
-@ROOT_ONLY
+@NON_ROOT_ONLY
 def test_evolve_falls_back_and_is_found(monkeypatch, tmp_path):
     ro = tmp_path / "ro"
     ro.mkdir()
@@ -200,7 +197,7 @@ def test_evolve_falls_back_and_is_found(monkeypatch, tmp_path):
         ro.chmod(0o700)
 
 
-@ROOT_ONLY
+@NON_ROOT_ONLY
 def test_evolve_with_no_writable_folder_returns_none(monkeypatch, tmp_path):
     ro = tmp_path / "ro"
     ro.mkdir()

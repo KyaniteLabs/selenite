@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import REPO, cleanse, ledger
+from conftest import NON_ROOT_ONLY, REPO, cleanse, ledger
 
 INSTALL = REPO / "install.sh"
 
@@ -116,7 +116,7 @@ def test_ledger_add_gives_up_quietly_when_every_state_folder_is_read_only(tmp_pa
 
 # --- D2: install.sh, read-only and broken targets ---------------------------
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores permission bits; a read-only home needs a non-root runner")
+@NON_ROOT_ONLY
 def test_install_skips_a_read_only_target_and_keeps_going(tmp_path):
     home = tmp_path / "home"
     (home / ".claude").mkdir(parents=True)

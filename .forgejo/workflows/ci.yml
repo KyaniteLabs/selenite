@@ -32,7 +32,14 @@ jobs:
         with:
           persist-credentials: false
       - name: Unit tests (includes the needs-no-cleansing requirement)
-        run: python3 -m pip install --no-cache-dir -r requirements-test.txt && python3 -m pytest -q
+        run: |
+          python3 -m pip install --no-cache-dir -r requirements-test.txt
+          # Root ignores permission bits, so the NON_ROOT_ONLY tests would skip. Run as a real user.
+          useradd --create-home ci
+          set -o pipefail
+          runuser -u ci -- env HOME=/home/ci python3 -m pytest -q -rs -p no:cacheprovider | tee pytest.out
+          # Every test should run in CI (fastapi is installed, the checkout is a git repo): a skip is a failure.
+          if grep -q "^SKIPPED" pytest.out; then echo "unexpected skips" >&2; exit 1; fi
       - name: Desktop event contract
         run: node --experimental-vm-modules tests/test_pane_events.mjs
       - name: Package installs and the fake-gate CLI runs
