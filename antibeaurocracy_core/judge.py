@@ -19,16 +19,21 @@ from typing import Callable, Iterable
 from .classify import FAKE
 
 CLASSES = ("WALL", "HUMAN", "MACHINERY", "DEPENDENCY", "FAKE")
-_ANSWER = re.compile(r"\b(" + "|".join(CLASSES) + r")\b")
+_CLASS = "|".join(CLASSES)
+_ANSWER_LINE = re.compile(r"^\s*ANSWER\s*:\s*\**(" + _CLASS + r")\b", re.I | re.M)
+_BARE = re.compile(r"\W*(" + _CLASS + r")\W*", re.I)
+_THINK = re.compile(r"<think(?:ing)?>.*?(?:</think(?:ing)?>|\Z)", re.I | re.S)
 
-PROMPT = """Classify why this kanban card is blocked. Answer with exactly one word.
+PROMPT = """Classify why this kanban card is blocked. Think briefly if you must, then end with a final line of the form
+ANSWER: <CLASS>
+where <CLASS> is exactly one of WALL, HUMAN, MACHINERY, DEPENDENCY, FAKE.
 
 WALL: credentials, spend, publishing or deploying, a destructive step, legal, or a named freeze.
 HUMAN: a question only a person can answer, or a stop or OK from a person with authority.
 MACHINERY: a tool, permission or host is broken or missing.
 DEPENDENCY: another task has to land first.
 FAKE: waiting only for another agent's OK, relay, ruling or ceremony on work the blocked agent could do.
-If unsure, answer WALL.
+If unsure, ANSWER: WALL.
 
 Block reason:
 {reason}
@@ -36,9 +41,17 @@ Block reason:
 
 
 def parse(out: str) -> str:
-    """The first class word in the output, or "" when there is none."""
-    m = _ANSWER.search((out or "").upper())
-    return m.group(1) if m else ""
+    """The class on the last ``ANSWER: <CLASS>`` line, outside any think block, or "" when there is none.
+
+    Prose is never scanned for class words ("Not FAKE, this is a WALL" must not read as FAKE). The one
+    exception is a reply that is nothing but a single class word, the old one-word contract.
+    """
+    text = _THINK.sub("", out or "")
+    found = _ANSWER_LINE.findall(text)
+    if found:
+        return found[-1].upper()
+    m = _BARE.fullmatch(text.strip())
+    return m.group(1).upper() if m else ""
 
 
 def runner(cmd: str, timeout_s: float = 60.0) -> Callable[[str], str]:
