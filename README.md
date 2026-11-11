@@ -51,7 +51,7 @@ git clone <this repo> ~/src/selenite && ~/src/selenite/install.sh            # t
 ~/src/selenite/install.sh --hermes                                          # and the Hermes plugin
 ```
 
-Hermes picks up the plugin on its next gateway restart. In Hermes, the `hooks` setting (or `SELENITE_HOOKS=0`) turns every hook off and keeps everything else. If you ran the standalone antibeaurocracy plugin before, disable it: running both doubles the fake-gate hooks, and the installer warns when it finds one.
+Hermes picks up the plugin on its next gateway restart. **In Hermes Desktop the page, status chip and Kanban badges start switched off**: Desktop ships every plugin's desktop half opt-in, and `hermes plugins enable` turns on only the agent half. Open **Capabilities ▸ Plugins**, search for Selenite and switch it on. In Hermes, the `hooks` setting (or `SELENITE_HOOKS=0`) turns every hook off and keeps everything else. If you ran the standalone antibeaurocracy plugin before, disable it: running both doubles the fake-gate hooks, and the installer warns when it finds one.
 
 The `/frictionless` command starts an agent turn through the Hermes gateway. Enable Hermes's `allow_gateway_injection` setting for the gateway to accept that handoff; otherwise Selenite prints the instructions for you to send manually.
 

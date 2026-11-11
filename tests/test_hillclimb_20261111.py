@@ -65,3 +65,10 @@ def test_slash_and_tool_label_low_confidence():
     assert "low confidence" not in _p.slash("check needs a password")
     assert _json.loads(_p.tool_classify({"text": "needs Ada to look at it"}))["low_confidence"] is True
     assert _json.loads(_p.tool_classify({"text": "needs a password"}))["low_confidence"] is False
+
+
+def test_docs_say_the_desktop_half_starts_off():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    assert "Capabilities ▸ Plugins" in (root / "README.md").read_text()
+    assert "Capabilities > Plugins" in (root / "install.sh").read_text()

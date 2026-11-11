@@ -154,6 +154,8 @@ if [ "$HERMES" = 1 ]; then
     else
       echo "enable: hermes is not on PATH; run: HERMES_HOME=$HH hermes plugins enable selenite"
     fi
+    echo "desktop: Hermes Desktop ships the page, chip and badges switched off."
+    echo "         Open Capabilities > Plugins, search Selenite and switch it on."
   fi
 fi
 
