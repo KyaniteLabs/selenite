@@ -22,6 +22,7 @@ def _load_api(monkeypatch):
 
     fastapi.APIRouter = Router
     fastapi.Query = lambda default=None, **_kwargs: default
+    fastapi.HTTPException = type("HTTPException", (Exception,), {"__init__": lambda self, status_code=500, detail="": Exception.__init__(self, detail)})
     pydantic = types.ModuleType("pydantic")
     pydantic.BaseModel = type("BaseModel", (), {})
     pydantic.Field = lambda default=None, **_kwargs: default
