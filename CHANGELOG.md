@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 (2026-11-11)
+
+- **Agent approvals are fake gates; authority walls stand.** Reviewer, security, QA and legal
+  agents waiting to sign off match `F1-ack`. Credential handoffs to a person match a high-confidence
+  wall and never suggest closing or rerouting the card. Human legal review and CEO approvals stay
+  with people; credentials, spending, publishing, deploying and deletion outrank stale waits.
+
 ## 0.5.0 (in catalog review; not yet merged)
 
 ### Dogfood fixes (2026-11-11)

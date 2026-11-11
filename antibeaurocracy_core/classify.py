@@ -77,6 +77,7 @@ _WALL = [
         r"requir(e|es|ed|ing)(?! no\b| zero\b)|rotat\w*|share|paste|only \w+ (has|holds|knows)) ([\w'’-]+ ){0,3}"
         r"(credentials?|tokens?|api[ -]?keys?|passwords?|secrets?|2fa|otp)\b(?!-)|"  # not "credential-free"
         # a person has to sign in: "waiting on Ana to log in to npm", "needs to authenticate with PyPI"
+        r"\b(needs?|waiting (for|on)|awaiting) (\w+ ){0,6}(credentials?|tokens?|(api|deploy|ssh|access)[ -]?keys?|passwords?|secrets?|2fa|otp)\b(?!-free\b)|"
         r"\b(to|must|has to|needs? to|have to) (log ?in|sign ?in|authenticate|re-?auth\w*)\b|"
         r"\bre-?auth(enticate)?\b|oauth (flow|login|consent)|sudo password|"
         # only the person's own account will do: "fill the Typeform with his own login"
@@ -99,7 +100,7 @@ _WALL = [
         r"delet\w* (the |all |a |production |prod |user |customer )*(\w+ ){0,2}(repo|repository|database|db|rows?|tables?|buckets?|account|data|history|backups?|branch|records?|files?|users?|namespaces?|clusters?|volumes?|disks?|tenants?)|"
         r"rewrit\w* (git )?history|reset --hard|wipe|purge|erase|data[- ]loss|shut ?down (prod|production)|revoke (access|keys?))", _I)),
     ("legal", re.compile(
-        r"\b(legal (review|team|sign-?off|approval|counsel)|(approval|sign-?off|ok) from legal|lawyer|licen[cs]e (\w+ )?(review|compat\w*)|contract signature|sign (the |a )?contract|"
+        r"\b(legal (review|to review|team|sign-?off|approval|counsel)|(approval|sign-?off|ok) from legal|lawyer|licen[cs]e (\w+ )?(review|compat\w*)|contract signature|sign (the |a )?contract|"
         r"terms of service|gdpr|hipaa|privacy review|trademark|copyright)\b", _I)),
     ("named-freeze", re.compile(
         r"\b(security hold|(ceo|board|exec\w*) (freeze|hold)|code freeze|change freeze|FROZEN by|incident hold|e-?stop|kill switch|embargo)\b", _I)),
@@ -203,6 +204,7 @@ def _seats_rx() -> str:
 
 def _build_fake() -> list[tuple[str, re.Pattern]]:
     seats = _seats_rx()
+    approvers = rf"(?:{seats}|[\w-]+[ -](agent|seat|bot|worker)s?)"
     extra = "|".join(re.escape(p) for p in _extra_ceremony)
     return [
         (RELAY, re.compile(
@@ -215,8 +217,9 @@ def _build_fake() -> list[tuple[str, re.Pattern]]:
             r"which (seat|agent|team) owns|ownership (unclear|unresolved|dispute))", _I)),
         (ACK, re.compile(
             rf"(\bACK (from|by)\b|\bawait(ing)? ACK\b|acknowledg(e|ment) (from|by) {seats}|sign-?off (from|by) {seats}|(approval|go-?ahead|ok) (from|by) {seats}|"
-            rf"(awaiting|await|wait(ing)? (for|on)) {seats}('s)? (approval|go-?ahead|green light|ok\b|okay|confirmation|sign-?off|ack)|"
-            rf"\buntil (the )?{seats} (reviews?|approves?|signs? off|acks?|confirms?|okays?|clears? it)\b)", _I)),
+            rf"(awaiting|await|wait(ing)? (for|on)) (the |my |our )?{approvers}('s)? (approval|go-?ahead|green light|ok\b|okay|confirmation|sign-?off|ack|to (sign[ -]?off|approv\w*|confirm|review))\b|"
+            rf"\b{approvers} (needs? to|must|has to|to) (sign[ -]?off|approv\w*|confirm|review)\b|"
+            rf"\buntil (the )?{approvers} (reviews?|approves?|signs? off|acks?|confirms?|okays?|clears? it)\b)", _I)),
         (CEREMONY, re.compile(
             r"\b(attest(ation)?|receipt (card|chain|required)|re-?verify the (verification|receipt)|"
             r"review of (the )?review|countersign|ratif(y|ied|ication)|"
