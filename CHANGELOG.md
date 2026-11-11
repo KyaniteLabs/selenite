@@ -11,6 +11,8 @@
 - **Settings on a real config:** without PyYAML or ruamel, the stdlib reader now parses only the
   top-level `plugins:` block. A list of mappings elsewhere (`custom_providers`) used to make every
   setting unreadable and print a warning on each CLI run.
+- **Lock file mode:** the ask-mode refusal store's lock is created 0600 like every other file
+  Selenite writes; it used to follow the umask (0664).
 
 ### Dogfood fixes (2026-11-10)
 

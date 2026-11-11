@@ -132,7 +132,8 @@ class RefusalStore:
         if not self._LOCK.acquire(timeout=self.lock_timeout_s):
             raise LockTimeout(f"{self.path} thread lock held > {self.lock_timeout_s}s")
         try:
-            with open(self.path.with_suffix(".lock"), "a") as lk:
+            # 0600 like every other file Selenite writes; open() alone would follow the umask
+            with os.fdopen(os.open(self.path.with_suffix(".lock"), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600), "a") as lk:
                 self._acquire(lk)
                 try:
                     data = self._load(now)

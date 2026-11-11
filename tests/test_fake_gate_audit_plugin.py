@@ -762,3 +762,19 @@ def test_a_missing_evidence_wait_is_not_nudged_or_asked(tmp_path, monkeypatch):
     assert ctx.hooks["pre_tool_call"](tool_name="kanban_block", args=args, session_id="s") is None
     out = ctx.hooks["transform_tool_result"](tool_name="kanban_block", args=args, result='{"ok": true}', session_id="s")
     assert out is None or out == '{"ok": true}'
+
+
+def test_the_refusal_store_and_its_lock_are_0600(tmp_path):
+    """Found by the live install acceptance: the lock followed the umask (0664)."""
+    import os
+    import stat
+
+    from antibeaurocracy_core.gates import RefusalStore
+    old = os.umask(0o002)
+    try:
+        store = RefusalStore(tmp_path / "refusals.json")
+        store.transition("card", lambda prior: ("ok", prior + 1))
+    finally:
+        os.umask(old)
+    for f in tmp_path.iterdir():
+        assert stat.S_IMODE(f.stat().st_mode) == 0o600, f.name
