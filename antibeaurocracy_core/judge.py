@@ -29,8 +29,8 @@ PROMPT = """Classify why this kanban card is blocked. Think briefly if you must,
 ANSWER: <CLASS>
 where <CLASS> is exactly one of WALL, HUMAN, MACHINERY, DEPENDENCY, FAKE.
 
-WALL: credentials, spend, publishing or deploying, a destructive step, legal, or a named freeze.
-HUMAN: a question only a person can answer, or a stop or OK from a person with authority.
+WALL: credentials, spend, publishing or deploying, a destructive step, legal, or a named freeze. WALL wins: if the wait involves any of these, answer WALL even when a person must approve it.
+HUMAN: a question or choice only a person can answer, with no credential, spend, publish, deploy, destructive, legal or freeze step in it.
 MACHINERY: a tool, permission or host is broken or missing.
 DEPENDENCY: another task has to land first.
 FAKE: waiting only for another agent's OK, relay, ruling or ceremony on work the blocked agent could do.
