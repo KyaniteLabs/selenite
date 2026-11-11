@@ -72,3 +72,29 @@ def test_docs_say_the_desktop_half_starts_off():
     root = Path(__file__).resolve().parents[1]
     assert "Capabilities ▸ Plugins" in (root / "README.md").read_text()
     assert "Capabilities > Plugins" in (root / "install.sh").read_text()
+
+
+# --- Calm recall: common "I already said this" phrasings ------------------------------------
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1] / "skills" / "frictionless" / "scripts"))
+import signals as _signals  # noqa: E402
+
+
+@pytest.mark.parametrize("text", [
+    "why is this STILL broken?? i told you three times",
+    "how many times do I have to say it",
+    "I already told you, use the other port",
+    "it's still broken",
+])
+def test_repeat_work_phrasings_count(text):
+    assert "repeat_work" in _signals.overload(text)
+
+
+@pytest.mark.parametrize("text", [
+    "I told you about the meeting on Friday",
+    "how many times should the job retry?",
+    "the old build was broken, the new one works",
+])
+def test_neutral_phrasings_do_not_count(text):
+    assert "repeat_work" not in _signals.overload(text)

@@ -30,6 +30,8 @@ CATEGORIES: dict[str, list[str]] = {
     "repeat_work": [
         r"\bi keep (having|doing|telling)\b", r"\bsame (thing|mistake|step) again\b",
         r"\bfor the (nth|\d+(st|nd|rd|th)) time\b", r"\bevery ?time now\b",
+        r"\bi (already |just )?told you( that)?( (already|before|twice|again|\w+ times))?\b(?! about)",
+        r"\bhow many times (do|have|must|did) i\b", r"\b(still|again) (broken|failing|not working)\b",
     ],
     "stopping_short": [
         r"\bwhy did(n'?t)? you (stop|finish)\b", r"\byou stopped\b", r"\bwhy (did|are) you (stop|wait)",
