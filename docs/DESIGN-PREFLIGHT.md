@@ -80,11 +80,15 @@ Rejected metaphors:
 - Selenite's identity colour is white. On dark chrome the identity accent is pearl `#ECE9E2`.
 - On light chrome a white tint would vanish, so the icon carries the identity and the UI uses host ink.
 - Gate, approval and fix states use host semantic tokens, and every one of them is paired with a text label. Colour never carries state alone.
-- **No brown or orange (Simon's standing rule).** The host's `--ui-orange` (#db704b) and `--ui-yellow` (#c08532, ochre at hue 35°) both fall in that band, so Selenite does not use them. Its two accent states take family colours instead:
-  - **Human gate:** family magenta `#FF1A6E`, mixed 15% toward host ink (`color-mix(in oklab, #FF1A6E 85%, var(--ui-text-primary))`) so it holds contrast on light and dark chrome. The Kanban badge uses the host's `pink` tone (hsl 330), the nearest fixed hue.
-  - **Calm trigger and high load:** family turquoise `#00FFE6`, mixed 30% toward host ink the same way. Family yellow `#FFD11A` was tried first and rejected on render (2026-11-10): pulled toward light-theme ink it came out mustard `#B99D3A` (hue 47°, 47% lightness), which reads as brown.
-  - Approval stays `--ui-blue` and fix stays `--ui-green`. Red stays reserved for broken.
-- **Assumption:** these two family colours are acceptable as fixed values, not host theme variables. Simon has not yet seen them in the app. If he wants host-only tokens, gate moves to `--ui-cyan` and this receipt is updated first.
+- **Correction from Simon, 2026-11-10: "this shonudl be very chill the colors of seleinte".** The page takes only the stone's own colours: white, pearl and silver satin. No saturated accents. This replaces the magenta and turquoise of round 1, which were too loud.
+- **No brown or orange (Simon's standing rule).** The host's `--ui-orange` and `--ui-yellow` (ochre) stay unused.
+- State colours, all quiet and all paired with a text label:
+  - **Human gate:** host ink (`--ui-text-primary`), the brightest pearl on dark chrome. It is the one state that asks for attention, so it is the brightest, not the most colourful.
+  - **Calm trigger and high load:** silver (`--ui-text-tertiary`). Calm dots are hollow rings, so shape tells them from gates as well as tone.
+  - **Approval:** host blue softened 60% into silver. **Fix:** host green softened 55% into silver.
+  - Red stays reserved for broken.
+  - **Kanban badge:** the host's `neutral` tone, not pink.
+- **Assumption:** the softened blue and green read as calm while staying distinguishable; render check pending Simon's eye.
 
 ## 8. Landed mark
 

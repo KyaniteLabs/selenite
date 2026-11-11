@@ -26,13 +26,13 @@ const FONTS = {
 // Identity: Selenite is white satin spar (docs/DESIGN-PREFLIGHT.md §3, §7). On dark
 // chrome the identity ink is the host's primary text (near-white); on light chrome
 // it falls back to host ink, and the icon carries the identity. State never rides
-// on colour alone: every state has a text label next to it. No brown or orange:
-// gate takes the family magenta and load the family turquoise, pulled toward host ink
-// so they hold contrast on light and dark chrome (PF §7).
+// on colour alone: every state has a text label next to it. Calm stone colours
+// only (Simon, 2026-11-10): gate is the brightest pearl ink, load is silver, and
+// approval and fix are host blue and green softened into silver (PF §7).
 const CSS = `
 ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-style:normal;font-weight:${w};font-display:swap;src:url(data:font/woff;base64,${b}) format('woff')}`).join('\n')}
 .sel-host{container-type:inline-size;width:100%}
-.sel{--sel-id:var(--ui-text-primary);--sel-gate:color-mix(in oklab,#FF1A6E 85%,var(--ui-text-primary));--sel-appr:var(--ui-blue);--sel-fix:var(--ui-green);--sel-load:color-mix(in oklab,#00FFE6 70%,var(--ui-text-primary));
+.sel{--sel-id:var(--ui-text-primary);--sel-gate:var(--ui-text-primary);--sel-appr:color-mix(in oklab,var(--ui-blue) 40%,var(--ui-text-tertiary));--sel-fix:color-mix(in oklab,var(--ui-green) 45%,var(--ui-text-tertiary));--sel-load:var(--ui-text-tertiary);
   --sel-display:'${FACE}',var(--font-sans);font-family:var(--font-sans);font-size:13px;line-height:1.45;color:var(--ui-text-primary);
   box-sizing:border-box;width:100%;max-width:1120px;margin:0 auto;padding:24px 28px 48px;display:flex;flex-direction:column;gap:20px}
 .sel *,.sel *::before,.sel *::after{box-sizing:border-box}
@@ -88,7 +88,7 @@ ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-s
 .sel-ev:first-child{border-top:0}
 .sel-dot{width:6px;height:6px;border-radius:50%;background:var(--ui-text-tertiary)}
 .sel-dot[data-k=gate],.sel-dot[data-k=blocked]{background:var(--sel-gate)}
-.sel-dot[data-k=calm]{background:var(--sel-load)}
+.sel-dot[data-k=calm]{background:transparent;box-shadow:inset 0 0 0 1.5px var(--sel-load)}
 .sel-dot[data-k=approval]{background:var(--sel-appr)}
 .sel-dot[data-k=fix]{background:var(--sel-fix)}
 .sel-kind{font-family:var(--sel-display);font-weight:500;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ui-text-secondary)}
@@ -612,7 +612,7 @@ export default {
         run: () => ctx.rest(`/proposal?days=${prefs.get().days}`, { method: 'POST' }).then(() => host.navigate(PATH), fail(tNow('err.draft'))) } },
       ...(KANBAN_CARD_AREAS?.badges ? [{ id: 'waiting', area: KANBAN_CARD_AREAS.badges, data: {
         decorate: card => (prefs.get().kanbanBadges && blocked().has(card.id)
-          ? { label: tNow('kanban.badge'), tone: 'pink', tooltip: tNow('kanban.tip') }
+          ? { label: tNow('kanban.badge'), tone: 'neutral', tooltip: tNow('kanban.tip') }
           : null)
       } }] : [])
     ])
