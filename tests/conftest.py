@@ -19,6 +19,8 @@ atexit.register(shutil.rmtree, _BASE, True)
 os.environ.update(HOME=str(HOME), SELENITE_STATE=str(STATE), SELENITE_HOME=str(HOME / ".config/selenite"),
                   HERMES_HOME=str(HOME / ".hermes"))
 os.environ.pop("SELENITE_HOOKS", None)
+for _k in [k for k in os.environ if k.startswith("HERMES_KANBAN_")]:
+    os.environ.pop(_k, None)
 
 
 def _load_plugin():
