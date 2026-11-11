@@ -4,10 +4,10 @@
 
 ### Dogfood fixes (2026-11-11)
 
-- **Credential walls stand.** "needs credentials", "needs Ana's token", "requires the npm token",
-  "only Ana has the PyPI token", "waiting on Ana to log in to npm" and "with his own login" were
-  read as stale waits ("or close the card"). They are now credential walls. "credential-free" and a
-  custody note that mentions a credential are still not walls.
+- **More credential walls stand.** On top of round two: a possessive or up to three words before the
+  secret ("needs Ana's token to publish"), "only Ana has the PyPI token", "waiting on Ana to log in to
+  npm" and "with his own login". "credential-free" and a custody note that mentions a credential are
+  still not walls.
 - **Public steps stand.** "before posting publicly" and an upstream PR or issue now match the publish
   wall. Found by running Selenite on the dogfooder's own open holds.
 - **Named holds are not stale.** "blocked until Security reviews" is an agent ack, and "waiting for
@@ -18,6 +18,27 @@
 - **The dashboard tab:** "Mark fixed" can be undone and a fixed row can be reopened; the picked
   7d/30d/90d window inverts and carries a check mark; the tab shows Cleanse ("what to clear next")
   and Evolve, and a drafted proposal confirms itself; every button is at least 44 px.
+
+### Dogfood round-two fixes (2026-11-11)
+
+- **A stale install can't win silently.** `install.sh --hermes` reuses the Selenite copy the machine
+  already loads, so every seat runs that copy. It now warns when that copy differs from the checkout
+  being installed, or is behind its upstream. A live copy 45 commits old was calling "before I drop
+  the users table" a fake gate.
+- **"Needs credentials" is a credentials wall.** The pattern only matched with two spaces, so "needs
+  credentials", "need a token", "requires credentials" and "needs the API key" read as fake. "The
+  production deploy" as a noun is now a publish wall too.
+- **Deliberate holds aren't parking lots.** A card that says where the work runs ("executed by zcode
+  outside the gateway; do not dispatch") or that it waits for room in a capped queue reads as a declared
+  hold, not a fake gate. A bare "HOLD" still does.
+- **Waiting for CI is a running check**, not a stale wait.
+- **`SELENITE_STATE` isolates.** When it is set, it is the only folder read or written, so Evolve and the
+  dashboard no longer mix in other seats' friction. The dashboard reports the folder it writes to.
+- **Cleanse counts a file once.** A skill symlinked into several agents was one finding per agent;
+  findings now dedupe by real path and check (176 → 106 on the dogfood host).
+- **Small ones.** `classify` with no text says "nothing to classify" and exits 2. `mine` prints its
+  samples path readably instead of redacting the user's own file name. `audit --counts` names an
+  unreadable board on stderr, and a locked board gets one retry.
 
 ### Roast round-four fixes (2026-11-11)
 

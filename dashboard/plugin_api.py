@@ -96,9 +96,8 @@ def _load_of(rows: list[dict], now: float) -> tuple[str, int, float]:
 
 
 def _state_dir() -> str:
-    """The folder the ledger is actually written to (a fallback when the first is read-only), home as ~."""
-    found = ledger.newest("ledger.jsonl")
-    return str(found[0].parent if found else ledger.STATE).replace(str(Path.home()), "~", 1)
+    """The folder the next ledger row is written to (a fallback when the first is read-only), home as ~."""
+    return str(ledger.write_target()).replace(str(Path.home()), "~", 1)
 
 
 STATUS_TTL = 30  # seconds: a polling chip re-reads card statuses at most this often

@@ -90,7 +90,7 @@ _WALL = [
         r"post(ing)? (to|on) (x|twitter|linkedin|reddit|bluesky|mastodon|hacker ?news|social)|tweet\w*|press release|"
         r"send\w* (an? |the )?(\w+ ){0,3}(email|newsletter|message|dm|sms|invite)s?|email (the )?(customers?|users?|list|clients?)|"
         r"in (the ceo|the user|the operator|the owner)'?s voice|external(ly)? (communicat|send|post)|"
-        r"deploy\w* (to )?(prod\w*|live)|terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall)|roll\w* out to (prod\w*|users|customers)|ship(ping)? to (prod\w*|customers|users)|merg\w* (\w+ ){0,3}(to|into) (main|master|prod\w*|release)|"
+        r"deploy\w* (to )?(prod\w*|live)|\b(prod|production) (deploy\w*|release|rollout)\b|terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall)|roll\w* out to (prod\w*|users|customers)|ship(ping)? to (prod\w*|customers|users)|merg\w* (\w+ ){0,3}(to|into) (main|master|prod\w*|release)|"
         r"submi\w* (\w+ ){0,3}(catalog|marketplace|store|registry)s?\b|(catalog|marketplace|store|registry) (entry|submission|listing)s?\b|"
         # "before posting publicly", "the upstream catalog PR": outside readers see it
         r"(post|open|fil|submit|comment)\w* (\w+ ){0,2}publicly|upstream (\w+ ){0,2}(pr|pull request|issue)s?\b)", _I)),
@@ -251,6 +251,20 @@ NAMED_APPROVER_ACTION = ("A named approver this plugin does not know. If it is a
 
 _HOLD_WITH_EXPIRY = re.compile(r"\b(until|expires?|through|till)\s+\d{4}-\d{2}-\d{2}|\buntil \d{1,2}[/-]\d{1,2}\b", _I)
 
+# A deliberate hold with a stated reason is not a parking lot: the work runs in another lane ("executed
+# by zcode outside the gateway; do not dispatch"), or the card waits for room in a capped queue.
+_RUNNING_ELSEWHERE = re.compile(
+    r"\b((being )?(executed|executing|run|running|implemented|handled|worked on) (by|in|via) "
+    r"(?!(the |an? )?(\w+ )?(approval|ack|sign-?off|ok|go-?ahead|review)\b)[\w.-]+|outside the gateway)\b", _I)
+_THROTTLE = re.compile(
+    r"\b((queue|backlog) (that |which )?(already )?ha(s|ve) \d+|max_in_progress\w*|throttl\w*|"
+    r"queue (cap|limit)|(when|until|once) the queue has (capacity|room)|"
+    r"so (it|they) (do(es)? not|don'?t|won'?t) auto-?dispatch)", _I)
+# A wait on a running check (CI, a build, a test run) clears on its own; it is neither a gate nor a fault yet.
+_RUNNING_CHECK = re.compile(
+    r"\b(waiting|wait|await\w*) (for|on) (the )?(ci|build|tests?|test run|checks?|pipeline|workflow( run)?|job)\b"
+    r"(?! (fail\w*|broke\w*|is red|errored))", _I)
+
 
 @dataclass
 class Verdict:
@@ -364,6 +378,13 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
         return Verdict(DEPENDENCY, "", 0.7, "time-boxed hold with an expiry; it lapses on its own",
                        "Leave it. When the expiry passes, dispatch or close it.", _hits(_HOLD_WITH_EXPIRY, t))
 
+    # 6b. A deliberate hold that says why: the work runs in another lane, or it waits for queue room.
+    if fakes and {s for s, _ in fakes} <= {PARKING, CEREMONY}:
+        held = _hits(_RUNNING_ELSEWHERE, t) or _hits(_THROTTLE, t)
+        if held:
+            return Verdict(DEPENDENCY, "", 0.7, "a declared hold: the work runs elsewhere or waits for queue room",
+                           "Leave it. Unblock it when the other lane lands or the queue has room.", held)
+
     # 7. needs_input is the worker's channel to a person. It stays HUMAN unless the text itself shows
     # an agent gate or a fault, in which case that wins with a little less certainty.
     if kind == "needs_input" and not (fakes or mach):
@@ -372,6 +393,12 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
     # 8. A fault with no gate layered on it.
     if mach and not fakes:
         return Verdict(MACHINERY, "", 0.75, "environment/tooling fault", ACTIONS[MACHINERY], mach)
+
+    # 8b. A wait on a running check clears on its own.
+    check = _hits(_RUNNING_CHECK, t)
+    if check and not fakes:
+        return Verdict(MACHINERY, "", 0.6, "waits on a running check; it clears on its own",
+                       "Not a gate. Let the check finish; if it fails, fix it.", check)
 
     # 9. Bureaucracy, evidenced by a phrase.
     if fakes:
@@ -407,9 +434,9 @@ RULES = (
     "4 WALL: kind=capability (Hermes: a hard wall that surfaces to a person); MACHINERY: kind=transient",
     "5 HUMAN: a wait or gate phrase whose source is a person with authority ('from the CEO', 'per the owner', "
     "'the founder's OK', 'the CEO must sign'); a bare role noun, or an agent named after a role, does not count",
-    "6 DEPENDENCY: a HOLD with an explicit expiry date",
+    "6 DEPENDENCY: a HOLD with an explicit expiry date, or a hold that names where the work runs or a queue cap",
     "7 HUMAN: kind=needs_input with no gate or fault phrase in the text",
-    "8 MACHINERY: a fault phrase with no gate phrase",
+    "8 MACHINERY: a fault phrase, or a wait on a running check (CI, build, tests), with no gate phrase",
     "9 FAKE F1-F5: an agent-to-agent gate phrase (confidence 0.7-0.95, less when mixed with a fault or filed as needs_input)",
     "10 HUMAN (0.5): an approval or review from a named party that is not a configured seat ('approval from CoS')",
     "11 FAKE default, not evidenced: created blocked or empty (0.5), older than 24h (0.5), anything else (0.3)",

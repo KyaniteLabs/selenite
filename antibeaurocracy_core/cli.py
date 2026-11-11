@@ -46,6 +46,9 @@ def handle(args: argparse.Namespace, settings: dict | None = None) -> int:
     _settings.apply(settings, extra_seats=getattr(args, "seat", None) or ())
     if args.cmd == "classify":
         text = " ".join(args.text) if args.text else sys.stdin.read()
+        if not text.strip():
+            print("antibeaurocracy: nothing to classify (pass the reason as text or on stdin).", file=sys.stderr)
+            return 2
         v = classify(text, kind=args.kind, age_hours=args.age_hours)
         print(json.dumps(v.to_dict(), indent=2) if args.json else f"{v.label} ({v.confidence}) — {v.action}")
         return 0
@@ -63,6 +66,9 @@ def handle(args: argparse.Namespace, settings: dict | None = None) -> int:
                    if args.judge else None)
         if args.counts:
             print(json.dumps(_audit.counts_only(summary), indent=2))
+            for e in summary.get("errors", []):  # counts stay name-free on stdout; say which board failed on stderr
+                board = str(e["board"]).replace(str(Path.home()), "~", 1)
+                print(f"antibeaurocracy: could not read {board}: {e['error']}", file=sys.stderr)
             return 0
         if args.json:
             out = {"summary": summary, "boards": boards, "rules": rules}
