@@ -201,7 +201,8 @@ def main() -> int:
     _prune(a.out, "samples-*.json", SAMPLE_KEEP)
     _prune(a.out, "report-*.json", REPORT_KEEP)
     print(json.dumps(report, indent=2))
-    print(f"private samples: {redact(str(sp))}", file=sys.stderr)
+    # The user's own file on their own terminal: shorten the home, don't redact the name into "<token>".
+    print(f"private samples: {str(sp).replace(str(Path.home()), '~', 1)}", file=sys.stderr)
     return 0
 
 

@@ -121,6 +121,15 @@ def _bucket(v: dict, auto: bool, created: bool) -> str:
 
 
 def audit_board(db: Path, now: float | None = None) -> dict:
+    """One board, read-only. A busy board (a writer holding the lock) gets one retry before it counts as unreadable."""
+    out = _audit_board(db, now)
+    if "locked" in str(out.get("error", "")) or "busy" in str(out.get("error", "")):
+        time.sleep(0.5)
+        out = _audit_board(db, now)
+    return out
+
+
+def _audit_board(db: Path, now: float | None = None) -> dict:
     now = now or time.time()
     try:
         con = _ro(db)

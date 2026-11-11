@@ -10,8 +10,10 @@ key:  a short stable slug for the friction (e.g. gh-login, npm-otp).
 Keys and notes are redacted when written (emails, IPs, tokens, secrets, the
 home path) and truncated: keys to 80 characters, notes to 200.
 
-Where state lives: $SELENITE_STATE wins; then $XDG_STATE_HOME/selenite, then
-$HERMES_HOME/plugin-data/selenite, then ~/.local/state/selenite. An agent seat
+Where state lives: $SELENITE_STATE, when set, is the only folder read or written
+(so one seat on a shared host never reads another's friction). Otherwise
+$XDG_STATE_HOME/selenite, then $HERMES_HOME/plugin-data/selenite, then
+~/.local/state/selenite. An agent seat
 normally has a read-only home and a writable Hermes home, so the third choice is
 what keeps it working there. Every write tries each folder in that order and
 gives up quietly instead of failing the caller.
@@ -49,6 +51,8 @@ def state_dirs() -> list[Path]:
     home folder is read-only: the preference falls through to a folder that
     takes the write instead of a traceback.
     """
+    if _explicit():
+        return [STATE]  # an explicit SELENITE_STATE is the whole world: no reads from, or writes to, other seats' folders
     out = [STATE]
     xdg = os.environ.get("XDG_STATE_HOME")
     hermes = os.environ.get("HERMES_HOME")
@@ -58,6 +62,25 @@ def state_dirs() -> list[Path]:
         if extra is not None and extra not in out:
             out.append(extra)
     return out
+
+
+def _explicit() -> bool:
+    """True when SELENITE_STATE names the folder in use. Isolation follows the folder actually in use,
+    so code that points STATE elsewhere gets the normal fallback list."""
+    explicit = os.environ.get("SELENITE_STATE")
+    return bool(explicit) and Path(explicit).expanduser() == STATE
+
+
+def write_target() -> Path:
+    """The folder the next write goes to, without creating anything: the first that exists and is
+    writable, or whose nearest existing parent is. Falls back to STATE when none would take it."""
+    for state in state_dirs():
+        probe = state
+        while not probe.exists() and probe.parent != probe:
+            probe = probe.parent
+        if probe.is_dir() and os.access(probe, os.W_OK):
+            return state
+    return STATE
 
 
 def writable_state() -> Path | None:

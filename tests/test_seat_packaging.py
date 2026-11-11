@@ -171,6 +171,19 @@ def test_install_reuses_the_installed_copy_instead_of_a_second_source(tmp_path):
     assert str(other) not in (home / ".hermes/plugins/selenite").readlink().parent.as_posix()
 
 
+def test_install_warns_when_the_reused_copy_differs(tmp_path):
+    """The reused copy is what Hermes loads: a stale one must not win silently (dogfood 2026-11-11)."""
+    home = tmp_path / "home"
+    installed = home / ".local/share/selenite"
+    installed.mkdir(parents=True)
+    (installed / "plugin.yaml").write_text("name: selenite\n")  # an old copy: nothing else matches
+
+    done = _install(home, "--hermes", "--no-enable")
+
+    assert done.returncode == 0, done.stderr  # a warning, never a failed install
+    assert f"warn  {installed} differs from this checkout" in done.stderr
+
+
 def test_install_links_a_first_copy_without_naming_a_reuse(tmp_path):
     home = tmp_path / "home"
     (home / ".claude").mkdir(parents=True)

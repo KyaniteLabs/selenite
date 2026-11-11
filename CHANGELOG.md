@@ -2,6 +2,27 @@
 
 ## 0.5.0 (in catalog review; not yet merged)
 
+### Dogfood round-two fixes (2026-11-11)
+
+- **A stale install can't win silently.** `install.sh --hermes` reuses the Selenite copy the machine
+  already loads, so every seat runs that copy. It now warns when that copy differs from the checkout
+  being installed, or is behind its upstream. A live copy 45 commits old was calling "before I drop
+  the users table" a fake gate.
+- **"Needs credentials" is a credentials wall.** The pattern only matched with two spaces, so "needs
+  credentials", "need a token", "requires credentials" and "needs the API key" read as fake. "The
+  production deploy" as a noun is now a publish wall too.
+- **Deliberate holds aren't parking lots.** A card that says where the work runs ("executed by zcode
+  outside the gateway; do not dispatch") or that it waits for room in a capped queue reads as a declared
+  hold, not a fake gate. A bare "HOLD" still does.
+- **Waiting for CI is a running check**, not a stale wait.
+- **`SELENITE_STATE` isolates.** When it is set, it is the only folder read or written, so Evolve and the
+  dashboard no longer mix in other seats' friction. The dashboard reports the folder it writes to.
+- **Cleanse counts a file once.** A skill symlinked into several agents was one finding per agent;
+  findings now dedupe by real path and check (176 → 106 on the dogfood host).
+- **Small ones.** `classify` with no text says "nothing to classify" and exits 2. `mine` prints its
+  samples path readably instead of redacting the user's own file name. `audit --counts` names an
+  unreadable board on stderr, and a locked board gets one retry.
+
 ### Roast round-four fixes (2026-11-11)
 
 - **`/frictionless` starts the agent turn.** The command used to return the mode's instructions to

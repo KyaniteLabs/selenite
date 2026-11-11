@@ -15,7 +15,7 @@ fixtures avoids two tests asserting opposite contracts.
 import json
 import sys
 
-from antibeaurocracy_core import DEPENDENCY, FAKE, HUMAN, WALL, classify
+from antibeaurocracy_core import DEPENDENCY, FAKE, HUMAN, MACHINERY, WALL, classify
 
 
 def test_catalog_entry_is_a_publishing_wall():
@@ -44,8 +44,8 @@ def test_waiting_on_owner_to_sign_off_is_a_person():
 
 def test_ordinary_wait_stays_stale_not_wall():
     v = classify("Waiting on the build to finish before we can test")
-    assert v.cls == FAKE  # still the low-confidence stale default, never a wall
-    assert v.confidence < 0.6  # below the action threshold
+    assert v.cls == MACHINERY  # a running check clears on its own (dogfood round 2); never a wall
+    assert not v.is_fake  # nothing to nudge
 
 
 def test_product_name_is_not_a_person():
