@@ -124,21 +124,33 @@ _HUMAN = re.compile(
 
 # A person with authority named as the source of a stop or an OK ("ACK from the CEO", "HOLD per the
 # owner"). That wait is a person's decision, not an agent gate, whatever gate phrase surrounds it.
+# Seat names this org actually uses; product/growth/content are deliberately absent (common nouns).
+# Seats are agents, not people: a wait ON a seat's approval is fake-gate territory per the shipped
+# contract ("waiting on platform approval" is FAKE). Seats appear only in the capability-infinitive
+# form ("need Liam/Platform to expose a GUI wrapper"), where the seat is who must BUILD, not gate.
+_SEAT = r"(liam|platform|security|design|engineering|governance|income|chief.?scientist)"
 _ROLE = (r"(ceo|cto|cfo|coo|founders?|owner|operator|user|human|boss|board|executives?|manager|legal|customers?|"
-         r"clients?|person)")
+         r"clients?|person|simon)")
 _NOT_A_PERSON = r"(?!-|('s)?\s+(agent|bot|seat|module|lane|worker|service|process)s?\b)"
+_NOUN = r"(approval|approvals|ok|okay|sign-?off|go|word|green-?light|blessing|decision|call|ack|ruling|verdict)"
+# weak: the role is only referenced ("ACK from the CEO"); needs a wait word or gate phrase to count
 _HUMAN_AUTHORITY = re.compile(
     # the source of the wait: "ACK from the CEO", "HOLD per the owner", "approved by the founder"
-    rf"(\b(from|per|by) (the |my |our )?{_ROLE}\b{_NOT_A_PERSON}|"
-    # the person's own word: "the founder's OK"
-    rf"\b(the |my |our )?{_ROLE}'s (approval|ok|okay|sign-?off|go-?ahead|decision|call|ack)\b|"
+    rf"(\b(from|per|by) (the |my |our )?{_ROLE}\b{_NOT_A_PERSON})", _I)
+# strong: the role itself acts or is asked to act — evidence enough on its own
+_HUMAN_AUTHORITY_STRONG = re.compile(
+    # the person's own word as a noun: "the founder's OK", "needs CEO approval", "CEO word on the copy"
+    rf"(\b(the |my |our |needs? |pending |awaiting |without )?{_ROLE}(?:'s)? {_NOUN}\b|"
     # the person as the subject: "the CEO must countersign", "CEO has not signed", "until the CEO approves",
     # and the infinitive form after the role: "needs the CEO to approve", "waiting on the owner to sign off"
     rf"\b{_ROLE} (must|has to|needs to|has not|hasn't|has yet to|approves?|approved|signs?|signed|"
     rf"decides?|countersigns?|ratif\w*|sign(s|ed)? off)\b|"
-    rf"\b{_ROLE} to (approv\w*|sign(s|ed)? off|decide|ratif\w*|countersign\w*|green-?light)\b)", _I)
+    rf"\b{_ROLE} to (approv\w*|sign(s|ed)? off|decide|ratif\w*|countersign\w*|green-?light|"
+    rf"expose|provide|grant|create|open|enable)\b|"
+    # a seat named as the builder of a missing capability: "need Liam/Platform to expose a GUI wrapper"
+    rf"\b(need|needs|needing) {_SEAT}(?:/\w+){{0,3}} to (expose|provide|grant|create|open|enable|build)\b)", _I)
 
-_WAIT_WORD = re.compile(r"\b(await\w*|waiting|approv\w*|ack|ok|okay|sign-?off|go-?ahead|hold|decision|decide|ruling|call)\b", _I)
+_WAIT_WORD = re.compile(r"\b(await\w*|waiting|approv\w*|ack|ok|okay|sign-?off|go(-?ahead)?|word|hold|decision|decide|ruling|call|need(s|ed)?)\b", _I)
 
 _MACHINERY = re.compile(
     r"\b(read-?only (file ?system|fs)|errno ?\d+|no such file|not found|command not found|missing (binary|tool|package|dependency|module)|"
@@ -148,7 +160,16 @@ _MACHINERY = re.compile(
     _I,
 )
 
-_DEPENDENCY = re.compile(r"\b(waiting on (task|card|parent|pr|issue) [#\w-]+|depends on (task|card|pr|issue) |blocked by (t_[0-9a-f]+|#\d+)|after (t_[0-9a-f]+|#\d+) (lands|merges|finishes))", _I)
+_DEPENDENCY = re.compile(r"\b(waiting on (task|card|parent|pr|issue) [#\w-]+|depends on (task|card|pr|issue) |blocked by ((task|card|parent|pr|issue) )?(t_[0-9a-f]+|#\d+)|after (t_[0-9a-f]+|#\d+) (lands|merges|finishes))", _I)
+
+# A wall no agent can clear in its own lane: an appeal held by a person, an action only the human
+# principal can take. Surfaced by the Income seat dogfood: without this, such cards read as
+# "close the card" (stale-wait) when the only honest move is to escalate.
+_CAPABILITY_WALL = re.compile(
+    r"\b(simon|ceo|owner|principal)s?[- ]held\b|"
+    r"\bno (agent|seat|bot|worker|tool) can (clear|lift|grant|approve|resolve|undo)\b|"
+    r"\bonly (simon|the ceo|the owner|a human|the principal) can\b|"
+    r"\bappeal\w* (is|are|rests?|sits) with\b", _I)
 
 # Generic agent roles. Teams add their own seat names with configure(seats=[...]); none ship here.
 # Human roles (owner, manager, legal, maintainer) are deliberately absent: a person's sign-off is not agent bureaucracy.
@@ -301,12 +322,21 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
     if kind == "transient":
         return Verdict(MACHINERY, "", 0.6, "declared transient gap", ACTIONS[MACHINERY], ["kind=transient"])
 
+    # 4b. A wall no agent can clear: an appeal a person holds, an action only the principal can take.
+    capwall = _hits(_CAPABILITY_WALL, t)
+    if capwall and not fakes:
+        return Verdict(WALL, "declared-capability", 0.6, "an agent cannot clear this; it belongs to a person",
+                       ACTIONS[WALL], capwall)
+
     mach = _hits(_MACHINERY, t)
 
     # 5. A wait whose source is a person with authority is that person's call.
+    # The strong form (the role acts, is asked to act, or its word is the noun) is evidence alone;
+    # the weak form (the role is only referenced) still needs a wait word or a gate phrase.
+    strong = _hits(_HUMAN_AUTHORITY_STRONG, t)
     authority = _hits(_HUMAN_AUTHORITY, t)
-    if authority and (fakes or _WAIT_WORD.search(t)):
-        return Verdict(HUMAN, "", 0.7, "a person's stop or approval", ACTIONS[HUMAN], authority)
+    if strong or (authority and (fakes or _WAIT_WORD.search(t))):
+        return Verdict(HUMAN, "", 0.7, "a person's stop or approval", ACTIONS[HUMAN], strong or authority)
 
     # 6. A hold with an explicit expiry is legitimate parking.
     if fakes and [s for s, _ in fakes] == [PARKING] and _HOLD_WITH_EXPIRY.search(t):
