@@ -116,3 +116,15 @@ def test_s8_fake_gate_ledger_write_gives_up_at_the_deadline(tmp_path, monkeypatc
 def test_s9_desktop_file_has_a_reduced_motion_rule():
     js = (REPO / "desktop" / "plugin.js").read_text()
     assert js.count("prefers-reduced-motion") >= 1
+
+
+# --- wave 3: X-SHLEX ------------------------------------------------------------------------
+def test_judge_command_keeps_windows_backslash_paths():
+    from antibeaurocracy_core import judge
+    argv = judge.split_command(r'judge.exe --repo "C:\Program Files\x" --other C:\tmp\y', windows=True)
+    assert argv == ["judge.exe", "--repo", r"C:\Program Files\x", "--other", r"C:\tmp\y"]
+
+
+def test_judge_command_posix_quoting_is_unchanged():
+    from antibeaurocracy_core import judge
+    assert judge.split_command("judge --repo 'a b' --x \"c d\"", windows=False) == ["judge", "--repo", "a b", "--x", "c d"]

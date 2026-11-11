@@ -11,10 +11,11 @@ a list of cards where the two disagree, for a person to look at.
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import subprocess
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Optional
 
 from .classify import FAKE
 
@@ -54,8 +55,17 @@ def parse(out: str) -> str:
     return m.group(1).upper() if m else ""
 
 
+def split_command(cmd: str, windows: Optional[bool] = None) -> list[str]:
+    """Split a ``--judge`` command line. On Windows a backslash is a path separator, not an escape."""
+    if windows is None:
+        windows = os.name == "nt"
+    if not windows:
+        return shlex.split(cmd)
+    return [t[1:-1] if len(t) > 1 and t[0] == t[-1] and t[0] in "\"'" else t for t in shlex.split(cmd, posix=False)]
+
+
 def runner(cmd: str, timeout_s: float = 60.0) -> Callable[[str], str]:
-    argv = shlex.split(cmd)
+    argv = split_command(cmd)
     if not argv:
         raise ValueError("--judge needs a command")
 
