@@ -27,8 +27,9 @@ Why it's a plugin and not an MCP server: the value is at the hook. It acts while
 - [x] Unattended runs: nothing waits for a person; Calm is off inside Kanban workers.
 - [x] Capabilities in this entry match `plugin.yaml` and what `register()` calls.
 - [x] `requires_hermes: ">=0.23.0"`, full 40-character pin.
-- [ ] `hermes plugins validate` receipt at the pinned SHA: REPLACE with link.
-- [ ] Tests at the pinned SHA (Python 3.10, 3.12, 3.14 and against Hermes): REPLACE with CI link.
+- [x] `hermes plugins validate` at the pinned SHA: ok, no warnings ([hermes-validate job](https://github.com/KyaniteLabs/selenite/actions/runs/42941198861)).
+- [x] Tests at the pinned SHA, Python 3.10–3.14 and against Hermes: [CI run](https://github.com/KyaniteLabs/selenite/actions/runs/42941198861).
+- [x] Live install: `hermes plugins install` of the pinned SHA into a clean Hermes home enables headlessly. Real `kanban_block` calls on a throwaway board: a relay or ceremony block goes through with a note (nudge) or is handed back once and passes with a declared kind (ask); a credential block and `kanban_complete` are untouched; Calm fires on two overload signals and not on one; Selenite's files hold no block reason or prompt text, and all are 0600.
 - [ ] Demo video: REPLACE with link.
 
 ## Relation to other KyaniteLabs entries
