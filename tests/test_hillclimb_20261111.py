@@ -75,10 +75,7 @@ def test_docs_say_the_desktop_half_starts_off():
 
 
 # --- Calm recall: common "I already said this" phrasings ------------------------------------
-import sys as _sys
-from pathlib import Path as _Path
-_sys.path.insert(0, str(_Path(__file__).resolve().parents[1] / "skills" / "frictionless" / "scripts"))
-import signals as _signals  # noqa: E402
+from conftest import signals as _signals  # noqa: E402  (loaded under its plugin name; no sys.path or sys.modules leak)
 
 
 @pytest.mark.parametrize("text", [
