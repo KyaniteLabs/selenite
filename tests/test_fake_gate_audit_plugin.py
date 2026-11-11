@@ -750,10 +750,16 @@ def test_a_pinned_kanban_db_wins(tmp_path, monkeypatch):
 
 
 def test_no_private_hermes_imports():
-    import re as _re
+    import ast
     for f in [*ROOT.glob("*.py"), *ROOT.glob("antibeaurocracy_core/*.py"), *ROOT.glob("dashboard/*.py"),
               *ROOT.glob("skills/*/scripts/*.py")]:
-        assert not _re.search(r"^\s*(from|import) hermes_cli\b", f.read_text(), _re.M), f
+        for node in ast.walk(ast.parse(f.read_text())):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == "hermes_cli":
+                # This sanctioned public bridge is the only Hermes CLI import plugins need.
+                assert node.module == "hermes_cli.plugin_events", f
+                assert [n.name for n in node.names] == ["broadcast_plugin_event"], f
+            elif isinstance(node, ast.Import):
+                assert not any(n.name.split(".")[0] == "hermes_cli" for n in node.names), f
 
 
 # Check Yourself boundary (docs/CHECKYOURSELF-BOUNDARY.md): its gate owns kanban_complete, Selenite owns kanban_block.

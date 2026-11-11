@@ -5,9 +5,9 @@ cleansing itself: no upkeep, self-trimming state. This Hermes plugin wraps
 Selenite's three provider-agnostic facet skills and registers:
 
   skills   frictionless, antibeaurocracy, antipedantry   (skills/<name>/SKILL.md)
-  commands /frictionless [cleanse|gate|calm|evolve] [text]
+  commands /frictionless [cleanse|gate|calm|evolve|status] [text]
            /antibeaurocracy [audit|check|mode|ledger], /fake-gate <reason>
-  tools    selenite_ledger (add, summary, cleanse), bureaucracy_classify, bureaucracy_audit
+  tools    selenite_ledger (add, summary, cleanse), selenite_show, bureaucracy_classify, bureaucracy_audit
   hooks    pre_llm_call            -> Calm-mode context on the two-signal rule (never inside a kanban worker)
            post_approval_response  -> a human "once"/"session" on a safe, non-wall prompt logs an approval row;
                                       a human "always" logs that approval as fixed
@@ -57,6 +57,7 @@ def _scripts(*names: str):
 
 
 cleanse, ledger, signals = _scripts("cleanse", "ledger", "signals")
+pane = ledger.pane
 
 # Hermes and the tests both load this file as a package, so the facet imports relatively.
 from .antibeaurocracy_core import FAKE, HUMAN, WALL, WALLS_TEXT  # noqa: E402
@@ -293,6 +294,8 @@ def frictionless_command(raw_args: str, *, session_key: str | None = None) -> st
     agent-facing instructions travel through ``ctx.inject_message``. Where no agent turn can be
     started (an old host, or a gateway without injection allowed), the human gets the text to send.
     """
+    if (raw_args or "").strip().lower() == "status":
+        return "Selenite updates its Desktop page through local events when open and enabled. " + pane.SETUP
     mode, prompt = frictionless_prompt(raw_args)
     what = f"{mode.capitalize()} mode" if mode else "your request"
     inject = getattr(_ctx, "inject_message", None)
@@ -358,6 +361,30 @@ LEDGER_SCHEMA = {
     },
 }
 
+SHOW_SCHEMA = {
+    "name": "selenite_show",
+    "description": "Ask the open, enabled Selenite Desktop page to show a section and optionally focus an item.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "view": {"type": "string", "enum": list(pane.VIEWS), "maxLength": 16},
+            "item_id": {"type": "string", "maxLength": 80, "pattern": "^" + pane.ITEM_PATTERN + "$",
+                        "description": "Optional short gate/ledger key, fake-gate card id, cleanse check id or signal id; no paths or private text."},
+        },
+        "required": ["view"],
+        "additionalProperties": False,
+    },
+}
+
+
+def selenite_show(args: dict | None = None, **_kw) -> str:
+    if not pane.valid_view(args):
+        return ("Error: view must be one of " + ", ".join(pane.VIEWS)
+                + "; optional item_id must be 1-80 letters, digits, underscores, colons or hyphens.")
+    pane.broadcast("view.set", args)
+    item = f", item {args['item_id']}" if "item_id" in args else ""
+    return f"Asked Selenite to show {args['view']}{item}; the Desktop page must be open and enabled."
+
 
 def selenite_ledger(args: dict, **_kw) -> str:
     try:
@@ -386,9 +413,11 @@ def register(ctx) -> None:
         ctx.register_skill(name, ROOT / "skills" / name / "SKILL.md", description=description)
     ctx.register_command(name="frictionless", handler=frictionless_command,
                          description="Selenite: cleanse the stack, shrink a human step, calm mode, evolve",
-                         args_hint="[cleanse|gate|calm|evolve] [context]")
+                         args_hint="[cleanse|gate|calm|evolve|status] [context]")
     ctx.register_tool(name="selenite_ledger", toolset="selenite", schema=LEDGER_SCHEMA,
                       handler=selenite_ledger, description=LEDGER_SCHEMA["description"], emoji="🤍")
+    ctx.register_tool(name="selenite_show", toolset="selenite", schema=SHOW_SCHEMA,
+                      handler=selenite_show, description=SHOW_SCHEMA["description"], emoji="🤍")
     for hook in (pre_llm_call, post_approval_response,
                  kanban_task_blocked, kanban_task_completed, on_kanban_task_updated):
         ctx.register_hook(hook.__name__, hook)

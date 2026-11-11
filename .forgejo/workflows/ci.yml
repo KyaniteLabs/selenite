@@ -33,6 +33,8 @@ jobs:
           persist-credentials: false
       - name: Unit tests (includes the needs-no-cleansing requirement)
         run: python3 -m pip install --no-cache-dir -r requirements-test.txt && python3 -m pytest -q
+      - name: Desktop event contract
+        run: node --experimental-vm-modules tests/test_pane_events.mjs
       - name: Package installs and the fake-gate CLI runs
         run: |
           V=$(mktemp -d) && python3 -m venv "$V" && "$V/bin/pip" install --no-cache-dir . && "$V/bin/antibeaurocracy" classify "Awaiting ACK from platform"
