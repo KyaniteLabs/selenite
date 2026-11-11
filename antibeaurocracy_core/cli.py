@@ -12,7 +12,7 @@ from . import __version__
 from . import audit as _audit
 from . import judge as _judge
 from . import settings as _settings
-from .classify import classify
+from .classify import FAKE, classify
 
 
 def add_arguments(p: argparse.ArgumentParser) -> None:
@@ -52,7 +52,15 @@ def handle(args: argparse.Namespace, settings: dict | None = None) -> int:
             print("antibeaurocracy: nothing to classify (pass the reason as text or on stdin).", file=sys.stderr)
             return 2
         v = classify(text, kind=args.kind, age_hours=args.age_hours)
-        print(json.dumps(v.to_dict(), indent=2) if args.json else f"{v.label} ({v.confidence}) — {v.action}")
+        d = v.to_dict()
+        # Same bar the audit uses: a FAKE below min_confidence (or with no matched phrase) is not acted on.
+        d["low_confidence"] = v.cls == FAKE and not _audit.is_fake({"verdict": d})
+        if args.json:
+            print(json.dumps(d, indent=2))
+        elif d["low_confidence"]:
+            print(f"{v.label} ({v.confidence}) — low confidence, no action. Read the card yourself.")
+        else:
+            print(f"{v.label} ({v.confidence}) — {v.action}")
         return 0
     if args.cmd == "audit":
         boards = [_audit.audit_board(db) for db in _audit.find_boards(args.root or _audit.default_roots(args.all_homes))]

@@ -428,7 +428,13 @@ AUDIT_SCHEMA = {
 
 def tool_classify(args: dict, **_kw) -> str:
     text = str(args.get("text") or "")
-    return json.dumps(classify(text, kind=args.get("kind"), age_hours=args.get("age_hours")).to_dict())
+    v = classify(text, kind=args.get("kind"), age_hours=args.get("age_hours"))
+    return json.dumps(dict(v.to_dict(), low_confidence=_low_confidence(v)))
+
+
+def _low_confidence(v) -> bool:
+    """A FAKE verdict the gate itself would not act on: no matched phrase, or below min_confidence."""
+    return v.cls == FAKE and not (v.evidenced and v.confidence >= _settings.min_confidence(_ctx_settings()))
 
 
 def _boards(home: Path | None = None) -> list[dict]:
@@ -460,6 +466,8 @@ def slash(raw_args: str = "", *, platform: str | None = None) -> str:
         if not rest:
             return "Usage: /antibeaurocracy check <reason text>"
         v = classify(rest)
+        if _low_confidence(v):
+            return f"{v.label} ({v.confidence}): low confidence, no action. Read the card yourself."
         return f"{v.label} ({v.confidence}): {v.action}"
     if sub == "mode":
         return f"antibeaurocracy {__version__}: gate mode is {_mode()}. Change it in plugins.entries.{OWNER}.settings.fake_gate_mode."
