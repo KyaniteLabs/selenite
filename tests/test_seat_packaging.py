@@ -15,6 +15,7 @@ D4 install.sh --hermes: the Hermes CLI step (which may first complete a code
 """
 import errno
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -236,8 +237,15 @@ def test_no_enable_never_calls_the_hermes_cli(tmp_path):
 def test_pyproject_does_not_make_hermes_ask_for_dependency_consent():
     """A [build-system] table reads to Hermes as 'installs Python packages', so a
     headless `hermes plugins install` stops at a consent question and stays disabled."""
-    tomllib = pytest.importorskip("tomllib")  # 3.11+; the 3.10 CI leg skips
-    doc = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
+    text = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
+    try:
+        import tomllib  # 3.11+
+    except ImportError:  # 3.10 has no TOML parser: check the same three facts as text, never skip
+        assert not re.search(r"(?m)^\[build-system\]", text)
+        assert not re.search(r"(?m)^(optional-dependencies|\[project\.optional-dependencies\]|\[dependency-groups\])", text)
+        assert re.search(r"(?m)^dependencies\s*=\s*\[\s*\]", text)
+        return
+    doc = tomllib.loads(text)
     assert "build-system" not in doc
     assert doc["project"]["dependencies"] == []
     assert not doc["project"].get("optional-dependencies") and "dependency-groups" not in doc

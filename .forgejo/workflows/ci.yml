@@ -36,6 +36,8 @@ jobs:
           python3 -m pip install --no-cache-dir -r requirements-test.txt
           # Root ignores permission bits, so the NON_ROOT_ONLY tests would skip. Run as a real user.
           useradd --create-home ci
+          # The checkout is owned by root; without this git refuses it for `ci` ("dubious ownership") and the git-based test skips.
+          git config --system --add safe.directory "$PWD"
           set -o pipefail
           runuser -u ci -- env HOME=/home/ci python3 -m pytest -q -rs -p no:cacheprovider | tee pytest.out
           # Every test should run in CI (fastapi is installed, the checkout is a git repo): a skip is a failure.
