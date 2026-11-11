@@ -252,6 +252,19 @@ def test_tool_actions():
     assert not json.loads(plugin.selenite_ledger({"action": "add", "kind": "bad", "key": "k"}))["success"]
 
 
+def test_ledger_tool_names_its_errors():
+    def call(**a):
+        return json.loads(plugin.selenite_ledger(a))
+    assert call(action="add", key="k") == {"success": False, "error": "kind is required"}
+    assert call(action="add", kind="gate") == {"success": False, "error": "key is required"}
+    assert call(action="add", kind="gate", key="  ") == {"success": False, "error": "key is required"}
+    assert call(action="add", kind="bad", key="k")["success"] is False
+    assert call(action="nope") == {"success": False, "error": "unknown action: nope"}
+    assert call() == {"success": False, "error": "action is required"}
+    assert call(action="summary")["success"] is True
+    assert plugin.LEDGER_SCHEMA["parameters"]["properties"]["action"]["enum"] == ["add", "summary", "cleanse"]
+
+
 def test_a_failing_hook_never_raises(monkeypatch):
     def boom(*a, **k):
         raise OSError("disk full")

@@ -391,14 +391,22 @@ def selenite_show(args: dict | None = None, **_kw) -> str:
 
 
 def selenite_ledger(args: dict, **_kw) -> str:
+    action = args.get("action")
+    if not action:
+        return json.dumps({"success": False, "error": "action is required"})
+    if action not in LEDGER_SCHEMA["parameters"]["properties"]["action"]["enum"]:
+        return json.dumps({"success": False, "error": f"unknown action: {action}"})
     try:
-        if args.get("action") == "add":
+        if action == "add":
+            for field in ("kind", "key"):
+                if not str(args.get(field) or "").strip():
+                    return json.dumps({"success": False, "error": f"{field} is required"})
             row = ledger.add(args["kind"], args["key"], args.get("note", ""), "hermes")
             if row is None:   # no writable state destination: nothing was recorded, so do not say it was
                 return json.dumps({"success": False, "row": None,
                                    "error": "ledger not writable: the row was not recorded"})
             return json.dumps({"success": True, "row": row})
-        if args.get("action") == "cleanse":
+        if action == "cleanse":
             report = cleanse.run(int(args.get("days", 30)))
             cleanse.write(report)
             return json.dumps({"success": True, "findings": report["findings"][:15],
