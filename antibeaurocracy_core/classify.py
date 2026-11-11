@@ -49,7 +49,7 @@ ACTIONS = {
     RELAY: "Collapse the hop: do the carry step yourself if your lane can. If it can't, ask whoever owns the capability for it once, rather than asking another agent for a favour each time.",
     LIMBO: "Make the call with a stated default and a revert path, comment it on the card, and move on. If ownership really is disputed, ask the named decider once.",
     CEREMONY: "Drop the ceremony. Keep only evidence a reader would actually check (a test run, a diff, a URL). Comment, don't open a new card.",
-    PARKING: "Unpark: dispatch it, put it in triage, or close it. A hold needs a named owner and an expiry, or it lapses.",
+    PARKING: "Unpark: ask whoever set the hold for a named owner and an expiry, then dispatch it, put it in triage, or close it. A hold with neither lapses.",
     STALE: "Name the next actor and action in one line, or close the card. A wait with no next step is not a wait.",
 }
 
@@ -78,6 +78,12 @@ _WALL = [
         r"(credentials?|tokens?|api[ -]?keys?|passwords?|secrets?|2fa|otp)\b(?!-)|"  # not "credential-free"
         # a person has to sign in: "waiting on Ana to log in to npm", "needs to authenticate with PyPI"
         r"\b(to|must|has to|needs? to|have to) (log ?in|sign ?in|authenticate|re-?auth\w*)\b|"
+        # "waiting for the GitHub token", "blocked on credentials for…", "need the SSH key", "provide the
+        # passphrase", "need someone to log in to the AWS console", "waiting for access to the private repo"
+        r"\b(need(s|ed|ing)?|waiting (for|on)|await\w*|blocked on|provide|send)(?! no\b| zero\b) (an? |the |new |our |my |your |their )?(\w+ ){0,3}"
+        r"(credentials?|tokens?|api[ -]?keys?|ssh[ -]?keys?|private keys?|passwords?|passphrases?|secrets?|2fa|otp|mfa)\b(?!-)|"
+        r"\b(need(s|ed|ing)?|waiting for|await\w*|requires?|ha(s|ve) to|must) (\w+ ){0,2}to (log|sign) ?in\b|"
+        r"\b(need(s|ed|ing)?|waiting (for|on)|await\w*|blocked on|requires?|requesting) (\w+ ){0,2}access (to|for)\b|"
         r"\bre-?auth(enticate)?\b|oauth (flow|login|consent)|sudo password|"
         # only the person's own account will do: "fill the Typeform with his own login"
         r"\b(his|her|their|my|\w+['’]s) own (login|account|sign-?in|credentials?)\b)", _I)),
@@ -93,7 +99,7 @@ _WALL = [
         r"deploy\w* (to )?(prod\w*|live)|\b(prod|production) (deploy\w*|release|rollout)\b|terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall)|roll\w* out to (prod\w*|users|customers)|ship(ping)? to (prod\w*|customers|users)|merg\w* (\w+ ){0,3}(to|into) (main|master|prod\w*|release)|"
         r"submi\w* (\w+ ){0,3}(catalog|marketplace|store|registry)s?\b|(catalog|marketplace|store|registry) (entry|submission|listing)s?\b|"
         # "before posting publicly", "the upstream catalog PR": outside readers see it
-        r"(post|open|fil|submit|comment)\w* (\w+ ){0,2}publicly|upstream (\w+ ){0,2}(pr|pull request|issue)s?\b)", _I)),
+        r"(post|open|fil|submit|comment)\w* (\w+ ){0,2}publicly|upstream (\w+ ){0,2}(pr|pull request|issue)s?\b|public(ly)?[- ]expos\w*|public exposure)", _I)),
     ("destructive", re.compile(
         r"\b(irreversibl\w*|destructive|drop (the |a |an |all |our |\w+ ){0,3}(tables?|databases?|schemas?|collections?|indexes|indices)\b|(prod\w*|production|live) (\w+ ){0,2}migrations?\b|truncate|rm -rf|force[- ]push|push (-f|--force)|git push --force|delete everything|"
         r"delet\w* (the |all |a |production |prod |user |customer )*(\w+ ){0,2}(repo|repository|database|db|rows?|tables?|buckets?|account|data|history|backups?|branch|records?|files?|users?|namespaces?|clusters?|volumes?|disks?|tenants?)|"
@@ -142,7 +148,7 @@ _SEAT = r"(liam|platform|security|design|engineering|governance|income|chief.?sc
 _ROLE = (r"(ceo|cto|cfo|coo|founders?|owner|operator|user|human|boss|board|executives?|manager|legal|customers?|"
          r"clients?|person|simon)")
 _NOT_A_PERSON = r"(?!-|('s)?\s+(agent|bot|seat|module|lane|worker|service|process)s?\b)"
-_NOUN = r"(approval|approvals|ok|okay|sign-?off|go|word|green-?light|blessing|decision|call|ack|ruling|verdict)"
+_NOUN = r"(approvals?|ok|okay|sign-?offs?|go|word|green-?light|blessing|decisions?|calls?|ack|rulings?|verdicts?)"
 # weak: the role is only referenced ("ACK from the CEO"); needs a wait word or gate phrase to count
 _HUMAN_AUTHORITY = re.compile(
     # the source of the wait: "ACK from the CEO", "HOLD per the owner", "approved by the founder"
@@ -255,10 +261,11 @@ _HOLD_WITH_EXPIRY = re.compile(r"\b(until|expires?|through|till)\s+\d{4}-\d{2}-\
 # by zcode outside the gateway; do not dispatch"), or the card waits for room in a capped queue.
 _RUNNING_ELSEWHERE = re.compile(
     r"\b((being )?(executed|executing|run|running|implemented|handled|worked on) (by|in|via) "
-    r"(?!(the |an? )?(\w+ )?(approval|ack|sign-?off|ok|go-?ahead|review)\b)[\w.-]+|outside the gateway)\b", _I)
+    r"(?!(the |an? )?(\w+ )?(approval|ack|sign-?off|ok|go-?ahead|review)\b)[\w.-]+|outside the (gateway|board|dispatcher)|"
+    r"(supervisor|session|harness|owner) (now )?owns (this|the|it))\b", _I)
 _THROTTLE = re.compile(
     r"\b((queue|backlog) (that |which )?(already )?ha(s|ve) \d+|max_in_progress\w*|throttl\w*|"
-    r"queue (cap|limit)|(when|until|once) the queue has (capacity|room)|"
+    r"queue (cap|limit)|(when|until|once) the queue has (capacity|room)|(max|maximum|at most) \d+ (in[ -]progress|running|at a time)|"
     r"so (it|they) (do(es)? not|don'?t|won'?t) auto-?dispatch)", _I)
 # A wait on a running check (CI, a build, a test run) clears on its own; it is neither a gate nor a fault yet.
 _RUNNING_CHECK = re.compile(
