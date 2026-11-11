@@ -16,6 +16,25 @@
 
 ## 0.5.0 (in catalog review; not yet merged)
 
+### Dogfood gap fixes (2026-11-11)
+
+- **More credential asks are walls.** "Need the SSH key", "waiting for access to the private repo",
+  "need someone to log in to the AWS console", "need the production database password" and similar
+  were still sorted as stale waits. The pattern now knows more verbs (blocked on, waiting for,
+  provide, send), up to three words before the noun, SSH and private keys, passphrases, MFA, "log in"
+  and "access to". "No credentials required" and "credential-free" still are not walls.
+- **More declared holds are recognised.** "The supervisor owns this repair" counts as work running
+  elsewhere, and "max 2 in progress" or "throttled at 3 running" as a capacity hold. Owner decisions
+  about a public exposure are a publish wall.
+- **Parking advice asks before it dispatches.** F5 now says to get a named owner and an expiry from
+  whoever set the hold, instead of "dispatch it".
+- **`classify` refuses symbol-only input** ("👍") as well as blank input. `antibeaurocracy --version` works.
+- **The web tab reads on a phone.** Long gate names wrap and show in full on hover. "1 Calm trigger" is
+  singular, and the fake-gate headline says "No boards found" or "Nothing blocked" instead of "0 of the
+  blocked (0%)".
+- **One test requirements file.** `requirements-test.txt` pins pytest, FastAPI and httpx for CI and
+  local runs; a missing FastAPI now says why the backend tests skipped.
+
 ### Dogfood fixes on real board snapshots (2026-11-11)
 
 - **A plain freeze is a wall.** "frozen: no repins until the deadline", "repin freeze" and "merge freeze

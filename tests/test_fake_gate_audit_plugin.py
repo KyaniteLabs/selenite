@@ -546,7 +546,7 @@ def test_echo_dedupe_ignores_board_name_and_refused_calls(tmp_path, monkeypatch)
 
 
 def test_dashboard_ledger_counts_survive_junk_lines(tmp_path, monkeypatch):
-    pytest.importorskip("fastapi")
+    pytest.importorskip("fastapi", reason="backend tests need FastAPI: pip install -r requirements-test.txt")
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     d = tmp_path / "plugin-data" / "antibeaurocracy"
     d.mkdir(parents=True)
@@ -562,7 +562,7 @@ def test_dashboard_ledger_counts_survive_junk_lines(tmp_path, monkeypatch):
 
 
 def test_dashboard_overview_has_no_people_or_paths(tmp_path, monkeypatch):
-    pytest.importorskip("fastapi")
+    pytest.importorskip("fastapi", reason="backend tests need FastAPI: pip install -r requirements-test.txt")
     _board(tmp_path)
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     spec = importlib.util.spec_from_file_location("ab_dash", ROOT / "dashboard" / "fake_gates_api.py")

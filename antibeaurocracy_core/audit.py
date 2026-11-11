@@ -245,7 +245,7 @@ def summarize(boards: list[dict], threshold: float | None = None) -> dict:
             for cause in c["shared_causes"]:
                 causes[cause].append(c["id"])
     return {
-        "running": running, "blocked": blocked, "fake": fake, "unclear": unclear,
+        "boards": len(boards), "running": running, "blocked": blocked, "fake": fake, "unclear": unclear,
         "created_blocked": by_bucket.get("created_blocked", 0), "auto_blocked": by_bucket.get("auto_blocked", 0),
         "fake_share": round(fake / blocked, 2) if blocked else 0.0,
         "by_label": dict(by_bucket.most_common()),
@@ -257,7 +257,7 @@ def summarize(boards: list[dict], threshold: float | None = None) -> dict:
 
 def counts_only(summary: dict) -> dict:
     """The summary with nothing that names a card or a person."""
-    keep = ("running", "blocked", "fake", "unclear", "created_blocked", "auto_blocked", "fake_share", "by_label")
+    keep = ("boards", "running", "blocked", "fake", "unclear", "created_blocked", "auto_blocked", "fake_share", "by_label")
     out = {k: summary.get(k) for k in keep}
     out["shared_causes"] = {k: len(v) for k, v in summary.get("shared_causes", {}).items()}
     out["board_errors"] = len(summary.get("errors", []))
@@ -265,8 +265,13 @@ def counts_only(summary: dict) -> dict:
 
 
 def headline(s: dict) -> str:
-    line = (f"{s['blocked']} blocked vs {s['running']} running. {s['fake']} of the blocked "
-            f"({int(s['fake_share'] * 100)}%) wait on agent bureaucracy, by the reasons they give.")
+    if s.get("boards") == 0:
+        return "No boards found. Point HERMES_HOME (or --all-homes) at a Hermes home with a kanban board."
+    if not s.get("blocked"):
+        line = f"Nothing blocked; {s.get('running', 0)} running."
+    else:
+        line = (f"{s['blocked']} blocked vs {s['running']} running. {s['fake']} of the blocked "
+                f"({int(s['fake_share'] * 100)}%) wait on agent bureaucracy, by the reasons they give.")
     extra = []
     if s.get("unclear"):
         extra.append(f"{s['unclear']} give no clear reason")
