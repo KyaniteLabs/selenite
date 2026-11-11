@@ -81,17 +81,17 @@ Rejected metaphors:
 - On light chrome a white tint would vanish, so the icon carries the identity and the UI uses host ink.
 - Gate, approval and fix states use host semantic tokens, and every one of them is paired with a text label. Colour never carries state alone.
 - **Correction from Simon, 2026-11-10: "this shonudl be very chill the colors of seleinte".** The page takes only the stone's own colours, with no saturated accents. This replaced round 1's magenta and turquoise, which were too loud.
-- **Second correction from Simon, 2026-11-10: "i don tliek balck and white. make it ilike desrrt rose. white and tan".** The pearl-and-silver round read as black and white and is rejected. The palette is now desert rose: selenite's rosette habit, white blades with sand caught between them. Desert rose is a real habit of gypsum/selenite (mineral fact, mindat: gypsum "desert rose"), so the tan is the stone's own sand, not an invented colour.
-- **No brown or orange (Simon's standing rule).** The tan is a pale, low-chroma sand (`#C8AD84` base), always mixed toward the host's text colour so it stays light sand on dark chrome and khaki-sand on light chrome. It never goes deep enough to read as brown, and it is never the host's `--ui-orange` or `--ui-yellow` (ochre), which stay unused.
-- State colours, all paired with a text label:
-  - **Sand** `--sel-sand` = `color-mix(in oklab,#C8AD84 84%,var(--ui-text-primary))`.
-  - **Human gate:** sand. It is the one state that asks for attention, so it gets the warmest tone on the page.
-  - **Calm trigger and high load:** pale sand, sand 35% into `--ui-text-tertiary`. Calm dots are hollow rings, so shape tells them from gates as well as tone.
-  - **Approval:** host blue 30% into pale sand. **Fix:** host green 35% into pale sand.
-  - **Identity:** white blades: pearl `#ECE9E2` on dark, host ink on light (unchanged).
-  - Red stays reserved for broken.
+- **Second correction from Simon, 2026-11-10: "i don tliek balck and white. make it ilike desrrt rose. white and tan".** The pearl-and-silver round read as black and white and is rejected. That round used desert rose: selenite's rosette habit, white blades with sand caught between them. Desert rose is a real habit of gypsum/selenite (mineral fact, mindat: gypsum "desert rose"), so the tan is the stone's own sand, not an invented colour.
+- **Third correction from Simon, 2026-11-10: "i stills ee black and whit i said no black make it like the walnut color system".** The desert-rose round still sat on the host's black chrome and is rejected. The page now uses Simon's own Walnut design system (`~/.local/share/walnut/design-system/tokens/walnut.css`, and the Hermes skin `walnut.yaml`): warm mid-dark walnut ground, cream text, pastel accents, one fixed mode with no light/dark switch.
+- **Standing rule vs. this ask.** The standing rule is "no brown or orange". Walnut is Simon's own named system, and his newest explicit instruction asks for it, so it governs this page. No other brown or orange is added, and the host's `--ui-orange` and `--ui-yellow` stay unused.
+- **How:** `.sel-host` paints the Walnut ground `#655a50` and re-points the host `--ui-*` tokens it uses at Walnut values (cards `#564d44`, text `#f3ebdf`/`#e6dccf`/`#d8ccbd`, strokes cream at 7–24%). Scoped to the plugin page only.
+- State colours, all from Walnut and all paired with a text label:
+  - **Identity:** Walnut bold text `#fffaf2`.
+  - **Human gate:** Walnut accent, amber cream `#f7d4ae`, the one state that asks for attention.
+  - **Calm trigger and high load:** Walnut faint sand `#bcae9d`. Calm dots are hollow rings.
+  - **Approval:** Walnut kyanite blue `#c6d8f3`. **Fix:** Walnut success green `#c9dead`. **Broken:** Walnut danger `#f5cec6`.
   - **Kanban badge:** the host's `neutral` tone.
-- **Assumption:** this sand reads as desert rose, not brown or orange, in both themes; render check pending Simon's eye.
+- **Assumption:** forcing the Walnut ground inside the page is right even when the host runs another theme; Simon's own host already runs the Walnut skin. Pending Simon's eye.
 
 ## 8. Landed mark
 

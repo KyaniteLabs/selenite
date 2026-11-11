@@ -27,13 +27,14 @@ const FONTS = {
 // chrome the identity ink is the host's primary text (near-white); on light chrome
 // it falls back to host ink, and the icon carries the identity. State never rides
 // on colour alone: every state has a text label next to it. Calm stone colours
-// only (Simon, 2026-11-10): desert rose, white blades and sand. Gate is sand,
-// load is pale sand, approval and fix are host blue and green softened into pale
-// sand (PF §7). The sand mixes toward host text so it never reads as brown.
+// Walnut (Simon, 2026-11-10): the page paints his Walnut system's warm
+// mid-dark ground, one fixed mode, no black and no white. Gate is Walnut's
+// amber cream, load is its faint sand, approval and fix are its pastel blue and
+// green (PF §7; tokens from ~/.local/share/walnut/design-system).
 const CSS = `
 ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-style:normal;font-weight:${w};font-display:swap;src:url(data:font/woff;base64,${b}) format('woff')}`).join('\n')}
-.sel-host{container-type:inline-size;width:100%}
-.sel{--sel-id:var(--ui-text-primary);--sel-sand:color-mix(in oklab,#C8AD84 84%,var(--ui-text-primary));--sel-load:color-mix(in oklab,#C8AD84 35%,var(--ui-text-tertiary));--sel-gate:var(--sel-sand);--sel-appr:color-mix(in oklab,var(--ui-blue) 30%,var(--sel-load));--sel-fix:color-mix(in oklab,var(--ui-green) 35%,var(--sel-load));
+.sel-host{container-type:inline-size;width:100%;min-height:100%;color-scheme:dark;background:#655a50;color:#f3ebdf;--ui-bg-primary:#655a50;--ui-bg-editor:#655a50;--ui-surface-background:#655a50;--ui-bg-secondary:#5d534a;--ui-bg-elevated:#5d534a;--ui-bg-card:#564d44;--ui-bg-tertiary:#5d534a;--ui-bg-input:#4f463e;--ui-control-hover-background:#6c6056;--ui-control-active-background:#7a6d61;--ui-row-hover-background:#6c6056;--ui-selection-background:#7a6d61;--ui-text-primary:#f3ebdf;--ui-text-secondary:#e6dccf;--ui-text-tertiary:#d8ccbd;--ui-text-quaternary:#bcae9d;--ui-stroke-primary:rgba(243,235,223,.24);--ui-stroke-secondary:rgba(243,235,223,.18);--ui-stroke-tertiary:rgba(243,235,223,.16);--ui-stroke-quaternary:rgba(243,235,223,.07);--ui-accent:#f7d4ae;--ui-blue:#c6d8f3;--ui-green:#c9dead;--ui-red:#f5cec6}
+.sel{--sel-id:#fffaf2;--sel-gate:#f7d4ae;--sel-load:#bcae9d;--sel-appr:#c6d8f3;--sel-fix:#c9dead;
   --sel-display:'${FACE}',var(--font-sans);font-family:var(--font-sans);font-size:13px;line-height:1.45;color:var(--ui-text-primary);
   box-sizing:border-box;width:100%;max-width:1120px;margin:0 auto;padding:24px 28px 48px;display:flex;flex-direction:column;gap:20px}
 .sel *,.sel *::before,.sel *::after{box-sizing:border-box}
