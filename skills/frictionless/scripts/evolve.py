@@ -37,7 +37,7 @@ CYCLE_GAP = 86400  # drafts closer together than this count as the same cycle
 
 def _newest_report() -> tuple[dict | None, float]:
     """The newest readable miner report and its mtime. Reports overlap in time, so summing them double-counts."""
-    for f in sorted(ledger.STATE.glob("report-*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+    for f in ledger.newest("report-*.json"):
         try:
             rep = json.loads(f.read_text())
         except (OSError, ValueError):
@@ -52,7 +52,9 @@ def latest_report() -> dict | None:
 
 
 def _state_path() -> Path:
-    return ledger.STATE / "evolve-state.json"
+    """The cycle state: the newest copy in any state folder, else where the next write lands."""
+    found = ledger.newest("evolve-state.json")
+    return found[0] if found else (ledger.writable_state() or ledger.STATE) / "evolve-state.json"
 
 
 def _load_state() -> tuple[float, float, dict[str, int]]:
@@ -78,15 +80,20 @@ def advance_cycle(fired: Counter, now: float, report_mtime: float = 0.0, calm: b
             | (set(OVERLOAD) if calm else set())
         silent = {c: (0 if fired[c] else silent[c] + 1) if c in measured else silent[c] for c in CATEGORIES}
         st = {"last": now, "report": report_mtime or consumed, "silent": silent}
-        fd = os.open(_state_path(), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as fh:
-            json.dump(st, fh)
+        target = ledger.writable_state()
+        if target is not None:  # every folder read-only: the proposal still drafts, the cycle just isn't saved
+            fd = os.open(target / "evolve-state.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as fh:
+                json.dump(st, fh)
     return silent
 
 
-def build(days: int = 30) -> Path:
-    """Write one proposal file and return its path."""
-    ledger.STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
+def build(days: int = 30) -> Path | None:
+    """Write one proposal file to the first state folder that takes it and return its path, or None
+    when every state folder is read-only."""
+    state = ledger.writable_state()
+    if state is None:
+        return None
     rows = list(ledger.rows(days))
     report, report_mtime = _newest_report()
     swept = cleanse.latest()
@@ -127,11 +134,11 @@ def build(days: int = 30) -> Path:
     L += ["", "Next: draft the accepted items on a local branch, code first and prose last. "
           "Opening a PR is the human's decision.", ""]
 
-    out = ledger.STATE / f"proposal-{time.strftime('%Y%m%dT%H%M%S')}.md"
+    out = state / f"proposal-{time.strftime('%Y%m%dT%H%M%S')}.md"
     fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as fh:
         fh.write("\n".join(L))
-    for old in sorted(ledger.STATE.glob("proposal-*.md"), key=lambda f: f.stat().st_mtime)[:-KEEP]:
+    for old in sorted(state.glob("proposal-*.md"), key=lambda f: f.stat().st_mtime)[:-KEEP]:
         old.unlink(missing_ok=True)
     return out
 
@@ -139,7 +146,11 @@ def build(days: int = 30) -> Path:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--days", type=int, default=30)
-    print(build(ap.parse_args().days))
+    out = build(ap.parse_args().days)
+    if out is None:
+        print("no state folder is writable; set SELENITE_STATE", file=sys.stderr)
+        return 1
+    print(out)
     return 0
 
 

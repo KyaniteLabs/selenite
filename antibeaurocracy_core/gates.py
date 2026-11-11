@@ -18,7 +18,10 @@ and refuse forever). Nudges live in memory only for the span of one tool call.
 
 from __future__ import annotations
 
-import fcntl
+try:
+    import fcntl
+except ImportError:  # Windows: no advisory locks; refusal counts are still written atomically
+    fcntl = None  # type: ignore[assignment]
 import json
 import os
 import tempfile
@@ -115,6 +118,8 @@ class RefusalStore:
         return self._load(now).get(key, {}).get("n", 0)
 
     def _acquire(self, fh) -> None:
+        if fcntl is None:  # the thread lock still serialises writers inside one process
+            return
         deadline = time.monotonic() + self.lock_timeout_s
         while True:
             try:
@@ -147,7 +152,8 @@ class RefusalStore:
                     atomic_write(self.path, json.dumps(data, separators=(",", ":")))
                     return state, n
                 finally:
-                    fcntl.flock(lk, fcntl.LOCK_UN)
+                    if fcntl is not None:
+                        fcntl.flock(lk, fcntl.LOCK_UN)
         finally:
             self._LOCK.release()
 

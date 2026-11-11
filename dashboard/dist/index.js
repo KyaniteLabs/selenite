@@ -84,7 +84,7 @@
 
     if (!data) return h("div", { className: "space-y-6" }, head, warn || h("p", { className: "text-sm text-muted-foreground" }, "Loading…"));
     if (!data.has_ledger) return h("div", { className: "space-y-6" }, head, warn, h(Card, null, h(CardContent, { className: "pt-6 text-sm text-muted-foreground" },
-      "Nothing logged yet. Selenite adds a row each time an agent hands you a step it could have done. To backfill from past transcripts, ask any agent to run /frictionless cleanse.")), h(FakeGates, { days: days }));
+      "Nothing logged yet. Selenite adds a row each time an agent hands you a step it could have done. Past transcripts are not copied in. To see what they cost you, ask any agent to run /frictionless evolve: it counts them into a private report and drafts a proposal.")), h(FakeGates, { days: days }));
 
     var t = data.totals || {}, gates = data.gates || [];
     var loadLabel = LOAD[data.load] || LOAD.clear;

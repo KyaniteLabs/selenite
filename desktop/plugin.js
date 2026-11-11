@@ -24,7 +24,7 @@ const FONTS = {
 
 
 // Identity: Selenite is white satin spar (docs/DESIGN-PREFLIGHT.md §3, §7).
-// Walnut (Simon, 2026-11-10), round 6: a solid light-sand ground from his
+// Walnut (owner correction, 2026-11-10), round 6: a solid light-sand ground from the
 // Walnut system with Walnut's dark ink as text, one fixed mode, no black and no
 // translucency. Every text tone passes WCAG AA. State colours are
 // ink-weight Walnut pastels, and every state also has a text label.
@@ -155,7 +155,7 @@ const EN = {
   },
   empty: {
     title: 'Nothing logged yet',
-    body: 'Selenite adds a row each time an agent hands you a step it could have done itself. To backfill from your past transcripts, ask any agent to run /frictionless cleanse.',
+    body: 'Selenite adds a row each time an agent hands you a step it could have done itself. Past transcripts are not copied in. To see what they cost you, ask any agent to run /frictionless evolve: it counts them into a private report and drafts a proposal.',
     gatesTitle: 'No human gates in this window',
     gatesBody: 'Nothing here means no agent asked you to log in, paste a token or approve a step.',
     ledger: 'No events in this window.'
@@ -330,7 +330,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
     onError: fail(t('err.fix'))
   })
   const sweep = useMutation({ mutationFn: () => ctx.rest(`/cleanse?days=${days}`, { method: 'POST' }), onSuccess: refresh, onError: fail(t('err.cleanse')) })
-  const draft = useMutation({ mutationFn: () => ctx.rest(`/proposal?days=${days}`, { method: 'POST' }), onSuccess: refresh, onError: fail(t('err.draft')) })
+  const draft = useMutation({ mutationFn: () => ctx.rest(`/proposal?days=${days}`, { method: 'POST' }).then(r => { if (r?.error) throw new Error(r.error); return r }), onSuccess: refresh, onError: fail(t('err.draft')) })
   const shell = children => jsx('div', { className: 'sel-host', children: jsx('div', { className: 'sel', children }) })
 
   const head = jsxs('header', { className: 'sel-head', children: [

@@ -16,7 +16,7 @@ from antibeaurocracy_core import FAKE, HUMAN, WALL, classify
 
 
 def test_catalog_entry_is_a_publishing_wall():
-    v = classify("Needs Simon to approve the catalog entry before we submit")
+    v = classify("Needs Alex to approve the catalog entry before we submit")
     assert v.cls == WALL
     assert v.subtype == "publish"
     assert v.confidence >= 0.9

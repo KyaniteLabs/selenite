@@ -10,8 +10,9 @@ generic (--path): *.jsonl rows whose role is "user", or a single text file
 you name directly, which is then read as your own words line by line.
 
 Privacy: the aggregate report holds only counts and category names, and no
-host name. Excerpts go to a private samples file under $SELENITE_STATE
-(default ~/.local/state/selenite), mode 0600, never into the repo. Samples
+host name. Report and excerpts go to the Selenite state folder ($SELENITE_STATE,
+else $XDG_STATE_HOME/selenite, else $HERMES_HOME/plugin-data/selenite, else
+~/.local/state/selenite: the first that takes a write), mode 0600, never into the repo. Samples
 are redacted by ledger.redact (emails, IPv4 and IPv6, URLs with credentials,
 key=value secrets, bearer and prefixed tokens, long token runs, the home path)
 and only the newest SAMPLE_KEEP files are kept.
@@ -30,15 +31,16 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 HOME = Path.home()
-STATE = Path(os.environ.get("SELENITE_STATE", HOME / ".local/state/selenite"))
 SAMPLE_KEEP = 3
 REPORT_KEEP = 10
 
 if __package__:  # loaded as selenite_frictionless.mine by a Hermes host
+    from . import ledger
     from .ledger import redact
     from .signals import classify
 else:  # run as a script
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import ledger  # noqa: E402  (one state-folder chain for every Selenite script)
     from ledger import redact  # noqa: E402  (one redaction rule for the ledger and the samples)
     from signals import classify  # noqa: E402  (shared detector)
 
@@ -95,7 +97,7 @@ def iter_codex(root: Path, since: float):
 def iter_hermes(db: Path, since: float):
     if not db.exists():
         return
-    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+    con = sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True, timeout=2)  # as_uri escapes ?, # and %
     try:
         for (content,) in con.execute(
             "select content from messages where role='user' and timestamp>=?", (since,)
@@ -143,7 +145,7 @@ def main() -> int:
     ap.add_argument("--days", type=int, default=45)
     ap.add_argument("--path", action="append", default=[], help="extra generic source")
     ap.add_argument("--samples", type=int, default=8, help="private samples per category")
-    ap.add_argument("--out", type=Path, default=STATE)
+    ap.add_argument("--out", type=Path, default=None, help="report folder (default: the first writable state folder)")
     a = ap.parse_args()
 
     since = time.time() - a.days * 86400
@@ -169,7 +171,16 @@ def main() -> int:
         except (OSError, sqlite3.Error) as e:
             print(f"selenite-mine: skipped a source: {e}", file=sys.stderr)
 
-    a.out.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if a.out is None:
+        a.out = ledger.writable_state()
+        if a.out is None:
+            print("selenite-mine: no state folder is writable; set SELENITE_STATE or pass --out", file=sys.stderr)
+            return 1
+    try:
+        a.out.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError as e:
+        print(f"selenite-mine: cannot write {redact(str(a.out))}: {e.strerror}", file=sys.stderr)
+        return 1
     stamp = time.strftime("%Y%m%dT%H%M%S")
     report = {
         "schema": "selenite.friction-report/1",

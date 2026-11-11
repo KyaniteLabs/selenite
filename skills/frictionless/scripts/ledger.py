@@ -72,7 +72,24 @@ def writable_state() -> Path | None:
     return None
 
 
+def newest(pattern: str) -> list[Path]:
+    """Files matching ``pattern`` in every state folder, newest first. A write that fell through to a
+    fallback folder is still found by every reader."""
+    found: list[tuple[float, Path]] = []
+    for state in state_dirs():
+        try:
+            for f in state.glob(pattern):
+                try:
+                    found.append((f.stat().st_mtime, f))
+                except OSError:
+                    continue
+        except OSError:
+            continue
+    return [f for _, f in sorted(found, key=lambda t: t[0], reverse=True)]
+
+
 STATE = _state_from_env()
+BLOCKED_DAYS = 90  # how long a blocked-card row keeps its badge: one window for hooks and dashboard
 LEDGER = STATE / "ledger.jsonl"
 ROTATED = STATE / "ledger.1.jsonl"
 ROTATE_BYTES = 4 * 1024 * 1024  # one rotated file is kept; older history is dropped

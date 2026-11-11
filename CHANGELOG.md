@@ -2,6 +2,33 @@
 
 ## 0.5.0 (unreleased)
 
+### Pre-submission review fixes (2026-11-11)
+
+- **"Waiting on you" badges clear when the card moves on.** Hermes fires no hook when a person
+  unblocks or archives a card, so a badge used to stay up for the whole 90-day window. Selenite now
+  checks badged cards against the board, read-only, at most once a minute on the dispatch tick and
+  on any update to a badged card, and logs the fix ("task unblocked", "task archived",
+  "task completed"). The dashboard filters the same way. A card the board doesn't know keeps its badge.
+- **A fake approval wait is not your step.** When the facet judges a wait FAKE (one agent waiting on
+  another's approval), the word "approval" no longer counts as a human step. A login, an OTP or a
+  manual step in the same reason still does.
+- **The stored block kind wins.** Hermes can re-kind a block when it stores it (a dependency with no
+  open parent becomes needs_input); Selenite now trusts the stored kind over the tool-call echo.
+- **One state folder chain everywhere.** The miner, evolve proposals, the cleanse cooldown and the
+  dashboard now read and write through the same fallback chain as the ledger. A read-only home
+  exits the miner cleanly, and drafting a proposal with no writable folder says "Set
+  SELENITE_STATE." instead of returning a 500.
+- **Smaller fixes:** bookkeeping on a read-only home never breaks a turn; `/antibeaurocracy ledger ²`
+  no longer crashes and `ledger 0` shows one line, not the whole ledger; "Mark fixed" accepts every
+  key the ledger writes (spaces, `<token>`, Unicode) and still rejects control characters, absolute
+  paths and `..`; the badge count in `/status` uses the plugin's 90-day window; cleanse reports
+  carry a UTC offset; the facet imports without `fcntl`; read-only SQLite URIs escape `?`, `#` and
+  `%` in the path.
+- **Copy and docs:** the empty state now points at `/frictionless evolve` (cleanse never read
+  transcripts); `docs/DESIGN-SYSTEM.md` matches the shipped page (glyph ink, the Walnut browns,
+  the High-load rule, the chip's label, the Fake gates card, the state folder chain); design notes
+  paraphrase the owner's corrections instead of quoting chat.
+
 ### Install acceptance fixes (2026-11-10)
 
 - **Headless install stays enabled:** `pyproject.toml` no longer carries a `[build-system]` table.
@@ -30,7 +57,7 @@
   `hermes plugins enable` step is last, never fatal, and `--no-enable` skips it: on a source
   checkout that command may first complete a code update and a desktop rebuild.
 - **classify.py:** catalog/marketplace/store/registry submissions are now publishing walls
-  ("Needs Simon to approve the catalog entry" is a WALL, not F6), and the infinitive form after a
+  ("Needs Alex to approve the catalog entry" is a WALL, not F6), and the infinitive form after a
   role ("needs the CEO to approve", "waiting on the owner to sign off") reads as a person's
   approval. Proper names are deliberately still not matched (product names are not people).
 

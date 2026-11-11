@@ -17,7 +17,7 @@ Selenite runs inside Hermes. It takes the host's theme and adds three things of 
 - **Glyph:** one satin-spar wand set diagonally, with a chisel tip, its fibres running the length and a narrow dark bevel on the shadowed edge (PF §4).
   - In the app it is drawn as the approved round-14 E shard: thick, raw, set diagonally, with an off-centre tip (PF §8).
   - It is a static mark and never shows state.
-  - In the app it draws in `currentColor` with the identity ink (`--ui-text-primary`), so it renders white on dark chrome.
+  - In the app it draws in Walnut ink `#3b342e` (`--sel-id`), with the bevel stroke in the same ink. The page is always the light sand ground, so the glyph never flips to white.
 - **App icon:** `assets/icon.svg` is a **concept guide only (A)**.
   - It follows the family law: crystal material, turquoise `#00FFE6` edge, magenta `#FF1A6E` and yellow `#FFD11A` catches, white specular, dark inner plane and a transparent background.
   - The shipped `icon.png` (512) will be a pipeline raster render behind the owner's eye-gate. It is not rendered yet.
@@ -46,7 +46,7 @@ Selenite runs inside Hermes. It takes the host's theme and adds three things of 
 | Everything else | `--ui-text-secondary/tertiary`, `--ui-stroke-*`, `--ui-bg-card` | Not applicable |
 
 - Colour never carries state on its own (PF §7).
-- No brown or orange: the host's `--ui-orange` and ochre `--ui-yellow` are never used (PF §7).
+- The only browns are the Walnut ink, sand and taupe values above. There is no orange: the host's `--ui-orange` and ochre `--ui-yellow` are never used (PF §7).
 - The minimum text tone is `--ui-text-tertiary`. The quaternary tone is reserved for hairlines.
 - Every text tone passes WCAG AA (4.5:1) on the sand ground; the lowest, `--ui-text-quaternary` `#62574d`, measures 5.9:1. State marks clear 3:1.
 
@@ -58,7 +58,7 @@ Load measures the human's overload over the last 24 hours, counted from Calm tri
 |---|---|---|
 | **Clear** | 1 | No Calm triggers |
 | **Rising** | 2 | 1–2 triggers |
-| **High** | 3, faint sand | 3 or more triggers, or 2 within 15 minutes |
+| **High** | 3, faint sand | 3 or more triggers in 24 hours, or at least 2 in 24 hours with the latest under 15 minutes ago |
 
 An unknown value from the backend renders as Clear.
 
@@ -86,15 +86,15 @@ Below 760px the layout drops to one column and the bars and notes are hidden.
 | Surface | Where | Content |
 |---|---|---|
 | Desktop page | `ROUTES_AREA` `/selenite`, plus `SIDEBAR_NAV_AREA` (`wand` codicon: a selenite wand) | Everything above |
-| Status chip | `STATUSBAR_AREAS.right` | The blade, plus the number of open gates today. Its tooltip and aria-label give the load and the gate count. Clicking it opens the page |
-| Kanban badge | `KANBAN_CARD_AREAS.badges` | "waiting on you" (`neutral`) on tasks blocked on a human gate |
+| Status chip | `STATUSBAR_AREAS.right` | The blade, plus the number of open gates today. Its aria-label is "Open Selenite"; its tooltip gives the load and the gate count. Clicking it opens the page |
+| Kanban badge | `KANBAN_CARD_AREAS.badges` | "waiting on you" (`neutral`) on tasks blocked on a human gate. It clears when the card is unblocked, archived or done on the board |
 | Palette | `PALETTE_AREA` | Open the friction ledger, run a cleanse, or draft an evolve proposal |
 | Settings | `registerSettingsPage` | Chip toggle, chip style, Kanban badges and the privacy note |
-| Web dashboard tab | `dashboard/manifest.json` tab `after:sessions`, entry `dist/index.js` | Load, the four totals and recurring gates with Mark fixed. Uses only the dashboard SDK components |
+| Web dashboard tab | `dashboard/manifest.json` tab `after:sessions`, entry `dist/index.js` | Load, the four totals, recurring gates with Mark fixed, and the Fake gates between agents card. Uses only the dashboard SDK components |
 
 ## Data and privacy
 
-- **Where the data lives:** the ledger is `~/.local/state/selenite/ledger.jsonl`. The directory is 0700 and the files are 0600, on the host that runs the agent.
+- **Where the data lives:** the ledger, reports and proposals sit in the Selenite state directory: `$SELENITE_STATE`, else `$XDG_STATE_HOME/selenite`, else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite`. A read-only folder falls through to the next, and readers look in all of them. The directory is 0700 and the files are 0600, on the host that runs the agent.
 - **Who reads it:** both UIs read it only through the user's own Hermes gateway (`/api/plugins/selenite/`). Selenite makes no other network calls.
 - **What a row holds:** no host name, and no secrets. Notes are capped at 200 characters.
 

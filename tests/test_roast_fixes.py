@@ -24,7 +24,7 @@ def test_a_card_counts_by_its_latest_event():
     now = time.time()
     _fake_ledger([
         {"ts": now, "event": "block_attempt", "task": "t_1", "verdict": "F1-ack", "conf": 0.8},
-        {"ts": now + 1, "event": "asked", "task": "t_1", "verdict": "F1-ack"},          # the agent asked: cleared
+        {"ts": now + 1, "event": "asked", "task": "t_1", "verdict": "F1-ack"},          # Selenite asked: cleared
         {"ts": now, "event": "block_attempt", "task": "t_2", "verdict": "F1-ack", "conf": 0.8},
         {"ts": now + 1, "event": "fail_open", "task": "t_2", "verdict": "F1-ack"},      # fail-open keeps it
         {"ts": now, "event": "block_attempt", "task": "t_3", "verdict": "F1-ack", "conf": 0.8},

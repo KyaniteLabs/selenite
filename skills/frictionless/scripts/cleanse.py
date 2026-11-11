@@ -33,6 +33,7 @@ import re
 import sys
 import time
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 if __package__:  # loaded as selenite_frictionless.cleanse by a Hermes host
@@ -262,7 +263,7 @@ def check_runbooks(ctx: dict) -> list[dict]:
 
 
 FAKE_EVENTS = ("block_attempt", "blocked_observed")  # a card blocked or about to be; not asks or declarations
-CLEARS = ("asked", "declared")  # the agent answered the question, or Hermes declared a real kind: not a fake wait
+CLEARS = ("asked", "declared")  # Selenite handed the block back with a question, or the agent declared a real kind: not a fake wait
 FAKE_MIN_CONF = 0.6  # the facet's own nudge floor: under it the classifier is guessing, not finding
 
 
@@ -322,6 +323,11 @@ def rank(findings: list[dict]) -> list[dict]:
     return sorted(findings, key=lambda f: (-f["interruptions"], -f["severity"], f["stone"], f["where"]))
 
 
+def _now_iso() -> str:
+    """UTC with its offset, so a client in another timezone reads the right age."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def run(days: int = 30, paths: list[Path] | None = None) -> dict:
     ctx = {"days": days, "paths": paths or []}
     found: list[dict] = []
@@ -332,7 +338,7 @@ def run(days: int = 30, paths: list[Path] | None = None) -> dict:
         except Exception as exc:  # one broken adapter must not hide the others
             errors.append(f"{check.__name__}: {type(exc).__name__}")
     ranked = rank(found)
-    return {"schema": "selenite.cleanse/1", "generated": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    return {"schema": "selenite.cleanse/1", "generated": _now_iso(),
             "window_days": days, "findings": ranked, "by_stone": dict(Counter(f["stone"] for f in ranked)),
             "errors": errors}
 

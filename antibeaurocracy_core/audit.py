@@ -47,9 +47,36 @@ _ANTI_GATE = re.compile(r"(no (seat|agent) is an approval gate|never create card
 
 
 def _ro(path: Path) -> sqlite3.Connection:
-    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+    # as_uri escapes ?, # and % in a home path, so sqlite always opens this file, read-only
+    con = sqlite3.connect(f"{Path(path).resolve().as_uri()}?mode=ro", uri=True, timeout=2)
     con.row_factory = sqlite3.Row
     return con
+
+
+def card_statuses(task_ids: Iterable[str], dbs: Iterable[Path]) -> dict[str, str]:
+    """Each card's current status (blocked, ready, archived...), read-only. Hermes fires no hook when a
+    person unblocks or archives a card, so a badge is checked against the board itself. Ids missing
+    from every board are left out: unknown is not cleared."""
+    want = {str(t) for t in task_ids if t}
+    out: dict[str, str] = {}
+    for db in dbs:
+        todo = sorted(want - out.keys())
+        if not todo:
+            break
+        if not Path(db).is_file():
+            continue
+        try:
+            con = _ro(Path(db))
+            try:
+                for i in range(0, len(todo), 500):
+                    part = todo[i:i + 500]
+                    q = f"SELECT id, status FROM tasks WHERE id IN ({','.join('?' * len(part))})"
+                    out.update({str(r["id"]): str(r["status"]) for r in con.execute(q, part) if r["status"]})
+            finally:
+                con.close()
+        except sqlite3.Error:
+            continue
+    return out
 
 
 def find_boards(roots: Iterable[Path]) -> list[Path]:

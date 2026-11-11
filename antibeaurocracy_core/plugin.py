@@ -61,6 +61,7 @@ _state_lock = threading.Lock()
 _nudges = NudgeBox()
 _snapshot_at: dict[str, float] = {}
 _snapshot_running: set[str] = set()
+_tick_extra: list = []  # Selenite's badge reconcile, set by on_tick()
 _ctx = None
 LEDGER_ROTATE_BYTES = 4 * 1024 * 1024  # same bound as Selenite's own ledger
 HOOKS_ON = lambda: True  # Selenite replaces this with its one off switch  # noqa: E731
@@ -102,6 +103,14 @@ def _count(key: str, default: int, hi: int = 1000) -> int:
     return max(0, min(hi, int(_num(key, default))))
 
 
+def _whole(text: str, default: int, hi: int = 500) -> int:
+    """A positive count typed after a slash command, clamped to 1..hi. "²" passes isdigit but not int()."""
+    try:
+        return max(1, min(hi, int(text))) if text.isdecimal() else default
+    except ValueError:
+        return default
+
+
 def _hermes_home() -> Path:
     try:
         from hermes_constants import get_hermes_home  # type: ignore
@@ -128,8 +137,8 @@ def _ledger(event: str, **fields) -> None:
     if not _cfg("fake_gate_ledger", True):
         return
     rec = {"ts": round(time.time(), 3), "event": event, **{k: v for k, v in fields.items() if v not in (None, "")}}
-    path = data_dir() / "ledger.jsonl"
     try:
+        path = data_dir() / "ledger.jsonl"  # mkdir can fail on a read-only home: inside the guard
         lock = os.open(path.with_name(".ledger.lock"), os.O_WRONLY | os.O_CREAT, 0o600)
         try:
             try:
@@ -312,6 +321,16 @@ def _stored_kind(task_id: str, board: str | None) -> str | None:
     return None
 
 
+def card_statuses(task_ids, board: str | None = None) -> dict[str, str]:
+    """Current status of each card, read-only, across the boards this home can see."""
+    return _audit.card_statuses(task_ids, _kanban_dbs(board)[:32])
+
+
+def on_tick(fn) -> None:
+    """Selenite's own housekeeping (badge reconcile) rides the one dispatch tick this facet registers."""
+    _tick_extra[:] = [fn]
+
+
 def observe_block(task_id: str = "", board: str | None = None, reason: str | None = None, kind: str | None = None):
     """Classify one block once and ledger its verdict, never the reason text. Returns ``(verdict, kind)``
     so Selenite's single ``kanban_task_blocked`` observer can route it. The kind is the one passed in,
@@ -322,9 +341,10 @@ def observe_block(task_id: str = "", board: str | None = None, reason: str | Non
     with _state_lock:
         t, echoed_kind = _recent_attempts.pop(key, (0.0, ""))
     seen = time.time() - t <= _ECHO_WINDOW_S
-    kind = kind if kind in _DECLARABLE else (echoed_kind if seen and echoed_kind else None)
-    if kind is None and task_id:
-        kind = _stored_kind(key, board)
+    if kind not in _DECLARABLE:
+        # Hermes may re-kind the block when it stores it (a dependency with no open parent is
+        # parked as needs_input), so the stored kind wins over the kind the agent echoed.
+        kind = (_stored_kind(key, board) if task_id else None) or (echoed_kind if seen and echoed_kind else None)
     v = classify(str(reason or ""), kind=kind)
     if not seen:
         _ledger("blocked_observed", task=task_id, board=board, verdict=v.label, conf=v.confidence, declared=kind)
@@ -343,6 +363,11 @@ def _snapshot(home: Path) -> dict:
 def on_kanban_dispatch_tick(dry_run: bool = False, **_kw):
     if dry_run or not HOOKS_ON():
         return None
+    for fn in _tick_extra:
+        try:
+            fn()
+        except Exception as exc:  # never let housekeeping break the dispatcher
+            logger.warning("selenite tick housekeeping failed: %s", exc)
     home = _hermes_home()  # resolved on the hook's thread, before handing off
     key = str(home)
     interval = max(1.0, _num("snapshot_minutes", 60)) * 60  # at least a minute, so 0 or junk never runs every tick
@@ -434,10 +459,10 @@ def slash(raw_args: str = "", *, platform: str | None = None) -> str:
     if not local:  # remote chat surfaces get counts, never card titles or reasons
         return _audit.headline(s) + " Run /antibeaurocracy audit locally or `hermes antibeaurocracy audit` for the list."
     if sub == "audit":
-        top = int(rest) if rest.isdigit() else 12
+        top = _whole(rest, 12)
         return _audit.render_markdown(s, boards, [], top=top)
     if sub == "ledger":
-        n = int(rest) if rest.isdigit() else 15
+        n = _whole(rest, 15)
         p = data_dir() / "ledger.jsonl"
         lines = p.read_text().splitlines()[-n:] if p.exists() else []
         return "\n".join(lines) or "Ledger is empty."

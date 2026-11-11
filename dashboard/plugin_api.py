@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "frictionless" / "scripts"
 
@@ -39,21 +39,24 @@ cleanse, evolve, ledger, signals = _scripts("cleanse", "evolve", "ledger", "sign
 router = APIRouter()
 
 
-def _mount_fake_gates() -> None:
+def _mount_fake_gates():
     """The fake-gate facet's read-only view lives at /fake-gates, under the same one plugin."""
     spec = importlib.util.spec_from_file_location("selenite_fake_gates_api", Path(__file__).resolve().parent / "fake_gates_api.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     router.include_router(mod.router, prefix="/fake-gates")
+    return mod
 
 
-_mount_fake_gates()
+_fake_gates = _mount_fake_gates()
 
 GATE_KINDS = ("gate", "blocked")
 DAY = 86400
 PROPOSAL_CHARS = 20000
 DRAFT_COOLDOWN = 10  # seconds: a repeat draft inside this returns the last one
-KEY_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:/@+\-]{0,79}$"
+# Any printable key the ledger writes ("<token>", "npm login", Unicode), up to 80; never one that
+# starts like a flag or a path, or climbs a directory.
+KEY_PATTERN = r"^[^\x00-\x1f\x7f\-./][^\x00-\x1f\x7f]{0,79}$"  # pydantic's regex has no lookahead: ".." is checked below
 Days = Query(30, ge=1, le=365)
 
 # --- one read of the ledger per change, shared by every route ----------------
@@ -93,13 +96,38 @@ def _load_of(rows: list[dict], now: float) -> tuple[str, int, float]:
 
 
 def _state_dir() -> str:
-    """The ledger directory with the home prefix shown as ~."""
-    return str(ledger.STATE).replace(str(Path.home()), "~", 1)
+    """The folder the ledger is actually written to (a fallback when the first is read-only), home as ~."""
+    found = ledger.newest("ledger.jsonl")
+    return str(found[0].parent if found else ledger.STATE).replace(str(Path.home()), "~", 1)
+
+
+STATUS_TTL = 30  # seconds: a polling chip re-reads card statuses at most this often
+_status_cache: dict = {"ts": 0.0, "ids": (), "statuses": {}}
+
+
+def _card_statuses(ids: list[str]) -> dict[str, str]:
+    """Each badged card's status on its board, read-only and cached. Unknown cards are left out."""
+    key = tuple(ids)
+    with _lock:
+        if _status_cache["ids"] == key and time.time() - _status_cache["ts"] < STATUS_TTL:
+            return _status_cache["statuses"]
+    try:
+        audit = _fake_gates._core().audit
+        statuses = audit.card_statuses(ids, audit.find_boards([_fake_gates._home()]))
+    except Exception:  # a missing or locked board never hides a badge, it just can't clear one
+        statuses = {}
+    with _lock:
+        _status_cache.update(ts=time.time(), ids=key, statuses=statuses)
+    return statuses
 
 
 def _blocked(rows: list[dict], fixed: set[str]) -> list[str]:
-    return sorted({r["key"].split(":", 1)[1] for r in rows
-                   if r["kind"] == "blocked" and r["key"].startswith("kanban:") and r["key"] not in fixed})
+    """Cards still waiting on a person: logged blocked, not fixed since, and not since unblocked,
+    archived or finished on the board (Hermes fires no hook for an unblock or an archive)."""
+    ids = sorted({r["key"].split(":", 1)[1] for r in rows
+                  if r["kind"] == "blocked" and r["key"].startswith("kanban:") and r["key"] not in fixed})
+    statuses = _card_statuses(ids) if ids else {}
+    return [i for i in ids if statuses.get(i, "blocked") == "blocked"]
 
 
 @router.get("/status")
@@ -110,8 +138,9 @@ def status() -> dict:
     fixed = ledger.fixed_keys(source=_all_rows())
     today = {r["key"] for r in rows if r["kind"] in GATE_KINDS and r["ts"] >= now - DAY}
     load, calm_24h, _ = _load_of(rows, now)
+    # badges use the same window as the plugin's hooks, not the 30-day load window
     return {"load": load, "calm_24h": calm_24h, "open_today": len(today - fixed),
-            "blocked_tasks": _blocked(rows, fixed), "state_dir": _state_dir()}
+            "blocked_tasks": _blocked(_window(ledger.BLOCKED_DAYS, now), fixed), "state_dir": _state_dir()}
 
 
 @router.get("/overview")
@@ -178,6 +207,13 @@ class Mark(BaseModel):
     key: str = Field(min_length=1, max_length=80, pattern=KEY_PATTERN)
     note: str = Field(default="", max_length=200)
 
+    @field_validator("key")
+    @classmethod
+    def _no_climb(cls, v: str) -> str:
+        if ".." in v:
+            raise ValueError("key must not contain '..'")
+        return v
+
 
 @router.post("/events")
 def mark(body: Mark) -> dict:
@@ -189,8 +225,8 @@ def _proposal_view(f: Path) -> dict:
 
 
 def _latest_proposal() -> Path | None:
-    files = sorted(ledger.STATE.glob("proposal-*.md"), key=lambda p: p.stat().st_mtime)
-    return files[-1] if files else None
+    files = ledger.newest("proposal-*.md")  # every state folder: a fallback draft still shows
+    return files[0] if files else None
 
 
 @router.get("/proposal")
@@ -204,7 +240,10 @@ def draft(days: int = Days) -> dict:
     last = _latest_proposal()
     if last and time.time() - last.stat().st_mtime < DRAFT_COOLDOWN:
         return {"proposal": _proposal_view(last), "reused": True}
-    return {"proposal": _proposal_view(evolve.build(days)), "reused": False}
+    out = evolve.build(days)
+    if out is None:  # every state folder is read-only: say so instead of a 500
+        return {"proposal": None, "reused": False, "error": "No state folder is writable. Set SELENITE_STATE."}
+    return {"proposal": _proposal_view(out), "reused": False}
 
 
 CLEANSE_COOLDOWN = 60  # seconds: a repeat run inside this returns the last report
@@ -226,8 +265,8 @@ def cleanse_latest() -> dict:
 
 @router.post("/cleanse")
 def cleanse_run(days: int = Days) -> dict:
-    files = sorted(ledger.STATE.glob("cleanse-*.json"), key=lambda p: p.stat().st_mtime)
-    if files and time.time() - files[-1].stat().st_mtime < CLEANSE_COOLDOWN:
+    files = ledger.newest("cleanse-*.json")
+    if files and time.time() - files[0].stat().st_mtime < CLEANSE_COOLDOWN:
         return {"cleanse": _cleanse_view(cleanse.latest()), "reused": True}
     report = cleanse.run(days)
     cleanse.write(report)

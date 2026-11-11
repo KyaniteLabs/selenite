@@ -13,7 +13,8 @@ Selenite's three provider-agnostic facet skills and registers:
                                       a human "always" logs that approval as fixed
            kanban_task_blocked     -> one observer: fake-gate verdict, plus a row when the wait lands on a human
            kanban_task_completed,
-           on_kanban_task_updated  -> clear that task's blocked badge
+           on_kanban_task_updated  -> clear that task's blocked badge (and, on the dispatch tick,
+                                      any badged card a person unblocked or archived)
            pre_tool_call, transform_tool_result, on_kanban_dispatch_tick
                                    -> the fake-gate facet (antibeaurocracy_core/plugin.py)
 
@@ -28,6 +29,7 @@ import logging
 import os
 import re
 import sys
+import time
 from collections import OrderedDict
 from pathlib import Path
 
@@ -89,6 +91,7 @@ _WALL_KEY = re.compile(
 _GATE_RE = re.compile(
     r"\b(human|approv(al|e|ed)|log ?in|sign ?in|2fa|otp|credentials?|api key|"
     r"manual(ly)?|needs? (the )?(owner|user|operator|ceo))\b", re.I)
+_APPROVAL_WORD = re.compile(r"\b(i|you) (have|need) to approve\b|\bapprov\w*", re.I)
 _HUMAN_KINDS = frozenset({"needs_input", "capability"})  # Hermes: both surface to a person
 # Kanban keys with an open blocked badge. Completion checks this set, and rereads the ledger only when
 # another process (a worker) has written to it since the last read.
@@ -182,13 +185,18 @@ def lands_on_a_human(reason: str, verdict, kind: str | None = None) -> bool:
     """One routing rule for every block. A declared needs_input or capability kind lands on a person
     (Hermes surfaces both to one). Otherwise an evidenced verdict decides: WALL and HUMAN wait on a
     person, DEPENDENCY and MACHINERY do not, and FAKE does not unless the reason also names a human
-    step (a login, an OTP, an approval), which a person still has to do. With no evidence, the
+    step other than an approval (a login, an OTP, a manual step), which a person still has to do. With no evidence, the
     classifier's default is not a finding, so Selenite's own human-step words decide."""
     if kind in _HUMAN_KINDS:
         return True
     words = bool(_GATE_RE.search(reason)) or "human_gate" in signals.classify(reason)
     if verdict is not None and verdict.evidenced:
-        return verdict.cls in (WALL, HUMAN) or (verdict.cls == FAKE and words)
+        if verdict.cls == FAKE:
+            # The verdict already says the approval is one agent waiting on another, so an approval
+            # word is not a person's step here; a login, an OTP or a manual step still is.
+            rest = _APPROVAL_WORD.sub(" ", reason)
+            return bool(_GATE_RE.search(rest)) or "human_gate" in signals.classify(rest)
+        return verdict.cls in (WALL, HUMAN)
     return words
 
 
@@ -211,7 +219,7 @@ def _open_badges() -> set[str]:
     sig = ledger.signature()  # every state folder: a row in a fallback folder still clears a badge
     if sig != _blocked_seen_sig[0]:
         _blocked_seen_sig[0] = sig
-        rows = list(ledger.rows(90))
+        rows = list(ledger.rows(ledger.BLOCKED_DAYS))
         fixed = ledger.fixed_keys(source=rows)
         _blocked_now.clear()
         _blocked_now.update(r["key"] for r in rows if r["kind"] == "blocked" and r["key"] not in fixed)
@@ -233,9 +241,47 @@ def kanban_task_completed(task_id=None, **_kw):
 
 @_safe
 def on_kanban_task_updated(task_id=None, changed_fields=None, **_kw):
-    """A status change on a card blocked on a person means someone moved it on (unblocked or archived)."""
-    if _hooks_on() and task_id and "status" in (changed_fields or ()):
+    """A status change on a card blocked on a person means someone moved it on (unblocked or archived).
+    Hermes sends no status field for those, so any update to a badged card checks the board too."""
+    if not (_hooks_on() and task_id):
+        return
+    if "status" in (changed_fields or ()):
         _clear_badge(task_id, "task unblocked")
+    elif f"kanban:{task_id}" in _open_badges():
+        reconcile_badges([str(task_id)])
+
+
+_MOVED_ON = {"archived": "task archived", "done": "task completed"}
+RECONCILE_EVERY_S = 60.0
+_reconciled_at = [0.0]
+
+
+def reconcile_badges(task_ids=None) -> int:
+    """Clear the badge of every card a person has since unblocked or archived. Hermes fires no hook
+    for either, so this reads each badged card's status from its board, read-only. A card missing
+    from every board keeps its badge: unknown is not cleared. Returns how many it cleared."""
+    ids = list(task_ids) if task_ids is not None else [
+        k.split(":", 1)[1] for k in sorted(_open_badges()) if k.startswith("kanban:")]
+    if not ids:
+        return 0
+    statuses = fake_gates.card_statuses(ids)
+    cleared = 0
+    for tid in ids:
+        st = statuses.get(tid)
+        if st and st != "blocked":
+            _clear_badge(tid, _MOVED_ON.get(st, "task unblocked"))
+            cleared += 1
+    return cleared
+
+
+def _tick_reconcile() -> None:
+    """On the dispatcher tick, at most once a minute."""
+    now = time.time()
+    if now - _reconciled_at[0] < RECONCILE_EVERY_S:
+        return
+    _reconciled_at[0] = now
+    if _hooks_on():
+        reconcile_badges()
 
 
 # --- command ---------------------------------------------------------------
@@ -319,4 +365,5 @@ def register(ctx) -> None:
                  kanban_task_blocked, kanban_task_completed, on_kanban_task_updated):
         ctx.register_hook(hook.__name__, hook)
     fake_gates.HOOKS_ON = _hooks_on  # one off switch for every hook Selenite runs
+    fake_gates.on_tick(_tick_reconcile)
     fake_gates.register(ctx)

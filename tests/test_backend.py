@@ -49,7 +49,8 @@ def test_ui_may_post_only_some_kinds(http, kind, code):
 
 
 @pytest.mark.parametrize("key,code", [("x" * 81, 422), ("../../etc/passwd", 422), ("-leading", 422), ("", 422),
-                                      ("a b", 422), ("<img>", 422), ("kanban:t_1", 200)])
+                                      ("a\x00b", 422), ("a\nb", 422), ("/etc/passwd", 422), ("a/../b", 422),
+                                          ("a b", 200), ("<token>", 200), ("café ⌘ login", 200), ("kanban:t_1", 200)])
 def test_key_validation(http, key, code):
     assert http.post(U + "/events", json={"kind": "fix", "key": key}).status_code == code
 
@@ -123,3 +124,40 @@ def test_rows_in_a_fallback_state_folder_reach_the_pane(tmp_path, monkeypatch):
     with (fallback / "ledger.jsonl").open("a") as fh:
         fh.write(json.dumps({**row, "ts": time.time(), "key": "fallback-two"}) + "\n")
     assert {g["key"] for g in api.overview(30)["gates"]} == {"fallback-only", "fallback-two"}
+
+
+# Third roast: badges follow the board, share the plugin's window, and a read-only home never 500s.
+
+def _board(cards: dict[str, str]):
+    import sqlite3
+    db = HOME / ".hermes" / "kanban" / "boards" / "demo" / "kanban.db"
+    db.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(db)
+    con.execute("create table if not exists tasks (id text primary key, status text)")
+    con.executemany("insert or replace into tasks values (?, ?)", cards.items())
+    con.commit(); con.close()
+
+
+def test_status_drops_badges_for_cards_unblocked_or_archived_on_the_board(monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(HOME / ".hermes"))
+    api._status_cache.update(ts=0.0, ids=())
+    for t in ("t_arch", "t_ready", "t_still", "t_gone"):
+        ledger.add("blocked", f"kanban:{t}")
+    _board({"t_arch": "archived", "t_ready": "ready", "t_still": "blocked"})
+    assert api.status()["blocked_tasks"] == ["t_gone", "t_still"]  # unknown stays: can't prove it moved
+
+
+def test_a_45_day_old_block_still_badges_in_status():
+    api._status_cache.update(ts=0.0, ids=())
+    STATE = ledger.writable_state()
+    row = {"ts": time.time() - 45 * 86400, "kind": "blocked", "key": "kanban:t_old", "note": "", "agent": ""}
+    with open(STATE / "ledger.jsonl", "a") as fh:
+        fh.write(json.dumps(row) + "\n")
+    assert "t_old" in api.status()["blocked_tasks"]
+
+
+def test_draft_on_a_read_only_home_says_so_instead_of_500(http, monkeypatch, tmp_path):
+    monkeypatch.setattr(api.evolve, "build", lambda days: None)
+    monkeypatch.setattr(api, "_latest_proposal", lambda: None)
+    r = http.post(U + "/proposal")
+    assert r.status_code == 200 and r.json()["proposal"] is None and "SELENITE_STATE" in r.json()["error"]
