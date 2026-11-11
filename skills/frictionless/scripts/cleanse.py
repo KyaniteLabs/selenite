@@ -113,9 +113,12 @@ def frontmatter(text: str) -> dict[str, str] | None:
 def check_skills(ctx: dict) -> list[dict]:
     out: list[dict] = []
     seen: dict[str, set[str]] = {}
+    only = [Path(o).expanduser().resolve() for o in (ctx.get("only") or [])]
     for agent, root in skill_roots().items():
         if not root.is_dir():
             continue
+        if only and not any(root == o or root.is_relative_to(o) for o in only):
+            continue  # --only: another seat's roots stay out of this report (shared-host mode)
         for d in sorted(root.iterdir()):
             if d.name.startswith("."):
                 continue
@@ -125,8 +128,15 @@ def check_skills(ctx: dict) -> list[dict]:
                 continue
             if not d.is_dir():
                 continue
-            out += _check_one_skill(d, agent)
-            seen.setdefault(d.name, set()).add(str(d.resolve()))
+            # Hermes profiles group skills one level deeper (category/skill/SKILL.md);
+            # a flat root keeps working, and a folder with no SKILL.md anywhere is just data.
+            skills = [d] if (d / "SKILL.md").exists() else [
+                s for s in sorted(d.iterdir())
+                if s.is_dir() and not s.name.startswith(".") and (s / "SKILL.md").exists()
+            ]
+            for sd in skills:
+                out += _check_one_skill(sd, agent)
+                seen.setdefault(sd.name, set()).add(str(sd.resolve()))
     for name, targets in sorted(seen.items()):
         if len(targets) > 1:
             out.append(finding("skill", f"{len(targets)} copies of {name}", "drift",
@@ -245,7 +255,10 @@ RUNBOOK_SKIP = ("2fa", "otp", "friction")
 def check_runbooks(ctx: dict) -> list[dict]:
     out: list[dict] = []
     pats = [p for p in COMPILED.get("human_gate", []) if not any(w in p.pattern for w in RUNBOOK_SKIP)]
-    for root in ctx["paths"]:
+    roots = ctx["paths"]
+    if ctx.get("only"):  # --only restricts runbooks too: a per-seat report on a shared host
+        roots = [Path(o).expanduser() for o in ctx["only"]]
+    for root in roots:
         files = [root] if root.is_file() else sorted(root.rglob("*.md"))
         for f in files[:2000]:
             if any(part in ("node_modules", ".git") for part in f.parts):
@@ -328,8 +341,8 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def run(days: int = 30, paths: list[Path] | None = None) -> dict:
-    ctx = {"days": days, "paths": paths or []}
+def run(days: int = 30, paths: list[Path] | None = None, only: list[Path] | None = None) -> dict:
+    ctx = {"days": days, "paths": paths or [], "only": [Path(p).expanduser() for p in (only or [])]}
     found: list[dict] = []
     errors: list[str] = []
     for check in CHECKS:
@@ -404,9 +417,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--days", type=int, default=30)
     ap.add_argument("--path", action="append", default=[], help="runbook file or folder to scan")
+    ap.add_argument("--only", action="append", default=[], metavar="DIR",
+                    help="restrict this report to what lives under DIR (per-seat mode on a shared host); "
+                         "skills from other roots and runbooks elsewhere stay out")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
-    report = run(a.days, [Path(p).expanduser() for p in a.path])
+    report = run(a.days, [Path(p).expanduser() for p in a.path], only=[Path(p).expanduser() for p in a.only])
     path = write(report)
     ledger.add("cleanse", "run", note=f"{len(report['findings'])} findings")
     print(json.dumps(report, indent=2) if a.json else render(report))

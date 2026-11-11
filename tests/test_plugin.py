@@ -177,11 +177,44 @@ def test_kanban_completed_clears_only_known_blocks():
 
 
 def test_command_modes_and_alias():
-    assert "Run Cleanse mode" in plugin.frictionless_command("cleanse skills")
-    assert "Run Cleanse mode" in plugin.frictionless_command("audit")
-    assert "Focus: skills" in plugin.frictionless_command("cleanse skills")
-    assert "Pick the mode" in plugin.frictionless_command("why is this slow")
-    assert "Context: why is this slow" in plugin.frictionless_command("why is this slow")
+    prompt = lambda raw: plugin.frictionless_prompt(raw)[1]
+    assert plugin.frictionless_prompt("audit")[0] == "cleanse"
+    assert "Run Cleanse mode" in prompt("cleanse skills")
+    assert "Run Cleanse mode" in prompt("audit")
+    assert "Focus: skills" in prompt("cleanse skills")
+    assert "Pick the mode" in prompt("why is this slow")
+    assert "Context: why is this slow" in prompt("why is this slow")
+
+
+class _InjectCtx:
+    def __init__(self, accept):
+        self.accept, self.sent = accept, []
+
+    def inject_message(self, content, role="user", *, session_key=None, origin=None):
+        self.sent.append((content, session_key))
+        return self.accept
+
+
+def test_command_starts_an_agent_turn_and_tells_the_human(monkeypatch):
+    ctx = _InjectCtx(True)
+    monkeypatch.setattr(plugin, "_ctx", ctx)
+    out = plugin.frictionless_command("cleanse skills", session_key="k1")
+    (sent, key), = ctx.sent
+    assert key == "k1" and "Run Cleanse mode" in sent   # the agent gets the instructions
+    assert "Load and follow" not in out and "Cleanse mode" in out   # the human gets a status line
+
+
+def test_command_falls_back_to_text_to_send_when_no_turn_can_start(monkeypatch):
+    for ctx in (_InjectCtx(False), object(), None):
+        monkeypatch.setattr(plugin, "_ctx", ctx)
+        out = plugin.frictionless_command("calm")
+        assert out.startswith("Selenite could not start an agent turn") and "Run Calm mode" in out
+
+
+def test_ledger_tool_does_not_claim_an_unwritten_row(monkeypatch):
+    monkeypatch.setattr(ledger, "state_dirs", lambda: [])
+    out = json.loads(plugin.selenite_ledger({"action": "add", "kind": "gate", "key": "k"}))
+    assert out["success"] is False and out["row"] is None and "not recorded" in out["error"]
 
 
 def test_tool_actions():

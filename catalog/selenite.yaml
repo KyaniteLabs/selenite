@@ -7,21 +7,24 @@ sha: 6603e379c8ae7fedb95e827ec95781f1e1dd77af
 description: >-
   Takes friction off the person, treated as accessibility: one test, "does this
   step, wait or check earn its cost to you?", applied to steps handed to a person,
-  agents parking Kanban work on each other for reasons that aren't real, and
-  checks that can't change the decision. Calm mode switches the agent to no
-  questions and one-line replies when your messages show overload. A read-only
-  cleanse ranks what to clear across skills, plugins, hooks, approvals, runbooks
-  and boards. Walls always stand: credentials, spend, publishing, destructive
-  steps, legal, named freezes. Disclosure: no network and no credentials. Hooks
-  add a context note in Calm mode, and in fake_gate_mode "nudge" (default) or
-  "ask" they add a note to, or hand back once with a question, a kanban_block
-  that reads as agent bureaucracy; they never approve, unblock, close or edit a
-  card, and any error fails open. Writes a metadata-only ledger (no block reasons
-  or prompt text, 0600, rotates at 4 MB), per-card question counts and a
-  counts-only snapshot under plugin-data/antibeaurocracy/, and reports under
-  the Selenite state directory (SELENITE_STATE, else XDG state, else HERMES_HOME).
-  Reads kanban.db read-only. The CLI's opt-in --judge
-  runs a command you name; the plugin never does.
+  agents parking Kanban work on each other for reasons that aren't real, and checks
+  that can't change the decision. Calm mode cues the agent toward no questions and
+  one-line replies when your messages show overload. A read-only cleanse ranks what
+  to clear across skills, plugins, hooks, approvals, runbooks and boards. Walls
+  always stand: credentials, spend, publishing, destructive steps, legal, named
+  freezes. Disclosure: no network and no credentials. Hooks add a context note in
+  Calm mode, and in fake_gate_mode "nudge" (default) or "ask" they add a note to, or
+  hand back once with a question, a kanban_block that reads as agent bureaucracy;
+  they never approve, unblock, close or edit a card, and any error fails open.
+  Writes a metadata-only ledger (no block reasons or prompt text, 0600, rotates at 4
+  MB), per-card question counts and a counts-only snapshot under
+  plugin-data/antibeaurocracy/, and reports under the Selenite state directory
+  (SELENITE_STATE, else XDG state, else HERMES_HOME). Optional Evolve mode, run by
+  hand, is the one part that reads your past messages (Claude Code, Codex and Hermes
+  transcripts, read-only) and keeps redacted excerpts — emails, IPs and tokens
+  stripped, 0600 — in the state folder; never run it and no transcript is read.
+  Reads kanban.db read-only. The CLI's opt-in --judge runs a command you name; the
+  plugin never does.
 maintainer: KyaniteLabs
 tier: community
 category: automation

@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 PLUGIN = "antibeaurocracy"
 HERE = Path(__file__).resolve().parent.parent  # the Selenite plugin root
 OWNER = "selenite"  # the Hermes plugin these settings and skills live under
-LOCAL_SURFACES = frozenset({"cli", "local"})
+LOCAL_SURFACES = frozenset({"cli", "local", "desktop", "tui"})
 MODES = ("observe", "nudge", "ask")
 # "enforce" was the 0.2 name for the mode that pushed back on a block. It is now "ask".
 _MODE_ALIASES = {"enforce": "ask"}
@@ -219,7 +219,11 @@ def _gate(tool_name: str, args: dict, session_id: str, tool_call_id: str):
     kind = str(args.get("kind") or "").strip().lower()
     v = classify(reason, kind=kind or None)
     mode = _mode()
-    over = v.cls == FAKE and v.evidenced and v.confidence >= _settings.min_confidence(_ctx_settings())
+    walled = wall_family(reason)
+    # A wall-family word (money, infra, deletion, credentials, publishing, legal, freezes) means the
+    # wait may be real: never call it fake, whatever else the reason says.
+    over = (not walled and v.cls == FAKE and v.evidenced
+            and v.confidence >= _settings.min_confidence(_ctx_settings()))
     card = _card_id(args)
     declared = kind if kind in _DECLARABLE else None
     _ledger("block_attempt", tool=tool_name, task=card, verdict=v.label, conf=v.confidence,
@@ -230,7 +234,7 @@ def _gate(tool_name: str, args: dict, session_id: str, tool_call_id: str):
         # next to the verdict so the audit can show where declarations and the classifier disagree.
         _ledger("declared", tool=tool_name, task=card, declared=kind, verdict=v.label, mode=mode, session=session_id)
         mode = "observe"
-    elif mode == "ask" and wall_family(reason):
+    elif mode == "ask" and walled:
         # A wall-family word (money, infra, deletion, credentials, publishing, legal, freezes, a person's
         # role; agent and seat names are not counted) means no question at all, only the nudge.
         mode = "nudge"
