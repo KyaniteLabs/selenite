@@ -92,6 +92,7 @@ Rejected metaphors:
   - **Approval:** Walnut kyanite blue `#c6d8f3`. **Fix:** Walnut success green `#c9dead`. **Broken:** Walnut danger `#f5cec6`.
   - **Kanban badge:** the host's `neutral` tone.
 - **Fourth note from Simon, 2026-11-10: "make it slightly brighter or lighter. and make it translucent".** The ground is now a lighter walnut (`#7a6e62` at 74% opacity) with a 28px backdrop blur, so the host's glass or wallpaper shows through. Cards are cream films (`rgba(255,248,238,.09)`), and text steps up one Walnut level (`#fffaf2` primary) to hold contrast on the lighter ground. With `prefers-reduced-transparency`, the page falls back to solid `#74685d`.
+- **Fifth correction from Simon, 2026-11-10: "remove translucency"; "the weird color i didintl ike was the background of myw allpaper showing through the transucen walnut".** The ground is now solid `#74685d` with no backdrop blur, so nothing behind the window shows through. Cards stay cream films over that solid ground.
 - **Assumption:** forcing the Walnut ground inside the page is right even when the host runs another theme; Simon's own host already runs the Walnut skin. Pending Simon's eye.
 
 ## 8. Landed mark
