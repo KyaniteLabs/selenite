@@ -96,3 +96,37 @@ def test_product_and_model_names_are_still_not_people():
 def test_weak_authority_still_needs_a_wait_word():
     # "the CEO" alone, referenced with no wait word and no gate, is not a person's stop
     assert classify("mention the CEO in the postmortem").cls != HUMAN
+
+
+# --- D6 (cco) + D10 (cgo): per-seat scoping and nested profile skills -----
+
+def test_nested_profile_skills_are_scanned(tmp_path, monkeypatch):
+    import skills.frictionless.scripts.cleanse as c
+    home = tmp_path / "home"
+    prof = home / ".hermes-org" / "profiles" / "cco"
+    nested = prof / "skills" / "creative" / "video-production"
+    nested.mkdir(parents=True)
+    (nested / "SKILL.md").write_text("no frontmatter at all\n")  # bad on purpose: proof of visibility
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("HERMES_HOME", str(prof))  # a seat exports its profile as the Hermes home
+    monkeypatch.setattr(c, "HOME", home)  # HOME is read at import; point the module at the fixture
+    findings = c.check_skills({"days": 30, "paths": []})
+    assert any(f["check"] == "no-frontmatter" and "video-production" in f["where"] for f in findings), \
+        "a skill one level deep (category/skill) used to be invisible (D6)"
+
+
+def test_only_flag_excludes_other_roots(tmp_path, monkeypatch):
+    import skills.frictionless.scripts.cleanse as c
+    home = tmp_path / "home"
+    prof = home / ".hermes-org" / "profiles" / "cco"
+    (prof / "skills").mkdir(parents=True)
+    bad = home / ".claude" / "skills" / "broken"
+    bad.mkdir(parents=True)
+    (bad / "SKILL.md").write_text("no frontmatter at all\n")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("HERMES_HOME", str(home / ".hermes-org"))
+    monkeypatch.setattr(c, "HOME", home)
+    findings = c.check_skills({"days": 30, "paths": [], "only": [str(prof)]})
+    assert findings == [], "--only must keep shared ~/.claude findings out of a seat report (D10)"
+    full = c.check_skills({"days": 30, "paths": []})
+    assert any(f["check"] == "no-frontmatter" for f in full), "without --only the shared root is still swept"
