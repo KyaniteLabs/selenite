@@ -9,7 +9,7 @@ Selenite runs inside Hermes. It takes the host's theme and adds three things of 
    - Status chip: *is anything waiting on me today?*
    - Page: *which human step should we remove next?*
    - Kanban badge: *is this card blocked on me?*
-3. **The host owns the chrome.** Panes, buttons, badges, empty states and colours all come from Hermes components and theme variables.
+3. **The host owns the components; the page owns its colours.** Panes, buttons, badges and empty states come from Hermes components. The page paints its own solid Walnut sand ground and re-points the host's theme variables at Walnut values inside `.sel-host`, so it looks the same under any host theme (PF §7).
 
 ## Stone and glyph
 
@@ -28,26 +28,27 @@ Selenite runs inside Hermes. It takes the host's theme and adds three things of 
 | Role | Face | Size and weight | Notes |
 |---|---|---|---|
 | Lockup (banner, README hero) | Chakra Petch | **SELENITE** Bold 700 uppercase, with "by KyaniteLabs" in Medium 500 | Glyphs unmodified, native kerning, OFL shipped (PF §5) |
-| Page title and section labels | Chakra Petch | Title 600 at 20px uppercase with +0.06em tracking; labels 500 at 10.5px uppercase with +0.08em | Embedded as a Latin subset WOFF. Only weights 500 and 600 are embedded in the app (A) |
+| Page title and section labels | Chakra Petch | Title 600 at 20px uppercase with +0.06em tracking; section labels 600 at 13.5px in mixed case with +0.02em; tags use the body face | Embedded as a Latin subset WOFF. Only weights 500 and 600 are embedded in the app (A) |
 | Big numerals | Chakra Petch | 600 at 28px | Values refresh every 30 s and never tick |
 | Body and rows | Host sans (`--font-sans`) | 13px at 400; meta text 11.5px | Long text stays in the app's face |
 | Ledger keys and counts | Host mono (`--font-mono`) | 12px, tabular figures | Counts line up down the column |
 
-## Colour (theme variables, plus two family catches)
+## Colour (Walnut sand film, round 6)
 
 | Meaning | Variable | Always paired with |
 |---|---|---|
-| Identity: glyph, meter, wordmark | `--ui-text-primary` (white on dark, ink on light) | Not applicable; identity only |
-| Human gate | Walnut amber cream `#f7d4ae` (PF §7) | A count and the label "Recurring gates"; the Kanban badge (`neutral` tone) says "waiting on you" |
-| Approval prompt | `--ui-blue` | The label "Approval prompts" |
-| Calm trigger and high load | Walnut faint sand `#bcae9d`; calm dots are hollow rings (PF §7) | The words "Load: High" and the reason line |
-| Fix landed | `--ui-green` | The word "fixed" |
+| Ground | Solid Walnut sand `#f3ebdf`; cards `#fbf5ec` | Not applicable |
+| Identity: glyph, meter, wordmark, text | Walnut ink `#3b342e` (`--ui-text-primary`) | Not applicable; identity only |
+| Human gate | Walnut ink `#3b342e`, the darkest mark on the page (PF §7) | A count and the label "Recurring gates"; the Kanban badge (`neutral` tone) says "waiting on you" |
+| Approval prompt | Ink-weight Walnut blue `#375684` (`--ui-blue`) | The label "Approval prompts" |
+| Calm trigger and high load | Walnut sand `#7d7064`; calm dots are hollow rings (PF §7) | The words "Load: High" and the reason line |
+| Fix landed | Ink-weight Walnut green `#46622a` (`--ui-green`) | The word "fixed" |
 | Everything else | `--ui-text-secondary/tertiary`, `--ui-stroke-*`, `--ui-bg-card` | Not applicable |
 
 - Colour never carries state on its own (PF §7).
 - No brown or orange: the host's `--ui-orange` and ochre `--ui-yellow` are never used (PF §7).
 - The minimum text tone is `--ui-text-tertiary`. The quaternary tone is reserved for hairlines.
-- Tints use `color-mix(in srgb, var(--ui-x) N%, transparent)`, so every host theme re-skins Selenite automatically.
+- Every text tone passes WCAG AA (4.5:1) on the sand ground; the lowest, `--ui-text-quaternary` `#62574d`, measures 5.9:1. State marks clear 3:1.
 
 ## Load
 
