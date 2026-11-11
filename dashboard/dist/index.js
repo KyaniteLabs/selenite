@@ -184,7 +184,7 @@
     return h("div", { className: "space-y-6" }, head, warn, undone,
       h(Card, null, h(CardContent, { className: "pt-6 flex flex-wrap items-center gap-3 text-sm" },
         h("span", { className: "font-medium" }, "Load: ", h("span", { "aria-live": "polite" }, loadLabel)),
-        h("span", { className: "text-muted-foreground" }, (data.calm_24h || 0) + " Calm triggers in the last 24 hours"))),
+        h("span", { className: "text-muted-foreground" }, (data.calm_24h || 0) + ((data.calm_24h === 1) ? " Calm trigger" : " Calm triggers") + " in the last 24 hours"))),
       h("div", { className: "grid gap-4 grid-cols-2 xl:grid-cols-4" },
         h(Stat, { label: "Human gates", n: t.gates }), h(Stat, { label: "Approval prompts", n: t.approvals }),
         h(Stat, { label: "Calm triggers", n: t.calm }), h(Stat, { label: "Fixes landed", n: t.fixes })),
@@ -194,7 +194,7 @@
           ? h("p", { className: "text-sm text-muted-foreground" }, "No human gates in this window.")
           : h("ol", { className: "space-y-2" }, gates.slice(0, 10).map(function (g) {
               return h("li", { key: g.key, className: "flex flex-wrap items-center gap-3 text-sm" },
-                h("code", { className: "mr-auto truncate" }, g.key),
+                h("code", { className: "mr-auto min-w-0 break-all sm:truncate", title: g.key }, g.key),
                 h("span", { className: "text-xs text-muted-foreground" }, "asked " + g.n + "×, last " + ago(g.last)),
                 g.fixed ? h(Badge, { variant: "outline" }, "fixed") : null,
                 g.fixed
