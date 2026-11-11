@@ -418,6 +418,13 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
         return Verdict(FAKE, sub, round(conf, 2), f"bureaucratic wait ({sub})", ACTIONS[sub],
                        hits + [h for _, hs in fakes[1:] for h in hs] + mach)
 
+    # 9b. A declared hold with no gate phrase at all ("throttled at 3 running", "the supervisor owns
+    # this") is the same declared hold as 6b; don't let it fall through to a stale-wait default.
+    held = _hits(_RUNNING_ELSEWHERE, t) or _hits(_THROTTLE, t)
+    if held:
+        return Verdict(DEPENDENCY, "", 0.7, "a declared hold: the work runs elsewhere or waits for queue room",
+                       "Leave it. Unblock it when the other lane lands or the queue has room.", held)
+
     # 10. An approval from a named party the plugin does not know: a person until configured otherwise.
     named = _hits(_NAMED_APPROVER, t)
     if named:
@@ -441,7 +448,7 @@ RULES = (
     "4 WALL: kind=capability (Hermes: a hard wall that surfaces to a person); MACHINERY: kind=transient",
     "5 HUMAN: a wait or gate phrase whose source is a person with authority ('from the CEO', 'per the owner', "
     "'the founder's OK', 'the CEO must sign'); a bare role noun, or an agent named after a role, does not count",
-    "6 DEPENDENCY: a HOLD with an explicit expiry date, or a hold that names where the work runs or a queue cap",
+    "6 DEPENDENCY: a HOLD with an explicit expiry date, or a hold that names where the work runs or a queue cap (also when no gate phrase matched)",
     "7 HUMAN: kind=needs_input with no gate or fault phrase in the text",
     "8 MACHINERY: a fault phrase, or a wait on a running check (CI, build, tests), with no gate phrase",
     "9 FAKE F1-F5: an agent-to-agent gate phrase (confidence 0.7-0.95, less when mixed with a fault or filed as needs_input)",

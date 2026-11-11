@@ -7,7 +7,7 @@ Every wait falls into exactly one class. The classifier checks the rules in a fi
 3. **DEPENDENCY**: an explicit task or card ID, or `kind=dependency`.
 4. **WALL**: `kind=capability`, which Hermes defines as a hard wall (no access, missing credentials, an action no agent can do) that surfaces to a person. **MACHINERY**: `kind=transient`, a fault that may clear on its own. The declared kind is trusted.
 5. **HUMAN**: a wait or gate phrase whose source is a person with authority ("Awaiting ACK from the CEO", "HOLD per the owner", "the founder's OK", "the CEO must countersign"). That is a person's call, not an agent gate, even when a fault is also mentioned. The role must be the source of the wait (after *from*, *per* or *by*, as a possessive, or as the subject): a bare noun ("the client to connect", "for the board update") does not count, and neither does an agent named after a role ("the CEO agent", "the CEO's agent").
-6. **DEPENDENCY**: a HOLD with an explicit expiry ("until 2026-11-17"). It lapses on its own.
+6. **DEPENDENCY**: a HOLD with an explicit expiry ("until 2026-11-17"). It lapses on its own. So does a declared hold that says why: the work runs elsewhere ("executed by zcode outside the gateway", "the supervisor owns this repair") or waits for queue room ("max 2 in progress", "throttled at 3 running"). Dispatching either would run the work twice or overload the queue, so neither is parking, with or without a gate phrase.
 7. **HUMAN**: `kind=needs_input` with no gate or fault phrase in the text.
 8. **MACHINERY**: a fault phrase with no gate phrase.
 9. **FAKE** F1–F5: an agent-to-agent gate phrase. Confidence is 0.7–0.95, lowered by 0.15 when a fault also appears (the fault is real; the gate on top is still bureaucracy) and by 0.1 when filed as `needs_input`.
@@ -35,7 +35,7 @@ In `ask` mode the plugin doesn't argue with a verdict; it asks. An evidenced fak
 - **F2-relay vs. a capability gap.** When your lane cannot push or open a PR, the gap is MACHINERY at the identity or permission owner. Asking a different seat to carry each patch turns one capability gap into a permanent relay. Fix the capability once.
 - **F3-ownership-limbo.** "X must own/record/rule/declare" is limbo unless X is the human and the subject is a wall. Seats make calls with a default and a revert path. Disputes go in one comment to whoever the org chart names.
 - **F4-ceremony.** Evidence a reader would actually check (a test run, a diff, a live URL) is not ceremony. Contracts about contracts, receipts for receipts, and re-verifying something already verified are.
-- **F5-parking-lot.** Only an upper-case `HOLD` or `PARKED` marker counts as evidence. A HOLD with an expiry date ("until 2026-11-17") is legitimate and is not flagged. A HOLD with no expiry, a card created blocked "so it doesn't auto-dispatch" (use `triage=true` instead), and a block with no reason are all parking.
+- **F5-parking-lot.** Only an upper-case `HOLD` or `PARKED` marker counts as evidence. A HOLD with an expiry date ("until 2026-11-17") is legitimate and is not flagged. A HOLD with no expiry, a card created blocked "so it doesn't auto-dispatch" (use `triage=true` instead), and a block with no reason are all parking. The advice never says to dispatch blindly: it asks whoever set the hold for a named owner and an expiry first.
 - **F6-stale-wait.** Done-but-stuck cards land here: "DONE, not blocked" and "PR complete, awaiting…". Close them.
 
 ## Why deterministic

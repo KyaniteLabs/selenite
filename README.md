@@ -105,7 +105,7 @@ What Selenite learns stays on your machine. Reports hold counts and category nam
 ## Tests
 
 ```bash
-python3 -m pip install pytest fastapi httpx && python3 -m pytest -q
+python3 -m pip install -r requirements-test.txt && python3 -m pytest -q
 ```
 
 ## License

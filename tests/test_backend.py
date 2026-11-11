@@ -7,8 +7,8 @@ import time
 
 import pytest
 
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
+pytest.importorskip("fastapi", reason="backend tests need FastAPI: pip install -r requirements-test.txt")
+pytest.importorskip("httpx", reason="backend tests need httpx: pip install -r requirements-test.txt")
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
