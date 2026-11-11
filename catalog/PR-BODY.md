@@ -27,8 +27,8 @@ Why it's a plugin and not an MCP server: the value is at the hook. It acts while
 - [x] Unattended runs: nothing waits for a person; Calm is off inside Kanban workers.
 - [x] Capabilities in this entry match `plugin.yaml` and what `register()` calls.
 - [x] `requires_hermes: ">=0.23.0"`, full 40-character pin.
-- [ ] `hermes plugins validate` receipt at the pinned SHA: REPLACE with link.
-- [ ] Tests at the pinned SHA (Python 3.10, 3.12, 3.14 and against Hermes): REPLACE with CI link.
+- [x] `hermes plugins validate` passes at the pinned SHA: [hermes-validate job](https://github.com/KyaniteLabs/selenite/actions/runs/42941467120).
+- [x] Tests pass at the pinned SHA on Python 3.10 to 3.14: [CI run](https://github.com/KyaniteLabs/selenite/actions/runs/42941467120).
 - [ ] Demo video: REPLACE with link.
 
 ## Relation to other KyaniteLabs entries
