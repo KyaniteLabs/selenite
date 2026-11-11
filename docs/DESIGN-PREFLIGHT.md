@@ -80,15 +80,18 @@ Rejected metaphors:
 - Selenite's identity colour is white. On dark chrome the identity accent is pearl `#ECE9E2`.
 - On light chrome a white tint would vanish, so the icon carries the identity and the UI uses host ink.
 - Gate, approval and fix states use host semantic tokens, and every one of them is paired with a text label. Colour never carries state alone.
-- **Correction from Simon, 2026-11-10: "this shonudl be very chill the colors of seleinte".** The page takes only the stone's own colours: white, pearl and silver satin. No saturated accents. This replaces the magenta and turquoise of round 1, which were too loud.
-- **No brown or orange (Simon's standing rule).** The host's `--ui-orange` and `--ui-yellow` (ochre) stay unused.
-- State colours, all quiet and all paired with a text label:
-  - **Human gate:** host ink (`--ui-text-primary`), the brightest pearl on dark chrome. It is the one state that asks for attention, so it is the brightest, not the most colourful.
-  - **Calm trigger and high load:** silver (`--ui-text-tertiary`). Calm dots are hollow rings, so shape tells them from gates as well as tone.
-  - **Approval:** host blue softened 60% into silver. **Fix:** host green softened 55% into silver.
+- **Correction from Simon, 2026-11-10: "this shonudl be very chill the colors of seleinte".** The page takes only the stone's own colours, with no saturated accents. This replaced round 1's magenta and turquoise, which were too loud.
+- **Second correction from Simon, 2026-11-10: "i don tliek balck and white. make it ilike desrrt rose. white and tan".** The pearl-and-silver round read as black and white and is rejected. The palette is now desert rose: selenite's rosette habit, white blades with sand caught between them. Desert rose is a real habit of gypsum/selenite (mineral fact, mindat: gypsum "desert rose"), so the tan is the stone's own sand, not an invented colour.
+- **No brown or orange (Simon's standing rule).** The tan is a pale, low-chroma sand (`#C8AD84` base), always mixed toward the host's text colour so it stays light sand on dark chrome and khaki-sand on light chrome. It never goes deep enough to read as brown, and it is never the host's `--ui-orange` or `--ui-yellow` (ochre), which stay unused.
+- State colours, all paired with a text label:
+  - **Sand** `--sel-sand` = `color-mix(in oklab,#C8AD84 84%,var(--ui-text-primary))`.
+  - **Human gate:** sand. It is the one state that asks for attention, so it gets the warmest tone on the page.
+  - **Calm trigger and high load:** pale sand, sand 35% into `--ui-text-tertiary`. Calm dots are hollow rings, so shape tells them from gates as well as tone.
+  - **Approval:** host blue 30% into pale sand. **Fix:** host green 35% into pale sand.
+  - **Identity:** white blades: pearl `#ECE9E2` on dark, host ink on light (unchanged).
   - Red stays reserved for broken.
-  - **Kanban badge:** the host's `neutral` tone, not pink.
-- **Assumption:** the softened blue and green read as calm while staying distinguishable; render check pending Simon's eye.
+  - **Kanban badge:** the host's `neutral` tone.
+- **Assumption:** this sand reads as desert rose, not brown or orange, in both themes; render check pending Simon's eye.
 
 ## 8. Landed mark
 

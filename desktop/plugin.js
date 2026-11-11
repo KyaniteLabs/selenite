@@ -27,12 +27,13 @@ const FONTS = {
 // chrome the identity ink is the host's primary text (near-white); on light chrome
 // it falls back to host ink, and the icon carries the identity. State never rides
 // on colour alone: every state has a text label next to it. Calm stone colours
-// only (Simon, 2026-11-10): gate is the brightest pearl ink, load is silver, and
-// approval and fix are host blue and green softened into silver (PF §7).
+// only (Simon, 2026-11-10): desert rose, white blades and sand. Gate is sand,
+// load is pale sand, approval and fix are host blue and green softened into pale
+// sand (PF §7). The sand mixes toward host text so it never reads as brown.
 const CSS = `
 ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-style:normal;font-weight:${w};font-display:swap;src:url(data:font/woff;base64,${b}) format('woff')}`).join('\n')}
 .sel-host{container-type:inline-size;width:100%}
-.sel{--sel-id:var(--ui-text-primary);--sel-gate:var(--ui-text-primary);--sel-appr:color-mix(in oklab,var(--ui-blue) 40%,var(--ui-text-tertiary));--sel-fix:color-mix(in oklab,var(--ui-green) 45%,var(--ui-text-tertiary));--sel-load:var(--ui-text-tertiary);
+.sel{--sel-id:var(--ui-text-primary);--sel-sand:color-mix(in oklab,#C8AD84 84%,var(--ui-text-primary));--sel-load:color-mix(in oklab,#C8AD84 35%,var(--ui-text-tertiary));--sel-gate:var(--sel-sand);--sel-appr:color-mix(in oklab,var(--ui-blue) 30%,var(--sel-load));--sel-fix:color-mix(in oklab,var(--ui-green) 35%,var(--sel-load));
   --sel-display:'${FACE}',var(--font-sans);font-family:var(--font-sans);font-size:13px;line-height:1.45;color:var(--ui-text-primary);
   box-sizing:border-box;width:100%;max-width:1120px;margin:0 auto;padding:24px 28px 48px;display:flex;flex-direction:column;gap:20px}
 .sel *,.sel *::before,.sel *::after{box-sizing:border-box}

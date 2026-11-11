@@ -38,9 +38,9 @@ Selenite runs inside Hermes. It takes the host's theme and adds three things of 
 | Meaning | Variable | Always paired with |
 |---|---|---|
 | Identity: glyph, meter, wordmark | `--ui-text-primary` (white on dark, ink on light) | Not applicable; identity only |
-| Human gate | host ink, the brightest pearl (PF §7) | A count and the label "Recurring gates"; the Kanban badge (`neutral` tone) says "waiting on you" |
+| Human gate | sand, `--sel-sand`, desert rose's tan (PF §7) | A count and the label "Recurring gates"; the Kanban badge (`neutral` tone) says "waiting on you" |
 | Approval prompt | `--ui-blue` | The label "Approval prompts" |
-| Calm trigger and high load | silver, `--ui-text-tertiary`; calm dots are hollow rings (PF §7) | The words "Load: High" and the reason line |
+| Calm trigger and high load | pale sand; calm dots are hollow rings (PF §7) | The words "Load: High" and the reason line |
 | Fix landed | `--ui-green` | The word "fixed" |
 | Everything else | `--ui-text-secondary/tertiary`, `--ui-stroke-*`, `--ui-bg-card` | Not applicable |
 
@@ -57,7 +57,7 @@ Load measures the human's overload over the last 24 hours, counted from Calm tri
 |---|---|---|
 | **Clear** | 1 | No Calm triggers |
 | **Rising** | 2 | 1–2 triggers |
-| **High** | 3, silver | 3 or more triggers, or 2 within 15 minutes |
+| **High** | 3, pale sand | 3 or more triggers, or 2 within 15 minutes |
 
 An unknown value from the backend renders as Clear.
 
