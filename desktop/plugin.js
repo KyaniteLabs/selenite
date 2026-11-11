@@ -26,13 +26,16 @@ const FONTS = {
 // Identity: Selenite is white satin spar (docs/DESIGN-PREFLIGHT.md §3, §7). On dark
 // chrome the identity ink is the host's primary text (near-white); on light chrome
 // it falls back to host ink, and the icon carries the identity. State never rides
-// on colour alone: every state has a text label next to it. No brown or orange:
-// gate takes the family magenta and load the family turquoise, pulled toward host ink
-// so they hold contrast on light and dark chrome (PF §7).
+// on colour alone: every state has a text label next to it. Calm stone colours
+// Walnut (Simon, 2026-11-10): the page paints a lighter, translucent take on
+// his Walnut system's warm ground, one fixed mode, no black and no white. Gate is Walnut's
+// amber cream, load is its faint sand, approval and fix are its pastel blue and
+// green (PF §7; tokens from ~/.local/share/walnut/design-system).
 const CSS = `
 ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-style:normal;font-weight:${w};font-display:swap;src:url(data:font/woff;base64,${b}) format('woff')}`).join('\n')}
-.sel-host{container-type:inline-size;width:100%}
-.sel{--sel-id:var(--ui-text-primary);--sel-gate:color-mix(in oklab,#FF1A6E 85%,var(--ui-text-primary));--sel-appr:var(--ui-blue);--sel-fix:var(--ui-green);--sel-load:color-mix(in oklab,#00FFE6 70%,var(--ui-text-primary));
+.sel-host{container-type:inline-size;width:100%;min-height:100%;color-scheme:dark;background:rgba(122,110,98,.74);-webkit-backdrop-filter:blur(28px) saturate(1.15);backdrop-filter:blur(28px) saturate(1.15);color:#fffaf2;--ui-bg-primary:transparent;--ui-bg-editor:transparent;--ui-surface-background:transparent;--ui-bg-secondary:rgba(255,248,238,.08);--ui-bg-elevated:rgba(255,248,238,.10);--ui-bg-card:rgba(255,248,238,.09);--ui-bg-tertiary:rgba(255,248,238,.08);--ui-bg-input:rgba(59,52,46,.28);--ui-control-hover-background:rgba(255,248,238,.14);--ui-control-active-background:rgba(255,248,238,.20);--ui-row-hover-background:rgba(255,248,238,.10);--ui-selection-background:rgba(255,248,238,.22);--ui-text-primary:#fffaf2;--ui-text-secondary:#f3ebdf;--ui-text-tertiary:#e6dccf;--ui-text-quaternary:#d8ccbd;--ui-stroke-primary:rgba(255,250,242,.30);--ui-stroke-secondary:rgba(255,250,242,.22);--ui-stroke-tertiary:rgba(255,250,242,.20);--ui-stroke-quaternary:rgba(255,250,242,.10);--ui-accent:#f7d4ae;--ui-blue:#c6d8f3;--ui-green:#c9dead;--ui-red:#f5cec6}
+@media (prefers-reduced-transparency:reduce){.sel-host{background:#74685d;-webkit-backdrop-filter:none;backdrop-filter:none;--ui-bg-card:#6a5f55;--ui-bg-secondary:#6f6359}}
+.sel{--sel-id:#fffaf2;--sel-gate:#f7d4ae;--sel-load:#d8ccbd;--sel-appr:#c6d8f3;--sel-fix:#c9dead;
   --sel-display:'${FACE}',var(--font-sans);font-family:var(--font-sans);font-size:13px;line-height:1.45;color:var(--ui-text-primary);
   box-sizing:border-box;width:100%;max-width:1120px;margin:0 auto;padding:24px 28px 48px;display:flex;flex-direction:column;gap:20px}
 .sel *,.sel *::before,.sel *::after{box-sizing:border-box}
@@ -88,7 +91,7 @@ ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-s
 .sel-ev:first-child{border-top:0}
 .sel-dot{width:6px;height:6px;border-radius:50%;background:var(--ui-text-tertiary)}
 .sel-dot[data-k=gate],.sel-dot[data-k=blocked]{background:var(--sel-gate)}
-.sel-dot[data-k=calm]{background:var(--sel-load)}
+.sel-dot[data-k=calm]{background:transparent;box-shadow:inset 0 0 0 1.5px var(--sel-load)}
 .sel-dot[data-k=approval]{background:var(--sel-appr)}
 .sel-dot[data-k=fix]{background:var(--sel-fix)}
 .sel-kind{font-family:var(--sel-display);font-weight:500;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ui-text-secondary)}
@@ -612,7 +615,7 @@ export default {
         run: () => ctx.rest(`/proposal?days=${prefs.get().days}`, { method: 'POST' }).then(() => host.navigate(PATH), fail(tNow('err.draft'))) } },
       ...(KANBAN_CARD_AREAS?.badges ? [{ id: 'waiting', area: KANBAN_CARD_AREAS.badges, data: {
         decorate: card => (prefs.get().kanbanBadges && blocked().has(card.id)
-          ? { label: tNow('kanban.badge'), tone: 'pink', tooltip: tNow('kanban.tip') }
+          ? { label: tNow('kanban.badge'), tone: 'neutral', tooltip: tNow('kanban.tip') }
           : null)
       } }] : [])
     ])

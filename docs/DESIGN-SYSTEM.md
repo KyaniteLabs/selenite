@@ -38,9 +38,9 @@ Selenite runs inside Hermes. It takes the host's theme and adds three things of 
 | Meaning | Variable | Always paired with |
 |---|---|---|
 | Identity: glyph, meter, wordmark | `--ui-text-primary` (white on dark, ink on light) | Not applicable; identity only |
-| Human gate | family magenta `#FF1A6E`, 15% toward host ink (PF §7) | A count and the label "Recurring gates"; the Kanban badge (`pink` tone) says "waiting on you" |
+| Human gate | Walnut amber cream `#f7d4ae` (PF §7) | A count and the label "Recurring gates"; the Kanban badge (`neutral` tone) says "waiting on you" |
 | Approval prompt | `--ui-blue` | The label "Approval prompts" |
-| Calm trigger and high load | family turquoise `#00FFE6`, 30% toward host ink (PF §7) | The words "Load: High" and the reason line |
+| Calm trigger and high load | Walnut faint sand `#bcae9d`; calm dots are hollow rings (PF §7) | The words "Load: High" and the reason line |
 | Fix landed | `--ui-green` | The word "fixed" |
 | Everything else | `--ui-text-secondary/tertiary`, `--ui-stroke-*`, `--ui-bg-card` | Not applicable |
 
@@ -57,7 +57,7 @@ Load measures the human's overload over the last 24 hours, counted from Calm tri
 |---|---|---|
 | **Clear** | 1 | No Calm triggers |
 | **Rising** | 2 | 1–2 triggers |
-| **High** | 3, turquoise | 3 or more triggers, or 2 within 15 minutes |
+| **High** | 3, faint sand | 3 or more triggers, or 2 within 15 minutes |
 
 An unknown value from the backend renders as Clear.
 
@@ -86,7 +86,7 @@ Below 760px the layout drops to one column and the bars and notes are hidden.
 |---|---|---|
 | Desktop page | `ROUTES_AREA` `/selenite`, plus `SIDEBAR_NAV_AREA` (`wand` codicon: a selenite wand) | Everything above |
 | Status chip | `STATUSBAR_AREAS.right` | The blade, plus the number of open gates today. Its tooltip and aria-label give the load and the gate count. Clicking it opens the page |
-| Kanban badge | `KANBAN_CARD_AREAS.badges` | "waiting on you" (`pink`) on tasks blocked on a human gate |
+| Kanban badge | `KANBAN_CARD_AREAS.badges` | "waiting on you" (`neutral`) on tasks blocked on a human gate |
 | Palette | `PALETTE_AREA` | Open the friction ledger, run a cleanse, or draft an evolve proposal |
 | Settings | `registerSettingsPage` | Chip toggle, chip style, Kanban badges and the privacy note |
 | Web dashboard tab | `dashboard/manifest.json` tab `after:sessions`, entry `dist/index.js` | Load, the four totals and recurring gates with Mark fixed. Uses only the dashboard SDK components |
