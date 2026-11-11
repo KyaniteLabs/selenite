@@ -4,7 +4,7 @@ description: Take friction off the human, treated as accessibility. Clears every
 license: MIT
 metadata:
   product: Selenite
-  version: 0.5.0
+  version: 0.5.1
 ---
 
 # frictionless
