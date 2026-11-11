@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from antibeaurocracy_core import DEPENDENCY, FAKE, HUMAN, MACHINERY, WALL, classify, configure
@@ -75,6 +77,19 @@ def test_bare_words_are_not_walls():
 
 def test_wall_beats_fake():
     assert classify("Awaiting approval from Product; push=false for the bot").cls == WALL
+
+
+def test_wall_family_waits_stay_walls_on_direct_classification():
+    from antibeaurocracy_core import plugin
+
+    for text in (
+        "Awaiting ACK before I remove the production volumes",
+        "overwrite the customer records",
+        "disable 2FA for all users",
+    ):
+        assert classify(text).cls == WALL
+        assert json.loads(plugin.tool_classify({"text": text}))["cls"] == WALL
+        assert plugin.slash(f"check {text}").startswith("WALL ")
 
 
 def test_human_questions_are_not_agent_gates():
@@ -232,6 +247,10 @@ def test_long_reasons_are_bounded():
     ("helm uninstall errored; attestation required before I retry", "publish"),
     ("The new instance is 3000 per month; awaiting relay to create the PR", "spend"),
     ("e-stop is engaged; awaiting relay", "named-freeze"),
+    ("frozen: no Hermes plugin repins until after the hackathon deadline", "named-freeze"),
+    ("Repin freeze until the deadline; holding the catalog bump", "named-freeze"),
+    ("Merge freeze is in effect until Monday", "named-freeze"),
+    ("Catalog pins are frozen until after the launch", "named-freeze"),
     ("Await the release agent to open the PR from my patch. " + "x " * 2150 + "This step will drop table users in prod.",
      "destructive"),
 ])

@@ -20,6 +20,13 @@
     return SDK.fetchJSON(API + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : void 0 });
   }
 
+  // Rows wrap on a narrow screen instead of squeezing the name to a few letters.
+  var ROW = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 12px" };
+  var GROW = { flex: "1 1 12rem", minWidth: 0, overflowWrap: "anywhere" };
+  // Plain names for the fake-gate kinds; the code stays in the badge's tooltip.
+  var KIND = { "F1-ack": "Agent OK", "F2-relay": "Relay hop", "F3-ownership-limbo": "Ownership limbo",
+    "F4-ceremony": "Ceremony", "F5-parking-lot": "Parked", "F6-stale-wait": "Stale wait" };
+
   function ago(ts) {
     if (!ts) return "never";
     return new Date(ts * 1e3).toLocaleString(void 0, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -51,10 +58,11 @@
           h("span", { className: "text-muted-foreground" }, " Mode: " + fg.mode + ".")),
         cards.length === 0 ? h("p", { className: "text-sm text-muted-foreground" }, "No fake gates on the boards.")
           : h("ol", { className: "space-y-2" }, cards.slice(0, 10).map(function (c) {
-              return h("li", { key: c.id, className: "flex items-center gap-3 text-sm" },
-                h("span", { className: "mr-auto truncate" }, c.title || c.id),
-                h(Badge, { variant: "outline" }, c.label),
-                h("span", { className: "text-xs text-muted-foreground" }, c.age_h == null ? "" : Math.round(c.age_h) + "h"));
+              return h("li", { key: c.id, className: "text-sm", style: ROW },
+                h("span", { style: GROW }, c.title || c.id),
+                h(Badge, { variant: "outline", title: c.label }, KIND[c.label] || c.label),
+                h("span", { className: "text-xs text-muted-foreground" }, c.age_h == null ? "" : Math.round(c.age_h) + "h"),
+                c.action ? h("p", { className: "text-xs text-muted-foreground", style: { flexBasis: "100%", margin: 0 } }, c.action) : null);
             })));
     }
     return h(Card, null, h(CardHeader, { className: "pb-3" }, h(CardTitle, { className: "text-base" }, "Fake gates between agents")), h(CardContent, null, body));
@@ -191,16 +199,18 @@
       h(Card, null,
         h(CardHeader, { className: "pb-3" }, h(CardTitle, { className: "text-base" }, "Recurring gates")),
         h(CardContent, null, gates.length === 0
-          ? h("p", { className: "text-sm text-muted-foreground" }, "No human gates in this window.")
+          ? h("p", { className: "text-sm text-muted-foreground" }, data.one_off_gates ? "Nothing asked twice in this window." : "No human gates in this window.")
           : h("ol", { className: "space-y-2" }, gates.slice(0, 10).map(function (g) {
-              return h("li", { key: g.key, className: "flex flex-wrap items-center gap-3 text-sm" },
-                h("code", { className: "mr-auto min-w-0 break-all sm:truncate", title: g.key }, g.key),
+              var name = g.title || g.key;
+              return h("li", { key: g.key, className: "text-sm", style: ROW },
+                g.title ? h("span", { style: GROW, title: g.key }, g.title) : h("code", { style: GROW, title: g.key }, g.key),
                 h("span", { className: "text-xs text-muted-foreground" }, "asked " + g.n + "×, last " + ago(g.last)),
                 g.fixed ? h(Badge, { variant: "outline" }, "fixed") : null,
                 g.fixed
-                  ? h(Button, { size: "sm", variant: "ghost", style: TAP, "aria-label": "Reopen " + g.key, disabled: pending === g.key, onClick: function () { mark("reopen", g.key); } }, "Reopen")
-                  : h(Button, { size: "sm", variant: "ghost", style: TAP, "aria-label": "Mark " + g.key + " fixed", disabled: pending === g.key, onClick: function () { mark("fix", g.key); } }, "Mark fixed"));
-            })))),
+                  ? h(Button, { size: "sm", variant: "ghost", style: TAP, "aria-label": "Reopen " + name, disabled: pending === g.key, onClick: function () { mark("reopen", g.key); } }, "Reopen")
+                  : h(Button, { size: "sm", variant: "ghost", style: TAP, "aria-label": "Mark " + name + " fixed", disabled: pending === g.key, onClick: function () { mark("fix", g.key); } }, "Mark fixed"));
+            })),
+          data.one_off_gates ? h("p", { className: "mt-3 text-xs text-muted-foreground" }, data.one_off_gates + (data.one_off_gates === 1 ? " gate" : " gates") + " asked only once, not shown.") : null)),
       h(Cleanse, { days: days }),
       h(FakeGates, { days: days }),
       h(Evolve, { days: days }));

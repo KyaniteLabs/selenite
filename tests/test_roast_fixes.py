@@ -126,6 +126,12 @@ def test_redaction_keeps_the_auth_scheme_word():
     assert ledger.redact("Authorization: Bearer abcdef0123456789abcdef") == "Authorization: Bearer <token>"
 
 
+def test_redaction_keeps_noncard_numbers_and_authority_words():
+    text = "deploy at 1731326400000 failed; authority: ceo approved; t_1731326400123"
+    assert ledger.redact(text) == text
+    assert ledger.redact("card 4111 1111 1111 1111") == "card <card>"
+
+
 # Fable roast lows: S1 quoted text, S4 active home only, S5 deleted cards.
 
 def test_calm_ignores_quoted_fenced_and_pasted_text():

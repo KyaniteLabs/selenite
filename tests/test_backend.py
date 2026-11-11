@@ -35,7 +35,8 @@ def test_empty_state():
 
 
 def test_fix_regression_and_reopen():
-    ledger.add("gate", "gh-login"); time.sleep(0.01)
+    ledger.add("gate", "gh-login"); ledger.add("gate", "gh-login")  # recurring = asked twice or more
+    time.sleep(0.01)
     ledger.add("fix", "gh-login")
     assert api.overview(30)["gates"][0]["fixed"] is True
     time.sleep(0.01); ledger.add("gate", "gh-login")
@@ -117,12 +118,12 @@ def test_rows_in_a_fallback_state_folder_reach_the_pane(tmp_path, monkeypatch):
     for p in (led.LEDGER, led.ROTATED):
         p.unlink(missing_ok=True)
     row = {"ts": time.time(), "kind": "gate", "key": "fallback-only", "note": "", "agent": "x"}
-    (fallback / "ledger.jsonl").write_text(json.dumps(row) + "\n")
+    (fallback / "ledger.jsonl").write_text((json.dumps(row) + "\n") * 2)  # recurring = asked twice or more
     o = api.overview(30)
     assert o["has_ledger"] is True and [g["key"] for g in o["gates"]] == ["fallback-only"]
     time.sleep(0.01)
     with (fallback / "ledger.jsonl").open("a") as fh:
-        fh.write(json.dumps({**row, "ts": time.time(), "key": "fallback-two"}) + "\n")
+        fh.write((json.dumps({**row, "ts": time.time(), "key": "fallback-two"}) + "\n") * 2)
     assert {g["key"] for g in api.overview(30)["gates"]} == {"fallback-only", "fallback-two"}
 
 

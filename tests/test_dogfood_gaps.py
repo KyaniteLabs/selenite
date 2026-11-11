@@ -118,7 +118,7 @@ def test_headline_with_nothing_blocked_skips_the_percentage():
 def test_web_tab_has_cleanse_evolve_and_readable_gate_names():
     js = (ROOT / "dashboard" / "dist" / "index.js").read_text()
     assert '"/cleanse"' in js and '"/proposal"' in js
-    assert 'title: g.key' in js and "break-all" in js
+    assert 'title: g.key' in js and 'overflowWrap: "anywhere"' in js
     assert '" Calm trigger"' in js
 
 
