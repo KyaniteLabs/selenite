@@ -3,7 +3,7 @@ Disclosure first: Selenite makes no network calls and reads no credentials. Its 
 - **Calm mode** (`pre_llm_call`): when two overload signals show up in your messages, it adds a short context note telling the agent to ask nothing else and reply in one line. Walls still get one short question. It stays off inside a Kanban worker.
 - **Fake gates** (`pre_tool_call`, `transform_tool_result`, on `kanban_block` only): in `nudge` (default) a block that reads as agent bureaucracy goes through with a note saying what to do instead. In `ask` an evidenced fake is handed back once with a question asking what kind of wait it is; any declared kind goes through. It never approves, unblocks, closes or edits a card, and never acts on `kanban_complete` or any other tool.
 
-Files written: a metadata-only ledger (event, tool, card id, verdict, declared kind, confidence, mode, session id; never block reasons or prompt text; 0600; rotates at 4 MB), per-card question counts with a TTL, and a counts-only snapshot under `$HERMES_HOME/plugin-data/antibeaurocracy/`; reports and its own ledger under `~/.local/state/selenite` (folder 0700, files 0600). `kanban.db` is opened with SQLite `mode=ro`. No child processes from the plugin; the CLI's opt-in `--judge CMD` runs a command the user names, never the plugin.
+Files written: a metadata-only ledger (event, tool, card id, verdict, declared kind, confidence, mode, session id; never block reasons or prompt text; 0600; rotates at 4 MB), per-card question counts with a TTL, and a counts-only snapshot under `$HERMES_HOME/plugin-data/antibeaurocracy/`; reports and its own ledger under the Selenite state directory (`SELENITE_STATE`, else XDG state, else `HERMES_HOME`; folder 0700, files 0600). `kanban.db` is opened with SQLite `mode=ro`. No child processes from the plugin; the CLI's opt-in `--judge CMD` runs a command the user names, never the plugin.
 
 ## What it does
 
@@ -27,9 +27,9 @@ Why it's a plugin and not an MCP server: the value is at the hook. It acts while
 - [x] Unattended runs: nothing waits for a person; Calm is off inside Kanban workers.
 - [x] Capabilities in this entry match `plugin.yaml` and what `register()` calls.
 - [x] `requires_hermes: ">=0.23.0"`, full 40-character pin.
-- [x] `hermes plugins validate` at the pinned SHA: ok, no warnings ([hermes-validate job](https://github.com/KyaniteLabs/selenite/actions/runs/42949372006)).
-- [x] Tests at the pinned SHA, Python 3.10–3.14 and against Hermes: [CI run](https://github.com/KyaniteLabs/selenite/actions/runs/42949372006).
-- [x] Live install: `hermes plugins install` of the pinned SHA into a clean Hermes home enables headlessly. At the previous pin (`51e7804`), real `kanban_block` calls on a throwaway board: a relay or ceremony block goes through with a note (nudge) or is handed back once and passes with a declared kind (ask); a credential block and `kanban_complete` are untouched; Calm fires on two overload signals and not on one; Selenite's files hold no block reason or prompt text, and all are 0600. Since then the hook code changed in one place (open Kanban badges now re-read every state folder), covered by the test suite.
+- [x] `hermes plugins validate` at the pinned SHA: ok, no warnings ([hermes-validate job](https://github.com/KyaniteLabs/selenite/actions/runs/42952520278)).
+- [x] Tests at the pinned SHA, Python 3.10–3.14 and against Hermes: [CI run](https://github.com/KyaniteLabs/selenite/actions/runs/42952520278).
+- [x] Live install: `hermes plugins install` of the pinned SHA (`6603e37`) into a clean Hermes home enables headlessly; validate ok with no warnings; [CI 42952520278](https://github.com/KyaniteLabs/selenite/actions/runs/42952520278) green.
 - [ ] Demo video: REPLACE with link.
 
 ## Relation to other KyaniteLabs entries
