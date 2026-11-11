@@ -6,7 +6,7 @@
 
 Friction here means every bit of effort a person spends that a tool could have spent: a login, a copied token, a trip through a dashboard, a command to remember, an approval clicked for the fortieth time, a wall of text to read, a question to answer. That makes it an accessibility problem as much as an agent problem. Every step removed helps the person who is tired, overloaded, on a phone, using a screen reader or keyboard only, or working with ADHD or another disability.
 
-People keep a selenite wand next to their other crystals to clear and recharge them. Selenite does that for your agent stack. It sweeps your skills, plugins, hooks, approval prompts, runbooks and Kanban boards for whatever keeps handing work back to you, ranks it by how often it lands on you, and drafts the fix. When a human step really can't be removed, it shrinks it to one paste-ready command that checks its own result. When your messages show overload, it switches the agent to no questions and one-line replies.
+People keep a selenite wand next to their other crystals to clear and recharge them. Selenite does that for your agent stack. It sweeps your skills, plugins, hooks, approval prompts, runbooks and Kanban boards for whatever keeps handing work back to you, ranks it by how often it lands on you, and drafts the fix. When a human step really can't be removed, it shrinks it to one paste-ready command that checks its own result. When your messages show overload, it cues the agent toward no questions and one-line replies.
 
 One test runs through all of it: **does this step, wait or check earn its cost to the person?** Selenite applies it in three facets:
 
