@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
+from . import __version__
 from . import audit as _audit
 from . import judge as _judge
 from . import settings as _settings
@@ -46,7 +48,7 @@ def handle(args: argparse.Namespace, settings: dict | None = None) -> int:
     _settings.apply(settings, extra_seats=getattr(args, "seat", None) or ())
     if args.cmd == "classify":
         text = " ".join(args.text) if args.text else sys.stdin.read()
-        if not text.strip():
+        if not re.search(r"\w", text):
             print("antibeaurocracy: nothing to classify (pass the reason as text or on stdin).", file=sys.stderr)
             return 2
         v = classify(text, kind=args.kind, age_hours=args.age_hours)
@@ -85,6 +87,7 @@ def handle(args: argparse.Namespace, settings: dict | None = None) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="antibeaurocracy", description="Find and dissolve fake gates in agent work.")
+    p.add_argument("--version", action="version", version=f"antibeaurocracy {__version__}")
     add_arguments(p)
     args = p.parse_args(argv)
     if not args.cmd:
