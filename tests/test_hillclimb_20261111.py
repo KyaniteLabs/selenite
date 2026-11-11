@@ -98,3 +98,24 @@ def test_repeat_work_phrasings_count(text):
 ])
 def test_neutral_phrasings_do_not_count(text):
     assert "repeat_work" not in _signals.overload(text)
+
+
+# S-U1: with nothing blocked, the headline must not print "0 of the blocked (0%)".
+def test_headline_zero_blocked_is_plain():
+    from antibeaurocracy_core import audit
+    s = {"blocked": 0, "running": 3, "fake": 0, "fake_share": 0.0}
+    h = audit.headline(s)
+    assert "0 of the blocked" not in h and "(0%)" not in h
+    assert "Nothing blocked" in h and "3 running" in h
+
+
+def test_headline_zero_blocked_still_reports_board_errors():
+    from antibeaurocracy_core import audit
+    s = {"blocked": 0, "running": 0, "fake": 0, "fake_share": 0.0, "errors": ["x"]}
+    assert "could not be read" in audit.headline(s)
+
+
+def test_headline_nonzero_unchanged():
+    from antibeaurocracy_core import audit
+    s = {"blocked": 4, "running": 2, "fake": 1, "fake_share": 0.25}
+    assert audit.headline(s).startswith("4 blocked vs 2 running. 1 of the blocked (25%)")

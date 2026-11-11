@@ -268,7 +268,7 @@ def headline(s: dict) -> str:
     if s.get("boards") == 0:
         return "No boards found. Point HERMES_HOME (or --all-homes) at a Hermes home with a kanban board."
     if not s.get("blocked"):
-        line = f"Nothing blocked; {s.get('running', 0)} running."
+        line = f"Nothing blocked; {s.get('running') or 0} running."
     else:
         line = (f"{s['blocked']} blocked vs {s['running']} running. {s['fake']} of the blocked "
                 f"({int(s['fake_share'] * 100)}%) wait on agent bureaucracy, by the reasons they give.")
