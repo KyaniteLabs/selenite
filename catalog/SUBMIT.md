@@ -1,20 +1,20 @@
 # Submitting Selenite to the Hermes plugin catalog
 
-The maintainer's clicks only, on Nov 11 by 11:00 AM PT. Nothing here has been opened, pushed or posted.
+The maintainer's clicks only, on Nov 11 by 11:00 AM PT. Nothing upstream has been opened or posted.
 
 ## Before the PR can open
 
-1. **Launch the GitHub repo.** The catalog installs from `https://github.com/KyaniteLabs/selenite` at the pinned SHA, and today that repo is an empty public teaser. Pushing `main` there is the launch, and it's your call. After you say "launch", the push is:
-   `git -C <selenite checkout> push github main` (the push URL is fenced until then).
-2. **Check the pin exists on GitHub:** `gh api repos/KyaniteLabs/selenite/commits/20942e5b21e403ef82352c889bb017a632ec42c3 --jq .sha`
-3. **Validate the pinned tree, not today's main:**
+The repo is public and `main` is launched. The catalog pins `51e780482936e7211a829e26271795cf76c44f92`, and CI at that commit passed hermes-validate and tests 3.10 to 3.14 ([run](https://github.com/KyaniteLabs/selenite/actions/runs/42941467120)).
+
+1. **Check the pin exists on GitHub:** `gh api repos/KyaniteLabs/selenite/commits/51e780482936e7211a829e26271795cf76c44f92 --jq .sha`
+2. **Validate the pinned tree, not today's main:**
    ```sh
    mkdir -p ~/hackathon-submit/selenite && cd ~/hackathon-submit/selenite
    git clone https://github.com/KyaniteLabs/selenite.git product
-   git -C product archive 20942e5b21e403ef82352c889bb017a632ec42c3 | (mkdir pinned && tar -x -C pinned)
+   git -C product archive 51e780482936e7211a829e26271795cf76c44f92 | (mkdir pinned && tar -x -C pinned)
    hermes plugins validate pinned --json      # expect ok true, no warnings
    ```
-4. Fill the three unchecked boxes in `catalog/PR-BODY.md` with the validate receipt, the CI run and the demo link. If a banner and screenshots exist at the pinned SHA, add `image:` and `screenshots:` to the yaml with raw URLs pinned to that SHA.
+3. Fill the last unchecked box in `catalog/PR-BODY.md` with the demo link.
 
 ## Opening it (the maintainer's personal GitHub login)
 
