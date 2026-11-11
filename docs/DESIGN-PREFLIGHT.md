@@ -80,3 +80,10 @@ Rejected metaphors:
 - Selenite's identity colour is white. On dark chrome the identity accent is pearl `#ECE9E2`.
 - On light chrome a white tint would vanish, so the icon carries the identity and the UI uses host ink.
 - Gate, approval and fix states use host semantic tokens, and every one of them is paired with a text label. Colour never carries state alone.
+
+## 8. Landed mark
+
+- The owner picked round 14 E on 2026-11-10: a thick raw satin-spar shard, set diagonally, with an off-centre, moderately pointed tip. This follows the owner's corrections: a shard like a raw selenite wand, "more angled, more pointy but not ultra pointy, and not centered".
+- Files: `branding/selenite.png` (1024² master, transparent), `branding/selenite-{512,192,32}.png`, and `icon.png` (512², the epoch-hermes plugin-icon convention).
+- The concept SVG in `assets/icon.svg` stays as a construction note only.
+- The 2:1 catalog banner and the catalog `image` field are still to come, pinned to a reviewed commit.

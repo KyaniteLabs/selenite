@@ -1,5 +1,7 @@
 # Selenite
 
+<p align="center"><img src="branding/selenite-512.png" alt="Selenite icon: a thick raw satin-spar shard" width="160"></p>
+
 **Selenite takes friction off the human: fewer manual steps, fewer clicks, fewer things to remember, read or decide.**
 
 Friction here means every bit of effort a person spends that a tool could have spent: a login, a copied token, a trip through a dashboard, a command to remember, an approval clicked for the fortieth time, a wall of text to read, a question to answer. That makes it an accessibility problem as much as an agent problem. Every step removed helps the person who is tired, overloaded, on a phone, using a screen reader or keyboard only, or working with ADHD or another disability.
@@ -26,7 +28,8 @@ Walls always stand: credentials, spend, publishing or deploying, destructive ste
 | `install.sh` | Links the skills into each agent it finds and the CLI into `~/.local/bin`, creates the state folder (0700) and checks the ledger works. Add `--hermes` to also link the plugin and enable it in Hermes. Idempotent; it never overwrites a real file or folder, and warns when a real folder hides a skill link. A read-only target (an agent seat, a managed Mac, a container) is skipped, not fatal: every target is attempted and the last line counts linked, skipped and failed. `--no-enable` links the plugin but leaves `hermes plugins enable` to you. |
 | `desktop/` | The Hermes Desktop page, status chip and Kanban badges (`plugin.js`), plus the Chakra Petch subsets it embeds. |
 | `dashboard/` | The web dashboard tab and its backend routes (`plugin_api.py`, plus `fake_gates_api.py` for the fake-gate card), served by Hermes under `/api/plugins/selenite/`. |
-| `assets/` | The icon concept and the Chakra Petch font license (OFL). |
+| `assets/` | The icon concept SVG and the Chakra Petch font license (OFL). |
+| `branding/`, `icon.png` | The approved icon render and its sizes. |
 | `docs/` | The design system, the design preflight receipt, `MERGE-INTENT.md` (why the three facets are one product) and `CHECKYOURSELF-BOUNDARY.md` (where Selenite stops and Check Yourself starts). |
 | `CHANGELOG.md`, `NOTICE` | Release notes, and the attribution for the merged antibeaurocracy and antipedantry code. |
 | `tests/` | Unit tests for the scripts, the plugin hooks, the backend routes, and the needs-no-cleansing requirement. |
