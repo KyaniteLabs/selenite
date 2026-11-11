@@ -59,6 +59,8 @@ The Desktop page reacts to agent tool calls through local Desktop events: ledger
 
 One Selenite per machine: if `~/.local/share/selenite` or another Hermes home already has the plugin, `--hermes` reuses that copy instead of adding a second checkout of the same plugin name, which Hermes refuses to admit (`Two workspace members are both named 'selenite'`).
 
+**macOS:** the plugin runs on macOS as well as Linux. The full unit suite passes on a Mac (Python 3.14), the state folder is `~/.local/state/selenite`, and `install.sh` is plain POSIX `sh`, so it works with the stock macOS shell. Windows is not listed: the installer is a shell script and was not run there.
+
 In a sandbox or a seat with a read-only home, the installer skips the folders it cannot write and still links the rest. `--hermes` ends with `hermes plugins enable selenite`; on a source checkout that command may first finish a pending Hermes update and rebuild its desktop app, so pass `--no-enable` when a caller has its own timeout and run the printed command yourself.
 
 Fake-gate settings live under `plugins.entries.selenite.settings`: `fake_gate_mode` (`observe`, `nudge` by default, or `ask`), `max_refusals`, `refusal_ttl_hours`, `min_confidence`, `extra_seats`, `extra_ceremony`, `doctrine_section`, `fake_gate_ledger` and `snapshot_minutes`. `plugin.yaml` says what each does. Start in `observe` or `nudge` and read the ledger before trying `ask`. The CLI and the dashboard card read the same `extra_seats`, `extra_ceremony` and `min_confidence`; `antibeaurocracy audit --seat NAME` adds to the configured seats.

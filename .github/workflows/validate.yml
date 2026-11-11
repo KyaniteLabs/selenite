@@ -29,8 +29,8 @@ jobs:
           test -L "$H/.local/bin/antibeaurocracy"
           again=$(HOME="$H" sh install.sh) && printf '%s\n' "$again" | grep "^ok " >/dev/null   # idempotent; grep -q would SIGPIPE install.sh under pipefail
   unit-os:
-    # macOS and Windows unit-test legs. Not yet proven green on a runner: catalog/selenite.yaml keeps
-    # `platforms: [linux]` until these pass.
+    # macOS and Windows unit-test legs. Catalog/selenite.yaml lists
+    # `platforms: [linux, macos]`; Windows stays out because install.sh is POSIX sh.
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
