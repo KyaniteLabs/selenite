@@ -110,4 +110,4 @@ python3 -m pip install pytest fastapi httpx && python3 -m pytest -q
 
 ## License
 
-MIT. The merged antibeaurocracy and antipedantry code keeps its own attribution in `NOTICE`.
+MIT. The merged antibeaurocracy and antipedantry code keeps its own attribution in `NOTICE`. Selenite is an independent project by KyaniteLabs and is not endorsed by Nous Research.
