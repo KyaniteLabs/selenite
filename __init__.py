@@ -286,7 +286,29 @@ def _tick_reconcile() -> None:
 
 # --- command ---------------------------------------------------------------
 
-def frictionless_command(raw_args: str) -> str:
+def frictionless_command(raw_args: str, *, session_key: str | None = None) -> str:
+    """Hand the request to the agent as a user turn; the reply to the human says what happened.
+
+    A slash command's return value is printed to the human, never sent to the agent, so the
+    agent-facing instructions travel through ``ctx.inject_message``. Where no agent turn can be
+    started (an old host, or a gateway without injection allowed), the human gets the text to send.
+    """
+    mode, prompt = frictionless_prompt(raw_args)
+    what = f"{mode.capitalize()} mode" if mode else "your request"
+    inject = getattr(_ctx, "inject_message", None)
+    try:
+        sent = bool(inject(prompt, session_key=session_key or None)) if inject else False
+    except Exception as exc:  # noqa: BLE001 - a failed hand-off must still answer the human
+        logger.warning("frictionless: could not start an agent turn: %s", exc)
+        sent = False
+    if sent:
+        return f"Selenite: handed {what} to your agent. It loads the frictionless skill and reports back here."
+    return ("Selenite could not start an agent turn from this surface. Send this to your agent:\n\n"
+            + prompt)
+
+
+def frictionless_prompt(raw_args: str) -> tuple[str, str]:
+    """(mode, the agent-facing instruction) for ``/frictionless`` arguments."""
     raw = (raw_args or "").strip()
     parts = raw.split(None, 1)
     word = parts[0].lower() if parts else ""
@@ -294,21 +316,21 @@ def frictionless_command(raw_args: str) -> str:
     rest = (parts[1] if len(parts) > 1 else "") if mode else raw
     head = "Load and follow the frictionless skill (skill_view name='selenite:frictionless').\n\n"
     if mode == "evolve":
-        return head + (
+        return mode, head + (
             "Run Evolve mode: run skills/frictionless/scripts/mine.py and cleanse.py at low priority, "
             "then evolve.py, read the proposal, and draft the accepted changes on a local branch of "
             "the Selenite repo. Opening a PR is the human's decision. Never edit the installed copy directly.\n"
             f"Plugin root: {ROOT}\n" + (f"Focus: {rest}\n" if rest else "")
         )
     if mode == "cleanse":
-        return head + (
+        return mode, head + (
             "Run Cleanse mode: run skills/frictionless/scripts/cleanse.py (read-only), take the top "
             "finding, and clear it with a reviewable change in the repo that owns that stone.\n"
             f"Plugin root: {ROOT}\n" + (f"Focus: {rest}\n" if rest else "")
         )
     if mode:
-        return head + f"Run {mode.capitalize()} mode." + (f"\n\nContext: {rest}" if rest else "")
-    return head + ("Pick the mode from the context." + (f"\n\nContext: {rest}" if rest else ""))
+        return mode, head + f"Run {mode.capitalize()} mode." + (f"\n\nContext: {rest}" if rest else "")
+    return "", head + ("Pick the mode from the context." + (f"\n\nContext: {rest}" if rest else ""))
 
 
 # --- tool ------------------------------------------------------------------
@@ -338,6 +360,9 @@ def selenite_ledger(args: dict, **_kw) -> str:
     try:
         if args.get("action") == "add":
             row = ledger.add(args["kind"], args["key"], args.get("note", ""), "hermes")
+            if row is None:   # no writable state destination: nothing was recorded, so do not say it was
+                return json.dumps({"success": False, "row": None,
+                                   "error": "ledger not writable: the row was not recorded"})
             return json.dumps({"success": True, "row": row})
         if args.get("action") == "cleanse":
             report = cleanse.run(int(args.get("days", 30)))

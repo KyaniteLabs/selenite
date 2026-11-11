@@ -85,7 +85,7 @@ _WALL = [
         r"deploy\w* (to )?(prod\w*|live)|terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall)|roll\w* out to (prod\w*|users|customers)|ship(ping)? to (prod\w*|customers|users)|merg\w* (\w+ ){0,3}(to|into) (main|master|prod\w*|release)|"
         r"submi\w* (\w+ ){0,3}(catalog|marketplace|store|registry)s?\b|(catalog|marketplace|store|registry) (entry|submission|listing)s?\b)", _I)),
     ("destructive", re.compile(
-        r"\b(irreversibl\w*|destructive|drop (table|database|schema)|truncate|rm -rf|force[- ]push|push (-f|--force)|git push --force|delete everything|"
+        r"\b(irreversibl\w*|destructive|drop (the |a |an |all |our |\w+ ){0,3}(tables?|databases?|schemas?|collections?|indexes|indices)\b|(prod\w*|production|live) (\w+ ){0,2}migrations?\b|truncate|rm -rf|force[- ]push|push (-f|--force)|git push --force|delete everything|"
         r"delet\w* (the |all |a |production |prod |user |customer )*(\w+ ){0,2}(repo|repository|database|db|rows?|tables?|buckets?|account|data|history|backups?|branch|records?|files?|users?|namespaces?|clusters?|volumes?|disks?|tenants?)|"
         r"rewrit\w* (git )?history|reset --hard|wipe|purge|erase|data[- ]loss|shut ?down (prod|production)|revoke (access|keys?))", _I)),
     ("legal", re.compile(
