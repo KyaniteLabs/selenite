@@ -20,6 +20,7 @@ It never writes a kanban row. Card actions stay with whoever owns the card. Its 
 from __future__ import annotations
 
 import json
+import math
 import logging
 import os
 import re
@@ -416,6 +417,8 @@ def on_kanban_dispatch_tick(dry_run: bool = False, **_kw):
 
 # ---------------------------------------------------------------- tools
 
+_KINDS = ("dependency", "needs_input", "capability", "transient")
+
 CLASSIFY_SCHEMA = {
     "name": "bureaucracy_classify",
     "description": ("Before you block a card on another agent, classify the reason. Returns WALL (stop and ask the "
@@ -424,7 +427,7 @@ CLASSIFY_SCHEMA = {
                     "proceed. It is a pattern heuristic: if in doubt, treat the wait as a wall."),
     "parameters": {"type": "object", "properties": {
         "text": {"type": "string", "description": "The block or wait reason."},
-        "kind": {"type": "string", "enum": ["dependency", "needs_input", "capability", "transient"]},
+        "kind": {"type": "string", "enum": list(_KINDS), "description": "The kanban block kind, if known."},
         "age_hours": {"type": "number", "description": "How long it has been waiting, if known."},
     }, "required": ["text"]},
 }
@@ -438,9 +441,37 @@ AUDIT_SCHEMA = {
 }
 
 
+def _bad_arguments(detail: str) -> str:
+    return json.dumps({"error": "bad_arguments", "detail": detail})
+
+
+def _check_classify_args(args) -> str | None:
+    """Why these arguments cannot be classified, or None. A wrong type must never turn into a verdict."""
+    if not isinstance(args, dict):
+        return "arguments must be an object with a text string"
+    text = args.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return "text must be a non-empty string (the block or wait reason)"
+    kind = args.get("kind")
+    if kind is not None and kind not in _KINDS:
+        return "kind must be one of " + ", ".join(_KINDS) + " (or omitted)"
+    age = args.get("age_hours")
+    if age is not None:
+        if isinstance(age, str):  # models often send numbers as text, and "3" has always been accepted
+            try:
+                age = float(age)
+            except ValueError:
+                age = None
+        if isinstance(age, bool) or not isinstance(age, (int, float)) or not math.isfinite(age) or age < 0:
+            return "age_hours must be a finite number of hours, 0 or more (or omitted)"
+    return None
+
+
 def tool_classify(args: dict, **_kw) -> str:
-    text = str(args.get("text") or "")
-    v = classify(text, kind=args.get("kind"), age_hours=args.get("age_hours"))
+    problem = _check_classify_args(args)
+    if problem:
+        return _bad_arguments(problem)
+    v = classify(args["text"], kind=args.get("kind"), age_hours=args.get("age_hours"))
     return json.dumps(dict(v.to_dict(), low_confidence=_low_confidence(v)))
 
 
