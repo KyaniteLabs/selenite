@@ -335,11 +335,11 @@ function SelenitePage({ ctx, prefs, pane, update, refreshStatus }) {
   const qc = useQueryClient()
   // Each live event gets a new cache generation: an older in-flight REST reply
   // can only populate its old key, never overwrite the event's refreshed data.
-  const overview = useQuery({ queryKey: [ID, 'overview', days, target.revision], queryFn: () => ctx.rest(`/overview?days=${days}`), refetchInterval: 30_000 })
-  const events = useQuery({ queryKey: [ID, 'events', days, target.revision], queryFn: () => ctx.rest(`/events?days=${days}&limit=40`), refetchInterval: 30_000 })
-  const proposal = useQuery({ queryKey: [ID, 'proposal', target.revision], queryFn: () => ctx.rest('/proposal') })
-  const cleanse = useQuery({ queryKey: [ID, 'cleanse', target.revision], queryFn: () => ctx.rest('/cleanse') })
-  const fake = useQuery({ queryKey: [ID, 'fake', days, target.revision], queryFn: () => ctx.rest(`/fake-gates/overview?days=${Math.min(days, 90)}&top=6`), refetchInterval: 60_000 })
+  const overview = useQuery({ queryKey: [ID, 'overview', days, target.revision], queryFn: () => ctx.rest(`/overview?days=${days}`), refetchInterval: 30_000, placeholderData: prev => prev })
+  const events = useQuery({ queryKey: [ID, 'events', days, target.revision], queryFn: () => ctx.rest(`/events?days=${days}&limit=40`), refetchInterval: 30_000, placeholderData: prev => prev })
+  const proposal = useQuery({ queryKey: [ID, 'proposal', target.revision], queryFn: () => ctx.rest('/proposal'), placeholderData: prev => prev })
+  const cleanse = useQuery({ queryKey: [ID, 'cleanse', target.revision], queryFn: () => ctx.rest('/cleanse'), placeholderData: prev => prev })
+  const fake = useQuery({ queryKey: [ID, 'fake', days, target.revision], queryFn: () => ctx.rest(`/fake-gates/overview?days=${Math.min(days, 90)}&top=6`), refetchInterval: 60_000, placeholderData: prev => prev })
   useEffect(() => {
     if (!target.view || !overview.data) return
     const section = target.view === 'overview' ? root.current
@@ -353,6 +353,7 @@ function SelenitePage({ ctx, prefs, pane, update, refreshStatus }) {
     el.scrollIntoView({ block: 'center' })
     el.focus({ preventScroll: true })
     focused.current = { request: target.focusRevision, el }
+    pane.set({ ...pane.get(), view: null, item_id: null })
   }, [target, overview.data, events.data, proposal.data, cleanse.data, fake.data])
   const refresh = () => { qc.invalidateQueries({ queryKey: [ID] }); refreshStatus() }
   const log = (kind, key, note) => ctx.rest('/events', { method: 'POST', body: { kind, key, note } })

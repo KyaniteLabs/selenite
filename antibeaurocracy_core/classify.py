@@ -137,6 +137,18 @@ WALL_FAMILY = re.compile(
     r"freeze|frozen|e-?stop|incident|embargo|kill switch|security|"
     r"ceo|cto|cfo|coo|founders?|owner|operator|human|boss|board|executives?|manager|person))\b", _I)
 
+# LLM token capacity is a compute limit, not an authentication credential. Match the
+# resource and its context structurally, then remove it before either wall detector runs.
+_LLM_TOKEN_CONTEXT = re.compile(
+    r"\b(?:(?:\d+\s+)?(?:more\s+)?tokens?\s+(?:of|for)\s+(?:the\s+)?(?:llm\s+)?context(?:\s+window)?|"
+    r"(?:out of|ran out of)\s+(?:the\s+)?(?:llm\s+)?tokens?|"
+    r"(?:llm\s+)?tokens?\s+(?:budget|limit)|"
+    r"(?:llm\s+)?context(?:\s+window)?\s+(?:is\s+)?(?:full|exhausted))\b", _I)
+
+
+def _without_llm_token_context(text: str) -> str:
+    return _LLM_TOKEN_CONTEXT.sub(" ", text)
+
 
 _HUMAN = re.compile(
     r"(\b(should i|shall i|do you want me to|want me to|would you like me to|may i|can i go ahead|ok to proceed|okay to proceed|"
@@ -262,7 +274,7 @@ def wall_family(text: str) -> bool:
     stop the question that a wait on another agent is meant to get."""
     t = re.sub(r"\b[\w-]+[ -](agent|seat|bot|lane|worker)s?\b", " ", str(text or ""), flags=_I)
     t = re.sub(rf"\b{_seats_rx()}\b", " ", t, flags=_I)
-    return bool(WALL_FAMILY.search(t))
+    return bool(WALL_FAMILY.search(_without_llm_token_context(t)))
 
 
 # An approval or review from a named party this plugin does not know ("approval from CoS", "until
@@ -354,7 +366,8 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
     age = _as_float(age_hours)
 
     # 1. Authority walls win over everything (negated mentions don't count).
-    walls = [(name, _hits(p, t, skip_negated=True)) for name, p in _WALL]
+    wall_text = _without_llm_token_context(t)
+    walls = [(name, _hits(p, wall_text, skip_negated=True)) for name, p in _WALL]
     walls = [(n, h) for n, h in walls if h]
     fakes = [(sub, _hits(p, t)) for sub, p in _FAKE]
     fakes = [(s, h) for s, h in fakes if h]

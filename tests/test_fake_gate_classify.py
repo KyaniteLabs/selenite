@@ -3,7 +3,7 @@ import json
 import pytest
 
 from antibeaurocracy_core import DEPENDENCY, FAKE, HUMAN, MACHINERY, WALL, classify, configure
-from antibeaurocracy_core.classify import ACK, ACTIONS
+from antibeaurocracy_core.classify import ACK, ACTIONS, wall_family
 
 WALLS = [
     ("npm publish fails: ENEEDAUTH, no working token on this host", "credentials"),
@@ -109,9 +109,16 @@ def test_wall_family_action_overrides_fake_ack(text):
 @pytest.mark.parametrize("text", [
     "blocked on token budget",
     "needs 2000 more tokens of context",
+    "need more tokens for context",
+    "out of tokens",
+    "the model ran out of tokens",
+    "token limit reached",
+    "more tokens for the context window",
+    "LLM context window is full",
 ])
 def test_llm_token_budget_is_not_a_credentials_wall(text):
     assert classify(text).cls != WALL
+    assert not wall_family(text)
 
 
 def test_human_questions_are_not_agent_gates():

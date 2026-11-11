@@ -1,6 +1,7 @@
 """Small, optional Desktop hints shared by the agent and dashboard writers."""
 import logging
 import re
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,8 @@ def valid_view(payload) -> bool:
 
 def broadcast(event, payload) -> None:
     """Refuse unknown fields; losing an optional event must never break a write."""
+    if "tui_gateway.server" not in sys.modules:
+        return  # the Hermes bridge imports the TUI server, which has process-wide stdout effects
     if not isinstance(event, str) or len(event) > 128 or not isinstance(payload, dict):
         return
     if event == "view.set":

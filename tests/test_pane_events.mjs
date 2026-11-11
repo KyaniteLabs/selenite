@@ -137,3 +137,14 @@ test('show focuses the matching item rather than interpreting its id as a select
   d.render()
   assert.equal(focused, 'item')
 })
+
+test('focus requests are cleared after the requested section receives focus', async () => {
+  const d = await desktop()
+  const section = { querySelectorAll: () => [], scrollIntoView() {}, focus() {} }
+  d.elements.set('[data-selenite-view="ledger"]', section)
+  d.emit('view.set', { view: 'ledger' })
+  d.render()
+  const pane = d.atoms.find(a => a.get()?.focusRevision === 1)
+  assert.equal(pane.get().view, null)
+  assert.equal(pane.get().item_id, null)
+})

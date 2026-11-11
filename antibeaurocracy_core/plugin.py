@@ -481,7 +481,8 @@ def _low_confidence(v) -> bool:
 
 
 def _boards(home: Path | None = None) -> list[dict]:
-    return [_audit.audit_board(db) for db in _audit.find_boards([home or _hermes_home()])]
+    dbs = _kanban_dbs(None) if home is None else _audit.find_boards([home])
+    return [_audit.audit_board(db) for db in dbs if Path(db).is_file()]
 
 
 def tool_audit(args: dict | None = None, **_kw) -> str:

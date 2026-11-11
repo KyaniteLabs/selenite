@@ -102,6 +102,31 @@ def test_fix_order():
     assert "a" not in ledger.fixed_keys()
 
 
+@pytest.mark.parametrize("text", [
+    "authorization: ApiKey abcdef0123456789",
+    "authorization: Digest username=private, realm=internal",
+    "oauth: Bearer abc.def.ghi",
+    "authorization: scheme-with-arbitrary-format secret-value",
+])
+def test_authorization_headers_redact_the_complete_value(text):
+    redacted = ledger.redact(text)
+    assert "abcdef0123456789" not in redacted
+    assert "username=private" not in redacted
+    assert "abc.def.ghi" not in redacted
+    assert "secret-value" not in redacted
+
+
+@pytest.mark.parametrize("text,secret", [
+    ("private_key=short-secret", "short-secret"),
+    ("credential: short-secret", "short-secret"),
+    ("cookie=session-value", "session-value"),
+    ("sessionid=short-secret", "short-secret"),
+    ("curl -u user:pass https://example.test", "user:pass"),
+])
+def test_common_secret_fields_and_curl_credentials_are_redacted(text, secret):
+    assert secret not in ledger.redact(text)
+
+
 def test_rotation_keeps_history_readable(monkeypatch):
     monkeypatch.setattr(ledger, "ROTATE_BYTES", 200)
     for i in range(10):

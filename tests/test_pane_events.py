@@ -1,5 +1,6 @@
 """Agent-to-Desktop events carry bounded hints, never private ledger/report text."""
 import json
+import os
 import sys
 from types import ModuleType
 
@@ -15,6 +16,8 @@ def bridge(monkeypatch):
     events.broadcast_plugin_event = lambda *args: calls.append(args)
     monkeypatch.setitem(sys.modules, "hermes_cli", ModuleType("hermes_cli"))
     monkeypatch.setitem(sys.modules, "hermes_cli.plugin_events", events)
+    monkeypatch.setitem(sys.modules, "tui_gateway", ModuleType("tui_gateway"))
+    monkeypatch.setitem(sys.modules, "tui_gateway.server", ModuleType("tui_gateway.server"))
     return calls
 
 
@@ -98,3 +101,23 @@ def test_status_explains_the_persons_enable_step(bridge):
     out = plugin.frictionless_command("status")
     assert "Capabilities -> Plugins" in out and "person" in out and "enabl" in out
     assert bridge == []
+
+
+@pytest.mark.skipif(not os.environ.get("SELENITE_TEST_HERMES_SOURCE"),
+                    reason="real Hermes source is not configured")
+def test_broadcast_does_not_load_tui_server_or_replace_stdout():
+    import importlib.util
+    import hermes_cli.plugin_events  # real Hermes v0.23.0 bridge, never a stub
+
+    pytest.importorskip("ruamel.yaml")
+    try:
+        available = importlib.util.find_spec("tui_gateway.server") is not None
+    except ModuleNotFoundError:
+        available = False
+    if not available:
+        pytest.skip("real tui_gateway source is not installed with this Hermes snapshot")
+    assert "tui_gateway.server" not in sys.modules
+    stdout = sys.stdout
+    plugin.pane.broadcast("ledger.updated", {"kind": "audit"})
+    assert sys.stdout is stdout
+    assert "tui_gateway.server" not in sys.modules

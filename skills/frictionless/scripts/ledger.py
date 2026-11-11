@@ -165,14 +165,18 @@ _REDACT = [
     (re.compile(r"[\w.+-]{1,64}@[\w-]+(\.[\w-]+)+"), "<email>"),
     (re.compile(r"://[^/\s:@]+:[^@\s]+@"), "://<cred>@"),
     (re.compile(r"(?i)\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 <token>"),
+    # Header credentials are opaque: remove the complete value after the field, regardless of scheme.
+    (re.compile(r"(?i)\b((?:proxy-)?authorization|oauth)(\s*[=:]\s*)(?!(?:bearer|basic|token)\s+<token>)(\"[^\"]*\"|'[^']*'|\S+(?:\s+\S+)*)"),
+     r"\1\2<secret>"),
     # key=value / key: value. A value the bearer rule already replaced keeps its scheme word, so
     # "Authorization: Bearer <token>" stays readable.
-    (re.compile(r"(?i)\b((?:[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)[\w-]*|"
+    (re.compile(r"(?i)\b((?:[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credentials?|cookies?|sessionid)[\w-]*|"
                 r"[\w-]*(?:oauth|auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth)(?:[-_][\w-]+)*|authorization|authentication)"
                 r")(\s*[=:]\s*)(?!(?:bearer|basic|token)\s+<token>)(\"[^\"]*\"|'[^']*'|\S+)"),
      r"\1\2<secret>"),
     # "password hunter2" with no separator; a plain word ("password reset") is left alone.
     (re.compile(r"(?i)\b(password|passphrase|passwd)(\s+)(?!<secret>)(?=\S*[^\sA-Za-z])\S+"), r"\1\2<secret>"),
+    (re.compile(r"(?i)(\bcurl\s+(?:[^\s]*\s+)*-u\s+)(?:\"[^\"]*\"|'[^']*'|\S+)"), r"\1<secret>"),
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "<token>"),
     (re.compile(r"\b(?:sk-proj-|sk-|ghp_|gho_|ghs_|ghu_|github_pat_|xox[abprs]-|glpat-)[A-Za-z0-9_\-]{8,}"), "<token>"),
     (re.compile(r"(?<![\w/+=])(?=[A-Za-z0-9_\-/+=]*\d)(?=[A-Za-z0-9_\-/+=]*[A-Za-z])[A-Za-z0-9_\-/+=]{32,}"), "<token>"),
