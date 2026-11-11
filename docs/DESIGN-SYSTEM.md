@@ -15,6 +15,7 @@ Selenite runs inside Hermes. It takes the host's theme and adds three things of 
 
 - **The stone is white satin-spar selenite** (PF §2–3): pearly white, dense straight fibres along the length, one silky chatoyant band, translucent edges. Selenite has no colour of its own, and it is never shown as purple or lavender.
 - **Glyph:** one satin-spar wand set diagonally, with a chisel tip, its fibres running the length and a narrow dark bevel on the shadowed edge (PF §4).
+  - In the app it is drawn as the approved round-14 E shard: thick, raw, set diagonally, with an off-centre tip (PF §8).
   - It is a static mark and never shows state.
   - In the app it draws in `currentColor` with the identity ink (`--ui-text-primary`), so it renders white on dark chrome.
 - **App icon:** `assets/icon.svg` is a **concept guide only (A)**.
@@ -32,18 +33,19 @@ Selenite runs inside Hermes. It takes the host's theme and adds three things of 
 | Body and rows | Host sans (`--font-sans`) | 13px at 400; meta text 11.5px | Long text stays in the app's face |
 | Ledger keys and counts | Host mono (`--font-mono`) | 12px, tabular figures | Counts line up down the column |
 
-## Colour (theme variables only)
+## Colour (theme variables, plus two family catches)
 
 | Meaning | Variable | Always paired with |
 |---|---|---|
 | Identity: glyph, meter, wordmark | `--ui-text-primary` (white on dark, ink on light) | Not applicable; identity only |
-| Human gate | `--ui-orange` | A count and the label "Recurring gates"; the Kanban badge says "waiting on you" |
+| Human gate | family magenta `#FF1A6E`, 15% toward host ink (PF §7) | A count and the label "Recurring gates"; the Kanban badge (`pink` tone) says "waiting on you" |
 | Approval prompt | `--ui-blue` | The label "Approval prompts" |
-| Calm trigger and high load | `--ui-yellow` | The words "Load: High" and the reason line |
+| Calm trigger and high load | family turquoise `#00FFE6`, 30% toward host ink (PF §7) | The words "Load: High" and the reason line |
 | Fix landed | `--ui-green` | The word "fixed" |
 | Everything else | `--ui-text-secondary/tertiary`, `--ui-stroke-*`, `--ui-bg-card` | Not applicable |
 
 - Colour never carries state on its own (PF §7).
+- No brown or orange: the host's `--ui-orange` and ochre `--ui-yellow` are never used (PF §7).
 - The minimum text tone is `--ui-text-tertiary`. The quaternary tone is reserved for hairlines.
 - Tints use `color-mix(in srgb, var(--ui-x) N%, transparent)`, so every host theme re-skins Selenite automatically.
 
@@ -55,7 +57,7 @@ Load measures the human's overload over the last 24 hours, counted from Calm tri
 |---|---|---|
 | **Clear** | 1 | No Calm triggers |
 | **Rising** | 2 | 1–2 triggers |
-| **High** | 3, yellow | 3 or more triggers, or 2 within 15 minutes |
+| **High** | 3, turquoise | 3 or more triggers, or 2 within 15 minutes |
 
 An unknown value from the backend renders as Clear.
 
@@ -67,10 +69,14 @@ The page sits on a 4-px grid with gaps of 8, 12, 16 and 24, and content is cappe
 2. **Error strip**, shown only on a failed refetch: it keeps the last good data visible and offers Retry.
 3. **Load strip:** the meter, "Load: *state*", a one-line reason, and the time of the last signal.
 4. **Four stat tiles:** Human gates, Approval prompts, Calm triggers and Fixes landed.
-5. **Two columns:**
+5. **Cleanse: clear next.** The latest cleanse report, which is the page's answer to "which human step should we remove next?":
+   - The top finding is set apart as *Clear next*, with its problem, where it lives and the fix.
+   - Up to five more findings follow, plus a count per stone.
+   - A *Run cleanse* button runs the read-only sweep. *Copy /frictionless cleanse* hands the clearing to an agent.
+6. **Two columns:**
    - Recurring gates, ranked, each with its own "Mark *key* fixed" button. The confirmation toast offers Undo.
-   - Evolve (the latest proposal) and Signal health.
-6. **The ledger timeline.**
+   - Fake gates between agents (the board audit's headline and its oldest fake waits), then Evolve (the latest proposal) and Signal health.
+7. **The ledger timeline**, with kinds in words (Gate, Approval, Calm, Fix, Reopened, Blocked).
 
 Below 760px the layout drops to one column and the bars and notes are hidden.
 
@@ -78,10 +84,10 @@ Below 760px the layout drops to one column and the bars and notes are hidden.
 
 | Surface | Where | Content |
 |---|---|---|
-| Desktop page | `ROUTES_AREA` `/selenite`, plus `SIDEBAR_NAV_AREA` (`ruby` codicon) | Everything above |
+| Desktop page | `ROUTES_AREA` `/selenite`, plus `SIDEBAR_NAV_AREA` (`wand` codicon: a selenite wand) | Everything above |
 | Status chip | `STATUSBAR_AREAS.right` | The blade, plus the number of open gates today. Its tooltip and aria-label give the load and the gate count. Clicking it opens the page |
-| Kanban badge | `KANBAN_CARD_AREAS.badges` | "waiting on you" (`orange`) on tasks blocked on a human gate |
-| Palette | `PALETTE_AREA` | Open the friction ledger, or draft an evolve proposal |
+| Kanban badge | `KANBAN_CARD_AREAS.badges` | "waiting on you" (`pink`) on tasks blocked on a human gate |
+| Palette | `PALETTE_AREA` | Open the friction ledger, run a cleanse, or draft an evolve proposal |
 | Settings | `registerSettingsPage` | Chip toggle, chip style, Kanban badges and the privacy note |
 | Web dashboard tab | `dashboard/manifest.json` tab `after:sessions`, entry `dist/index.js` | Load, the four totals and recurring gates with Mark fixed. Uses only the dashboard SDK components |
 

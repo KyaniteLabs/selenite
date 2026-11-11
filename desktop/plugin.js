@@ -26,11 +26,13 @@ const FONTS = {
 // Identity: Selenite is white satin spar (docs/DESIGN-PREFLIGHT.md §3, §7). On dark
 // chrome the identity ink is the host's primary text (near-white); on light chrome
 // it falls back to host ink, and the icon carries the identity. State never rides
-// on colour alone: every state has a text label next to it.
+// on colour alone: every state has a text label next to it. No brown or orange:
+// gate takes the family magenta and load the family turquoise, pulled toward host ink
+// so they hold contrast on light and dark chrome (PF §7).
 const CSS = `
 ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-style:normal;font-weight:${w};font-display:swap;src:url(data:font/woff;base64,${b}) format('woff')}`).join('\n')}
 .sel-host{container-type:inline-size;width:100%}
-.sel{--sel-id:var(--ui-text-primary);--sel-gate:var(--ui-orange);--sel-appr:var(--ui-blue);--sel-fix:var(--ui-green);--sel-load:var(--ui-yellow);
+.sel{--sel-id:var(--ui-text-primary);--sel-gate:color-mix(in oklab,#FF1A6E 85%,var(--ui-text-primary));--sel-appr:var(--ui-blue);--sel-fix:var(--ui-green);--sel-load:color-mix(in oklab,#00FFE6 70%,var(--ui-text-primary));
   --sel-display:'${FACE}',var(--font-sans);font-family:var(--font-sans);font-size:13px;line-height:1.45;color:var(--ui-text-primary);
   box-sizing:border-box;width:100%;max-width:1120px;margin:0 auto;padding:24px 28px 48px;display:flex;flex-direction:column;gap:20px}
 .sel *,.sel *::before,.sel *::after{box-sizing:border-box}
@@ -59,8 +61,9 @@ ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-s
 .sel-sec{display:flex;flex-direction:column;gap:12px}
 .sel-sec-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 8px}
 .sel-rows{display:flex;flex-direction:column;margin:0;padding:0;list-style:none}
-.sel-row{display:grid;grid-template-columns:20px minmax(0,1fr) 96px 64px auto;align-items:center;gap:10px;min-height:40px;padding:6px 0;border-top:1px solid var(--ui-stroke-quaternary)}
+.sel-row{display:grid;grid-template-columns:20px minmax(0,1fr) 96px 40px 88px;align-items:center;gap:10px;min-height:40px;padding:6px 0;border-top:1px solid var(--ui-stroke-quaternary)}
 .sel-row:first-child{border-top:0}
+.sel-row>:last-child{justify-self:start}
 .sel-rank{font-family:var(--sel-display);font-weight:500;font-size:12px;color:var(--ui-text-secondary);text-align:right}
 .sel-key{font-family:var(--font-mono);font-size:12px;overflow-wrap:anywhere}
 .sel-note{font-size:12px;color:var(--ui-text-secondary);overflow-wrap:anywhere}
@@ -93,10 +96,27 @@ ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-s
 .sel-inline{font-size:12.5px;color:var(--ui-text-secondary);display:flex;align-items:center;gap:10px;margin:0}
 .sel-glyph{flex:none;color:var(--sel-id)}
 .sel-chip-n{font-family:var(--sel-display);font-weight:500;letter-spacing:.04em}
+.sel-tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border:1px solid var(--ui-stroke-tertiary);border-radius:4px;font-family:var(--sel-display);font-weight:500;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ui-text-secondary);white-space:nowrap}
+.sel-tag b{font-family:var(--font-mono);font-weight:500;letter-spacing:0;margin-left:6px;color:var(--ui-text-primary)}
+.sel-next{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;padding:14px 16px;border:1px solid color-mix(in srgb,var(--sel-id) 22%,var(--ui-stroke-tertiary));border-radius:8px;background:color-mix(in srgb,var(--sel-id) 4%,transparent)}
+.sel-next-top{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.sel-next-problem{margin:0;font-size:14px;font-weight:600;line-height:1.35;color:var(--ui-text-primary)}
+.sel-next-fix{margin:0;font-size:12.5px;color:var(--ui-text-secondary)}
+.sel-next-fix b{font-weight:600;color:var(--ui-text-primary)}
+.sel-next-n{align-self:start;font-family:var(--sel-display);font-weight:600;font-size:22px;line-height:1;text-align:right}
+.sel-next-n small{display:block;margin-top:4px;font-family:var(--font-sans);font-weight:400;font-size:11px;color:var(--ui-text-tertiary)}
+.sel-find{display:grid;grid-template-columns:88px minmax(0,1fr) 48px;align-items:center;gap:10px;min-height:36px;padding:6px 0;border-top:1px solid var(--ui-stroke-quaternary)}
+.sel-find:first-child{border-top:0}
+.sel-find .sel-tag{justify-self:start}
+.sel-stones{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.sel-fg{display:grid;grid-template-columns:minmax(0,1fr) auto 40px;align-items:center;gap:10px;min-height:34px;padding:4px 0;border-top:1px solid var(--ui-stroke-quaternary)}
+.sel-fg:first-child{border-top:0}
+.sel-fg-title{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sel-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 @container (max-width:760px){.sel{padding:16px}.sel-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.sel-cols{grid-template-columns:minmax(0,1fr)}
-  .sel-row{grid-template-columns:20px minmax(0,1fr) 48px auto}.sel-row .sel-bar{display:none}
-  .sel-ev{grid-template-columns:8px 72px minmax(0,1fr) auto}.sel-ev .sel-note{display:none}}
+  .sel-row{grid-template-columns:20px minmax(0,1fr) 40px 88px}.sel-row .sel-bar{display:none}
+  .sel-ev{grid-template-columns:8px 72px minmax(0,1fr) auto}.sel-ev .sel-note{display:none}
+  .sel-find{grid-template-columns:minmax(0,1fr) 40px}.sel-find .sel-tag{display:none}}
 @container (max-width:420px){.sel-stats{grid-template-columns:minmax(0,1fr)}.sel-row{grid-template-columns:minmax(0,1fr) 40px}.sel-rank{display:none}.sel-row>:last-child{grid-column:1/-1;justify-self:start}}
 `
 
@@ -126,6 +146,9 @@ const EN = {
     downTitle: 'Selenite can’t reach its backend',
     retry: 'Retry',
     fix: 'Selenite could not log that fix.',
+    cleanse: 'Selenite could not run a cleanse.',
+    cleanseLoad: 'The latest cleanse didn’t load.',
+    fake: 'The board audit isn’t answering.',
     undo: 'Selenite could not undo that.',
     draft: 'Selenite could not draft a proposal.',
     ledger: 'The ledger didn’t load.',
@@ -133,7 +156,7 @@ const EN = {
   },
   empty: {
     title: 'Nothing logged yet',
-    body: 'Selenite adds a row each time an agent hands you a step it could have done itself. To backfill from your past transcripts, ask any agent to run /frictionless audit.',
+    body: 'Selenite adds a row each time an agent hands you a step it could have done itself. To backfill from your past transcripts, ask any agent to run /frictionless cleanse.',
     gatesTitle: 'No human gates in this window',
     gatesBody: 'Nothing here means no agent asked you to log in, paste a token or approve a step.',
     ledger: 'No events in this window.'
@@ -157,6 +180,25 @@ const EN = {
     about: 'A proposal turns the ledger into ways to sharpen Selenite. Optional: skipping it degrades nothing. You review it as a pull request; nothing changes silently.',
     draft: 'Draft proposal', drafting: 'Drafting…', copy: 'Copy /frictionless evolve', region: 'Latest evolve proposal'
   },
+  cleanse: {
+    title: 'Cleanse', clearNext: 'Clear next',
+    swept: (n, k, when) => `${n} ${n === 1 ? 'finding' : 'findings'} across ${k} ${k === 1 ? 'stone' : 'stones'}, swept ${when}`,
+    none: 'not run yet',
+    about: 'Cleanse sweeps your skills, plugins, hooks, approvals, gates and runbooks, read-only, and ranks what to clear by how often it interrupts you.',
+    clean: 'Nothing to clear. Every stone Selenite checks is clean.',
+    fix: 'Fix:', where: 'Where:',
+    hits: n => (n === 1 ? 'interruption' : 'interruptions'),
+    more: 'Next in line', byStone: 'Findings by stone',
+    run: 'Run cleanse', running: 'Sweeping…', copy: 'Copy /frictionless cleanse',
+    errors: n => `${n} ${n === 1 ? 'check' : 'checks'} could not run.`
+  },
+  fake: {
+    title: 'Fake gates', sub: 'Waits between agents that end up on you',
+    none: 'No fake gates on the boards.', loading: 'Auditing boards…',
+    age: h => (h == null ? '' : h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`),
+    ageLong: h => (h == null ? '' : `waiting ${Math.round(h)} hours`)
+  },
+  kinds: { gate: 'Gate', blocked: 'Blocked', approval: 'Approval', calm: 'Calm', fix: 'Fix', reopen: 'Reopened', miss: 'Missed', fp: 'False alarm', audit: 'Audit', cleanse: 'Cleanse' },
   signals: { title: 'Signal health', sub: 'Silent twice in a row → pruned', silent: 'silent' },
   ledger: { title: 'Ledger' },
   never: 'never',
@@ -164,7 +206,7 @@ const EN = {
     open: 'Open Selenite',
     status: (load, n) => `Selenite: load ${load}, ${n} open ${n === 1 ? 'gate' : 'gates'} today`
   },
-  palette: { open: 'Selenite: Open friction ledger', draft: 'Selenite: Draft evolve proposal' },
+  palette: { open: 'Selenite: Open friction ledger', cleanse: 'Selenite: Run cleanse', draft: 'Selenite: Draft evolve proposal' },
   settings: {
     chip: 'Show Selenite in the status bar',
     chipBody: 'A small selenite blade that opens this page. Its tooltip gives today’s load and open gates.',
@@ -192,15 +234,16 @@ const useT = () => usePluginI18n(ID)
 const LOAD = { clear: { bars: 1, why: 'whyClear' }, rising: { bars: 2, why: 'whyRising' }, high: { bars: 3, why: 'whyHigh' } }
 const loadKey = v => (Object.hasOwn(LOAD, v) ? v : 'clear')
 
-// The glyph: one satin-spar blade, chisel tip, fibres along its length.
+// The glyph: the approved round-14 E shard (docs/DESIGN-PREFLIGHT.md §8). A thick
+// raw satin-spar shard set diagonally, off-centre tip, fibres along its length.
 // Static identity, never a state indicator.
 function Blade({ size = 16, title }) {
   return jsxs('svg', {
     className: 'sel-glyph', width: size, height: size, viewBox: '0 0 24 24',
     role: title ? 'img' : undefined, 'aria-label': title, 'aria-hidden': title ? undefined : true,
     children: [
-      jsx('path', { d: 'M5 21.5 2.5 19 15.5 3.2 20.8 2.5 20.4 8.1Z', fill: 'currentColor', fillOpacity: 0.92 }),
-      jsx('path', { d: 'M6.9 17.6 17.6 5.4M9.2 18.4 19.2 7', stroke: 'var(--ui-bg-card, #000)', strokeOpacity: 0.45, strokeWidth: 0.9, strokeLinecap: 'round' })
+      jsx('path', { d: 'M2.6 17.4 15.9 3.9 21.3 2.6 20.6 8.3 7.2 21.5 4.9 21 4.4 19.6 2.9 19.1Z', fill: 'currentColor', fillOpacity: 0.92 }),
+      jsx('path', { d: 'M5.4 18.6 17.9 5.9M8.3 19.5 19.6 8.1', stroke: 'var(--ui-bg-card, #000)', strokeOpacity: 0.4, strokeWidth: 0.9, strokeLinecap: 'round' })
     ]
   })
 }
@@ -268,11 +311,15 @@ const Retry = ({ onClick, t }) => jsx(Button, { size: 'sm', variant: 'secondary'
 function SelenitePage({ ctx, prefs, update, refreshStatus }) {
   const t = useT()
   const ago = ts => (ts ? relativeTime(ts * 1000) : t('never'))
+  // Ledger kinds in words; an unknown kind shows as logged.
+  const kindLabel = k => { const v = t(`kinds.${k}`); return !v || v === `kinds.${k}` ? k : v }
   const { days } = useValue(prefs)
   const qc = useQueryClient()
   const overview = useQuery({ queryKey: [ID, 'overview', days], queryFn: () => ctx.rest(`/overview?days=${days}`), refetchInterval: 30_000 })
   const events = useQuery({ queryKey: [ID, 'events', days], queryFn: () => ctx.rest(`/events?days=${days}&limit=40`), refetchInterval: 30_000 })
   const proposal = useQuery({ queryKey: [ID, 'proposal'], queryFn: () => ctx.rest('/proposal') })
+  const cleanse = useQuery({ queryKey: [ID, 'cleanse'], queryFn: () => ctx.rest('/cleanse') })
+  const fake = useQuery({ queryKey: [ID, 'fake', days], queryFn: () => ctx.rest(`/fake-gates/overview?days=${Math.min(days, 90)}&top=6`), refetchInterval: 60_000 })
   const refresh = () => { qc.invalidateQueries({ queryKey: [ID] }); refreshStatus() }
   const log = (kind, key, note) => ctx.rest('/events', { method: 'POST', body: { kind, key, note } })
   const markFix = useMutation({
@@ -283,6 +330,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
     },
     onError: fail(t('err.fix'))
   })
+  const sweep = useMutation({ mutationFn: () => ctx.rest(`/cleanse?days=${days}`, { method: 'POST' }), onSuccess: refresh, onError: fail(t('err.cleanse')) })
   const draft = useMutation({ mutationFn: () => ctx.rest(`/proposal?days=${days}`, { method: 'POST' }), onSuccess: refresh, onError: fail(t('err.draft')) })
   const shell = children => jsx('div', { className: 'sel-host', children: jsx('div', { className: 'sel', children }) })
 
@@ -315,9 +363,6 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
   const warn = overview.isError && jsxs('div', { className: 'sel-warn', role: 'alert', children: [
     jsx('span', { children: t('err.stale') }), jsx(Retry, { t, onClick: () => overview.refetch() })
   ] })
-  if (!o.has_ledger) {
-    return shell([head, warn, jsx('div', { className: 'sel-card', children: jsx(EmptyState, { title: t('empty.title'), description: t('empty.body') }) })])
-  }
 
   const tot = o.totals ?? {}
   const gates = Array.isArray(o.gates) ? o.gates : []
@@ -334,7 +379,66 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
     ...body
   ] })
   const evs = events.data?.events ?? []
+  const cl = cleanse.data?.cleanse
+  const finds = Array.isArray(cl?.findings) ? cl.findings : []
+  const stones = Object.entries(cl?.by_stone ?? {}).sort((a, b) => b[1] - a[1])
+  const swept = cl?.generated ? relativeTime(Date.parse(cl.generated)) : ''
+  const top = finds[0]
+  const cleanseSec = sec('sel-cleanse-h', t('cleanse.title'), cl ? t('cleanse.swept', cl.total ?? finds.length, stones.length, swept) : t('cleanse.none'), [
+    cleanse.isError && !cleanse.data
+      ? jsxs('p', { className: 'sel-inline', role: 'alert', children: [t('err.cleanseLoad'), jsx(Retry, { t, onClick: () => cleanse.refetch() })] }, 'x')
+      : !cl
+        ? jsx('p', { className: 'sel-load-why', style: { margin: 0 }, children: t('cleanse.about') }, 'a')
+        : !top
+          ? jsxs('p', { className: 'sel-inline', children: [jsx('span', { className: 'sel-fixed', children: t('cleanse.clean') })] }, 'c')
+          : jsxs('div', { className: 'sel-next', children: [
+              jsxs('div', { className: 'sel-next-top', children: [jsx('h3', { className: 'sel-label', style: { color: 'var(--ui-text-primary)' }, children: t('cleanse.clearNext') }), jsx('span', { className: 'sel-tag', children: top.stone })] }),
+              jsxs('div', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }, children: [
+                jsx('p', { className: 'sel-next-problem', children: top.problem }),
+                jsxs('p', { className: 'sel-next-fix', children: [jsx('b', { children: t('cleanse.where') }), ' ', jsx('span', { className: 'sel-key', children: top.where })] }),
+                jsxs('p', { className: 'sel-next-fix', children: [jsx('b', { children: t('cleanse.fix') }), ' ', top.fix] })
+              ] }),
+              Number(top.interruptions) > 0 ? jsxs('div', { className: 'sel-next-n', children: [top.interruptions, jsx('small', { children: t('cleanse.hits', Number(top.interruptions)) })] }) : null
+            ] }, 'n'),
+    finds.length > 1 && jsxs('div', { className: 'sel-sec', style: { gap: 6 }, children: [
+      jsx('h3', { className: 'sel-label', children: t('cleanse.more') }),
+      jsx('ol', { className: 'sel-rows', children: keyed(finds.slice(1, 6), f => `${f.stone}-${f.where}-${f.check}`).map(([k, f]) => jsxs('li', { className: 'sel-find', children: [
+        jsx('span', { className: 'sel-tag', children: f.stone }),
+        jsxs('div', { style: { minWidth: 0 }, children: [jsx('div', { style: { fontSize: 12.5 }, children: f.problem }), jsx('div', { className: 'sel-key sel-note', style: { fontSize: 11.5 }, children: f.where })] }),
+        jsx('span', { className: 'sel-count', children: Number(f.interruptions) > 0 ? `×${f.interruptions}` : '' })
+      ] }, k)) })
+    ] }, 'm'),
+    stones.length > 0 && jsx('ul', { className: 'sel-stones', 'aria-label': t('cleanse.byStone'), children: stones.map(([k, n]) => jsxs('li', { className: 'sel-tag', children: [k, jsx('b', { children: n })] }, k)) }, 's'),
+    cl?.errors?.length ? jsx('p', { className: 'sel-sub', style: { margin: 0 }, children: t('cleanse.errors', cl.errors.length) }, 'r') : null,
+    jsxs('div', { className: 'sel-actions', children: [
+      jsx(Button, { size: 'sm', variant: 'secondary', disabled: sweep.isPending, onClick: () => sweep.mutate(), children: sweep.isPending ? t('cleanse.running') : t('cleanse.run') }),
+      jsx(CopyButton, { text: '/frictionless cleanse', label: t('cleanse.copy'), showLabel: true, appearance: 'button', buttonVariant: 'ghost', buttonSize: 'sm' })
+    ] }, 'b')
+  ])
+  const fg = fake.data
+  const fgCards = Array.isArray(fg?.cards) ? fg.cards : []
+  const fakeSec = sec('sel-fake-h', t('fake.title'), t('fake.sub'), [
+    fake.isError && !fg
+      ? jsxs('p', { className: 'sel-inline', role: 'alert', children: [t('err.fake'), jsx(Retry, { t, onClick: () => fake.refetch() })] }, 'x')
+      : !fg
+        ? jsx('p', { className: 'sel-inline', children: t('fake.loading') }, 'l')
+        : jsxs(Fragment, { children: [
+            fg.summary?.headline ? jsx('p', { className: 'sel-load-why', style: { margin: 0 }, children: fg.summary.headline }, 'h') : null,
+            fgCards.length === 0
+              ? jsx('p', { className: 'sel-inline', children: t('fake.none') }, 'e')
+              : jsx('ol', { className: 'sel-rows', children: fgCards.map(c => jsxs('li', { className: 'sel-fg', children: [
+                  jsx('span', { className: 'sel-fg-title', title: c.title || c.id, children: c.title || c.id }),
+                  jsx('span', { className: 'sel-tag', children: c.label }),
+                  jsxs('span', { className: 'sel-when', style: { textAlign: 'right' }, children: [jsx('span', { 'aria-hidden': true, children: t('fake.age', c.age_h) }), jsx('span', { className: 'sel-sr', children: t('fake.ageLong', c.age_h) })] })
+                ] }, c.id)) }, 'c')
+          ] }, 'b')
+  ])
   const prop = proposal.data?.proposal
+
+  // A fresh install has no ledger yet; Cleanse and the board audit still work.
+  if (!o.has_ledger) {
+    return shell([head, warn, jsx('div', { className: 'sel-card', children: jsx(EmptyState, { title: t('empty.title'), description: t('empty.body') }) }, 'e'), cleanseSec, fakeSec])
+  }
 
   return shell([
     head,
@@ -355,6 +459,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
       stat(t('stats.calm'), tot.calm, 'calm'),
       stat(t('stats.fixes'), tot.fixes, null)
     ] }),
+    cleanseSec,
     jsxs('div', { className: 'sel-cols', children: [
       sec('sel-gates-h', t('gates.title'), t('gates.sub'), [gates.length === 0
         ? jsx(EmptyState, { title: t('empty.gatesTitle'), description: t('empty.gatesBody') }, 'e')
@@ -372,6 +477,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
                   disabled: markFix.isPending && markFix.variables === g.key, onClick: () => markFix.mutate(g.key), children: t('gates.mark') })
           ] }, g.key)) }, 'l')]),
       jsxs('div', { className: 'sel-sec', children: [
+        fakeSec,
         sec('sel-evolve-h', t('evolve.title'), prop ? t('evolve.drafted', ago(prop.mtime)) : t('evolve.none'), [
           proposal.isError && !prop
             ? jsxs('p', { className: 'sel-inline', role: 'alert', children: [t('err.proposal'), jsx(Retry, { t, onClick: () => proposal.refetch() })] }, 'x')
@@ -397,7 +503,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
           ? jsx('p', { className: 'sel-inline', children: t('empty.ledger') }, 'e')
           : jsx('ul', { className: 'sel-rows', children: keyed(evs, e => `${e.ts}-${e.kind}-${e.key}`).map(([k, e]) => jsxs('li', { className: 'sel-ev', children: [
               jsx('span', { className: 'sel-dot', 'data-k': e.kind, 'aria-hidden': true }),
-              jsx('span', { className: 'sel-kind', children: e.kind }),
+              jsx('span', { className: 'sel-kind', children: kindLabel(e.kind) }),
               jsx('span', { className: 'sel-key', children: e.key }),
               jsx('span', { className: 'sel-note', children: e.note }),
               jsx('span', { className: 'sel-when', children: ago(e.ts) })
@@ -500,11 +606,13 @@ export default {
       { id: 'nav', area: SIDEBAR_NAV_AREA, data: { path: PATH, label: tNow('name'), codicon: 'wand' } },
       { id: 'chip', area: STATUSBAR_AREAS.right, order: 105, render: () => jsx(Chip, { prefs, status }) },
       { id: 'open', area: PALETTE_AREA, data: { id: 'selenite.open', label: tNow('palette.open'), keywords: ['friction', 'gate', 'calm', 'ledger'], run: () => host.navigate(PATH) } },
+      { id: 'cleanse', area: PALETTE_AREA, data: { id: 'selenite.cleanse', label: tNow('palette.cleanse'), keywords: ['cleanse', 'clear', 'audit', 'sweep'],
+        run: () => ctx.rest(`/cleanse?days=${prefs.get().days}`, { method: 'POST' }).then(() => host.navigate(PATH), fail(tNow('err.cleanse'))) } },
       { id: 'draft', area: PALETTE_AREA, data: { id: 'selenite.draft', label: tNow('palette.draft'), keywords: ['evolve', 'proposal', 'improve'],
         run: () => ctx.rest(`/proposal?days=${prefs.get().days}`, { method: 'POST' }).then(() => host.navigate(PATH), fail(tNow('err.draft'))) } },
       ...(KANBAN_CARD_AREAS?.badges ? [{ id: 'waiting', area: KANBAN_CARD_AREAS.badges, data: {
         decorate: card => (prefs.get().kanbanBadges && blocked().has(card.id)
-          ? { label: tNow('kanban.badge'), tone: 'orange', tooltip: tNow('kanban.tip') }
+          ? { label: tNow('kanban.badge'), tone: 'pink', tooltip: tNow('kanban.tip') }
           : null)
       } }] : [])
     ])
