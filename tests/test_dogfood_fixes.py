@@ -12,6 +12,9 @@ is skipped, the install still ends with a summary and exit 0, and cleanse
 falls through the state folders and exits 0. Keeping one copy of those shell
 fixtures avoids two tests asserting opposite contracts.
 """
+import json
+import sys
+
 from antibeaurocracy_core import DEPENDENCY, FAKE, HUMAN, WALL, classify
 
 
@@ -130,3 +133,44 @@ def test_only_flag_excludes_other_roots(tmp_path, monkeypatch):
     assert findings == [], "--only must keep shared ~/.claude findings out of a seat report (D10)"
     full = c.check_skills({"days": 30, "paths": []})
     assert any(f["check"] == "no-frontmatter" for f in full), "without --only the shared root is still swept"
+
+
+# --- D7/D8 (cco + cgo): mine.py seat attribution --------------------------
+
+def test_mine_samples_are_fair_across_agents(tmp_path, monkeypatch):
+    import skills.frictionless.scripts.mine as m
+    def fake_claude(root, since):
+        for i in range(20):
+            yield "claude-code", "proj", f"wtf number {i}"
+    def fake_hermes(db, since):
+        for i in range(2):
+            yield "hermes", "seat", f"wtf hermes {i}"
+    monkeypatch.setattr(m, "iter_claude", fake_claude)
+    monkeypatch.setattr(m, "iter_codex", lambda root, since: iter(()))
+    monkeypatch.setattr(m, "iter_hermes", fake_hermes)
+    monkeypatch.setattr(m, "HOME", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["mine.py", "--out", str(tmp_path), "--samples", "8"])
+    rc = m.main()
+    assert rc == 0
+    sp = sorted(tmp_path.glob("samples-*.json"))[-1]
+    samples = json.loads(sp.read_text())["curse"]
+    agents = [s["agent"] for s in samples]
+    assert agents.count("claude-code") <= 4, "one busy agent must not eat the whole budget (D8)"
+    assert "hermes" in agents, "the seat's own friction must be visible in the default samples (D8)"
+
+
+def test_mine_hermes_home_flag(tmp_path, monkeypatch):
+    import skills.frictionless.scripts.mine as m
+    captured = {}
+    def fake_hermes(db, since):
+        captured["db"] = db
+        return iter(())
+    monkeypatch.setattr(m, "iter_claude", lambda root, since: iter(()))
+    monkeypatch.setattr(m, "iter_codex", lambda root, since: iter(()))
+    monkeypatch.setattr(m, "iter_hermes", fake_hermes)
+    monkeypatch.setattr(m, "HOME", tmp_path)
+    monkeypatch.delenv("HERMES_HOME", raising=False)
+    prof = tmp_path / "profiles" / "cco"
+    monkeypatch.setattr(sys, "argv", ["mine.py", "--out", str(tmp_path), "--hermes-home", str(prof)])
+    assert m.main() == 0
+    assert captured["db"] == prof / "state.db", "--hermes-home must reach the source (D7)"

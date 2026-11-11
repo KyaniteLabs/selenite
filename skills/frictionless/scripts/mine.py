@@ -145,19 +145,24 @@ def main() -> int:
     ap.add_argument("--days", type=int, default=45)
     ap.add_argument("--path", action="append", default=[], help="extra generic source")
     ap.add_argument("--samples", type=int, default=8, help="private samples per category")
+    ap.add_argument("--hermes-home", type=Path, default=None,
+                    help="Hermes home to mine (default: $HERMES_HOME or ~/.hermes). On a shared host, "
+                         "point this at your own profile so the report shows YOUR loop, not the host's.")
     ap.add_argument("--out", type=Path, default=None, help="report folder (default: the first writable state folder)")
     a = ap.parse_args()
 
     since = time.time() - a.days * 86400
+    hermes_home = a.hermes_home or Path(os.environ.get("HERMES_HOME") or HOME / ".hermes")
     sources = [
         iter_claude(HOME / ".claude/projects", since),
         iter_codex(HOME / ".codex/sessions", since),
-        iter_hermes(Path(os.environ.get("HERMES_HOME") or HOME / ".hermes") / "state.db", since),
+        iter_hermes(hermes_home / "state.db", since),
         *[iter_generic(Path(p).expanduser(), since) for p in a.path],
     ]
     counts: Counter = Counter()
     by_agent: dict[str, Counter] = defaultdict(Counter)
     samples: dict[str, list] = defaultdict(list)
+    per_agent = max(1, a.samples // 2)  # one busy agent must not eat the whole sample budget
     seen = 0
     for src in sources:
         try:
@@ -166,7 +171,8 @@ def main() -> int:
                 for cat in classify(text):
                     counts[cat] += 1
                     by_agent[agent][cat] += 1
-                    if len(samples[cat]) < a.samples:
+                    if len(samples[cat]) < a.samples and \
+                            sum(1 for s in samples[cat] if s["agent"] == agent) < per_agent:
                         samples[cat].append({"agent": agent, "text": redact(text[:300])})
         except (OSError, sqlite3.Error) as e:
             print(f"selenite-mine: skipped a source: {e}", file=sys.stderr)
