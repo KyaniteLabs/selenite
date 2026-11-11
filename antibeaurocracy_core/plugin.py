@@ -63,6 +63,7 @@ _snapshot_at: dict[str, float] = {}
 _snapshot_running: set[str] = set()
 _tick_extra: list = []  # Selenite's badge reconcile, set by on_tick()
 _ctx = None
+LEDGER_LOCK_TIMEOUT_S = 3.0  # a stuck writer must not hang the agent's turn
 LEDGER_ROTATE_BYTES = 4 * 1024 * 1024  # same bound as Selenite's own ledger
 HOOKS_ON = lambda: True  # Selenite replaces this with its one off switch  # noqa: E731
 
@@ -143,9 +144,20 @@ def _ledger(event: str, **fields) -> None:
         try:
             try:
                 import fcntl
-                fcntl.flock(lock, fcntl.LOCK_EX)  # two writers never rotate the same file twice
-            except (ImportError, OSError):
-                pass
+            except ImportError:
+                fcntl = None
+            if fcntl is not None:  # two writers never rotate the same file twice
+                deadline = time.monotonic() + LEDGER_LOCK_TIMEOUT_S
+                while True:
+                    try:
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError(f"ledger lock held > {LEDGER_LOCK_TIMEOUT_S}s")
+                        time.sleep(0.02)
+                    except OSError:
+                        break  # flock unsupported here: append anyway, rotation is best effort
             # Selenite needs no cleansing: past LEDGER_ROTATE_BYTES the ledger becomes ledger.1.jsonl (one kept).
             if path.exists() and path.stat().st_size >= LEDGER_ROTATE_BYTES:
                 os.replace(path, path.with_name("ledger.1.jsonl"))

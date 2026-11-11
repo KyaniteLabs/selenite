@@ -17,7 +17,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "frictionless" / "scripts"
@@ -245,7 +245,10 @@ class Mark(BaseModel):
 
 @router.post("/events")
 def mark(body: Mark) -> dict:
-    return {"row": ledger.add(body.kind, body.key, body.note, agent="desktop")}
+    row = ledger.add(body.kind, body.key, body.note, agent="desktop")
+    if row is None:   # every state folder refused it (read-only, full or locked): say so, like the tool does
+        raise HTTPException(status_code=503, detail="ledger not writable: the row was not recorded")
+    return {"row": row}
 
 
 def _proposal_view(f: Path) -> dict:

@@ -138,6 +138,7 @@ STATE = _state_from_env()
 BLOCKED_DAYS = 90  # how long a blocked-card row keeps its badge: one window for hooks and dashboard
 LEDGER = STATE / "ledger.jsonl"
 ROTATED = STATE / "ledger.1.jsonl"
+LOCK_TIMEOUT_S = 3.0  # longest a writer waits for the ledger lock (TimeoutError is an OSError: add() moves on)
 ROTATE_BYTES = 4 * 1024 * 1024  # one rotated file is kept; older history is dropped
 KINDS = {"gate", "calm", "audit", "cleanse", "approval", "blocked", "miss", "fp", "fix", "reopen"}
 APPROVAL_KEY = 71  # approval keys are cut here, so "approval:" + key fits the 80-character key limit
@@ -161,7 +162,7 @@ _REDACT = [
     (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----(?:.*?-----END [A-Z ]*PRIVATE KEY-----)?", re.S),
      "<private-key>"),
     (re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*"), "<token>"),  # JWT, any length
-    (re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+"), "<email>"),
+    (re.compile(r"[\w.+-]{1,64}@[\w-]+(\.[\w-]+)+"), "<email>"),
     (re.compile(r"://[^/\s:@]+:[^@\s]+@"), "://<cred>@"),
     (re.compile(r"(?i)\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 <token>"),
     # key=value / key: value. A value the bearer rule already replaced keeps its scheme word, so
@@ -183,8 +184,11 @@ _REDACT = [
 ]
 
 
+REDACT_MAX_CHARS = 4000   # callers keep at most 200 chars; cutting first keeps regex cost bounded
+
+
 def redact(text: str) -> str:
-    text = str(text).replace(str(Path.home()), "~")
+    text = str(text)[:REDACT_MAX_CHARS].replace(str(Path.home()), "~")
     for pat, sub in _REDACT:
         text = pat.sub(sub, text)
     return text
@@ -200,10 +204,21 @@ class _Lock:
         self.fd = os.open(self.state / ".ledger.lock", os.O_WRONLY | os.O_CREAT, 0o600)
         try:
             import fcntl
-            fcntl.flock(self.fd, fcntl.LOCK_EX)
-        except (ImportError, OSError):  # no fcntl (Windows): appends are still atomic, rotation is best effort
-            pass
-        return self
+        except ImportError:  # no fcntl (Windows): appends are still atomic, rotation is best effort
+            return self
+        deadline = time.monotonic() + LOCK_TIMEOUT_S
+        try:
+            while True:
+                try:
+                    fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    return self
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError(f"{self.state / '.ledger.lock'} held > {LOCK_TIMEOUT_S}s")
+                    time.sleep(0.02)
+        except BaseException:
+            os.close(self.fd)  # a lock we never got must not leak its descriptor
+            raise
 
     def __exit__(self, *exc):
         os.close(self.fd)  # closing releases the lock
