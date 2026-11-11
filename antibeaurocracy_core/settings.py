@@ -120,6 +120,23 @@ def _mini_yaml(text: str):
     return root
 
 
+def _plugins_block(text: str) -> str:
+    """Only the top-level ``plugins:`` block, the one part Selenite reads.
+
+    The stdlib reader handles a small YAML subset. A real Hermes config has
+    lists of mappings elsewhere (``custom_providers``), and those must not
+    make Selenite's own settings unreadable."""
+    out: list[str] = []
+    inside = False
+    for line in text.splitlines():
+        top = line[:1] not in ("", " ", "\t", "#")
+        if top:
+            inside = line.split("#", 1)[0].rstrip().startswith("plugins:")
+        if inside:
+            out.append(line)
+    return "\n".join(out)
+
+
 def _load_yaml(text: str):
     try:
         import yaml  # type: ignore
@@ -130,7 +147,7 @@ def _load_yaml(text: str):
     try:
         from ruamel.yaml import YAML  # type: ignore  # what Hermes itself ships
     except ImportError:
-        return _mini_yaml(text)  # the stdlib CLI on a host with neither library
+        return _mini_yaml(_plugins_block(text))  # the stdlib CLI on a host with neither library
     return YAML(typ="safe", pure=True).load(text)
 
 

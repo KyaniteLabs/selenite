@@ -2,6 +2,16 @@
 
 ## 0.5.0 (unreleased)
 
+### Install acceptance fixes (2026-11-10)
+
+- **Headless install stays enabled:** `pyproject.toml` no longer carries a `[build-system]` table.
+  Hermes read it as "installs Python packages" and stopped a non-interactive
+  `hermes plugins install --enable` at a dependency-consent question, leaving Selenite disabled
+  although it has no dependencies. `pip install .` still gives the `antibeaurocracy` command.
+- **Settings on a real config:** without PyYAML or ruamel, the stdlib reader now parses only the
+  top-level `plugins:` block. A list of mappings elsewhere (`custom_providers`) used to make every
+  setting unreadable and print a warning on each CLI run.
+
 ### Dogfood fixes (2026-11-10)
 
 - **Packaging in a read-only seat:** the defects that only show up in the environment Selenite is

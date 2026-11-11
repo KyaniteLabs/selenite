@@ -218,3 +218,13 @@ def test_no_enable_never_calls_the_hermes_cli(tmp_path):
     assert not marker.exists()
     assert "enable: skipped (--no-enable)" in done.stdout
     assert _last_line(done.stdout).startswith("Selenite install: ")
+
+
+def test_pyproject_does_not_make_hermes_ask_for_dependency_consent():
+    """A [build-system] table reads to Hermes as 'installs Python packages', so a
+    headless `hermes plugins install` stops at a consent question and stays disabled."""
+    tomllib = pytest.importorskip("tomllib")  # 3.11+; the 3.10 CI leg skips
+    doc = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
+    assert "build-system" not in doc
+    assert doc["project"]["dependencies"] == []
+    assert not doc["project"].get("optional-dependencies") and "dependency-groups" not in doc

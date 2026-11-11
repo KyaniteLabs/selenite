@@ -56,11 +56,19 @@ def test_a_hermes_shaped_config_reads_the_same_either_way(tmp_path):
                                         "hooks": False}, None)
 
 
-@pytest.mark.parametrize("bad", ["a:\n   b: 1\n  c: 2\n", "\tkey: 1\n", "x: 'open\n", "- top\nkey: 1\n"])
+@pytest.mark.parametrize("bad", ["plugins:\n   b: 1\n  c: 2\n", "plugins:\n\tkey: 1\n", "plugins: 'open\n",
+                                 "plugins:\n  - top\n  key: 1\n"])
 def test_a_config_it_cannot_read_is_reported(tmp_path, bad):
     _config(tmp_path, bad)
     got, err = settings.read(tmp_path)
     assert got == {} and err
+
+
+def test_a_list_of_mappings_elsewhere_does_not_hide_the_settings(tmp_path):
+    """A real Hermes config has `custom_providers: [- name: ...]`; the stdlib reader must not give up on it."""
+    _config(tmp_path, "custom_providers:\n  - name: a\n    base_url: http://x\n  - name: b\n" + HERMES_LIKE)
+    got, err = settings.read(tmp_path)
+    assert err is None and got["fake_gate_mode"] == "ask" and got["extra_seats"] == ["quartermaster", "scribe"]
 
 
 def _config(home: Path, body: str) -> None:
@@ -116,7 +124,7 @@ def test_cli_reads_min_confidence_and_warns_on_a_bad_config(tmp_path, monkeypatc
     _config(tmp_path, "plugins:\n  entries:\n    selenite:\n      settings:\n        min_confidence: 0.9\n")
     cli.handle(_args("classify", "x"))
     assert audit.FAKE_THRESHOLD == 0.9
-    _config(tmp_path, "{{{not yaml")
+    _config(tmp_path, "plugins:\n  entries: {{{not yaml\n   bad: indent\n")
     cli.handle(_args("classify", "x"))
     assert audit.FAKE_THRESHOLD == 0.6 and "unreadable" in capsys.readouterr().err
 
