@@ -2,6 +2,23 @@
 
 ## 0.5.0 (in catalog review; not yet merged)
 
+### Dogfood fixes (2026-11-11)
+
+- **More credential walls stand.** On top of round two: a possessive or up to three words before the
+  secret ("needs Ana's token to publish"), "only Ana has the PyPI token", "waiting on Ana to log in to
+  npm" and "with his own login". "credential-free" and a custody note that mentions a credential are
+  still not walls.
+- **Public steps stand.** "before posting publicly" and an upstream PR or issue now match the publish
+  wall. Found by running Selenite on the dogfooder's own open holds.
+- **Named holds are not stale.** "blocked until Security reviews" is an agent ack, and "waiting for
+  approval from CoS" (a party that is not a configured seat) is a person's queue, not a dead wait.
+- **Each Hermes home reads only its own ledger.** The shared fallback folder is split by home
+  (`by-home/<tag>`), so a gate from one profile no longer shows in another, and "Mark fixed" in one
+  never clears another's gate.
+- **The dashboard tab:** "Mark fixed" can be undone and a fixed row can be reopened; the picked
+  7d/30d/90d window inverts and carries a check mark; the tab shows Cleanse ("what to clear next")
+  and Evolve, and a drafted proposal confirms itself; every button is at least 44 px.
+
 ### Dogfood round-two fixes (2026-11-11)
 
 - **A stale install can't win silently.** `install.sh --hermes` reuses the Selenite copy the machine
