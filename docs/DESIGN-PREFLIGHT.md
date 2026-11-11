@@ -103,3 +103,4 @@ Rejected metaphors:
 - The concept SVG in `assets/icon.svg` stays as a construction note only.
 - The 2:1 catalog banner is `docs/banner.png` (1200×600; the icon plus the SELENITE lockup in Chakra Petch Bold 700 and Medium 500, pearl ink `#ECE9E2` on dark).
 - The catalog `image` field points at `docs/banner.png` on raw.githubusercontent.com, pinned to the same sha as the catalog entry.
+- Wordmark exports (Simon asked, 2026-11-10: "do you have the logo and wordmark"): `branding/selenite-wordmark-*.svg` (SELENITE alone) and `branding/selenite-lockup-*.svg` (SELENITE over "by KyaniteLabs"), both with glyphs converted to outlines so they render without the font. There are also `branding/selenite-lockup-horizontal-*.png` (mark plus lockup, transparent). Each comes in `ink` (Walnut ink `#3b342e`, for light grounds) and `pearl` (`#ECE9E2`, the banner's ink, for dark grounds). Per §5, only the ink changes between them.
