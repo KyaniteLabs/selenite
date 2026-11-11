@@ -41,7 +41,8 @@ jobs:
           set -o pipefail
           runuser -u ci -- env HOME=/home/ci python3 -m pytest -q -rs -p no:cacheprovider | tee pytest.out
           # Every test should run in CI (fastapi is installed, the checkout is a git repo): a skip is a failure.
-          if grep -q "^SKIPPED" pytest.out; then echo "unexpected skips" >&2; exit 1; fi
+          # The two tests that need a real Hermes checkout run in hermes-validate instead.
+          if grep "^SKIPPED" pytest.out | grep -v -e "Hermes gateway session context is not present" -e "real Hermes source is not configured"; then echo "unexpected skips" >&2; exit 1; fi
       - name: Desktop event contract
         run: node --experimental-vm-modules tests/test_pane_events.mjs
       - name: Package installs and the fake-gate CLI runs
@@ -79,7 +80,7 @@ jobs:
       - name: Plugin tests under the Hermes runtime
         run: |
           uv pip install --python .hermes-runtime/.venv/bin/python pytest==8.4.2
-          cd plugin && ../.hermes-runtime/.venv/bin/python -m pytest -q
+          cd plugin && SELENITE_TEST_HERMES_SOURCE="$(cd ../.hermes-runtime && pwd)" ../.hermes-runtime/.venv/bin/python -m pytest -q -rs
       - name: The real validator passes with no warnings (no credentials)
         run: |
           HERMES_HOME=$(mktemp -d) .hermes-runtime/.venv/bin/hermes plugins validate plugin --json > validate.json
