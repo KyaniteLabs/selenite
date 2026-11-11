@@ -1,6 +1,20 @@
 # Changelog
 
-## 0.5.0 (unreleased)
+## 0.5.0 (in catalog review; not yet merged)
+
+### Roast round-four fixes (2026-11-11)
+
+- **`/frictionless` starts the agent turn.** The command used to return the mode's instructions to
+  the person who typed it. It now hands them to the agent on the same session and replies with one
+  status line. A surface that cannot start a turn gets the text to send instead.
+- **Destructive waits are never called fake.** "Drop the users table" and "prod database migration"
+  now match the wall list (it only knew `drop table` and `migration` next to each other), and in
+  nudge mode a wait that names a wall is never nudged as a fake gate, even when another agent is
+  the one it waits on.
+- **The TUI and the desktop app are local,** like the CLI: `/antibeaurocracy audit` shows them the
+  full card list, matching Unbl0ck and Epoch.
+- **The ledger tool admits a dropped row.** `selenite_ledger add` on a home with no writable state
+  folder returns `success: false` instead of reporting a row it never wrote.
 
 ### Pre-submission review fixes (2026-11-11)
 

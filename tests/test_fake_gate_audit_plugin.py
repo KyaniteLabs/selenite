@@ -349,9 +349,10 @@ def test_slash_remote_is_count_only(tmp_path, monkeypatch):
     _, ctx = _load_plugin(tmp_path, monkeypatch)
     remote = ctx.commands["antibeaurocracy"]("audit", platform="discord")
     assert "t_d" not in remote and "blocked" in remote
-    assert "t_d" not in ctx.commands["antibeaurocracy"]("audit", platform="tui")
     local = ctx.commands["antibeaurocracy"]("audit", platform="cli")
     assert "t_d" in local
+    for surface in ("tui", "desktop"):   # local clients, like the CLI: the full list
+        assert "t_d" in ctx.commands["antibeaurocracy"]("audit", platform=surface)
     assert "F2-relay" in ctx.commands["fake-gate"](RELAY, platform="discord")
 
 
@@ -508,6 +509,19 @@ def test_ask_never_questions_text_with_a_wall_family_word(tmp_path, monkeypatch,
     _, ctx = _load_plugin(tmp_path, monkeypatch, {"fake_gate_mode": "ask"})
     assert ctx.hooks["pre_tool_call"](tool_name="kanban_block", args={"task_id": "t", "reason": reason},
                                       session_id="s") is None
+
+
+@pytest.mark.parametrize("reason", [
+    "Awaiting ACK from platform before I drop the users table",
+    "Awaiting ACK from platform before running the prod database migration",
+    "Awaiting relay to create the PR; the token rotation is pending",
+])
+def test_a_wall_family_wait_is_never_nudged_as_fake(tmp_path, monkeypatch, reason):
+    _, ctx = _load_plugin(tmp_path, monkeypatch, {"fake_gate_mode": "nudge"})
+    pre, post = ctx.hooks["pre_tool_call"], ctx.hooks["transform_tool_result"]
+    args = {"task_id": "t_w", "reason": reason}
+    assert pre(tool_name="kanban_block", args=args, session_id="s", tool_call_id="cw") is None
+    assert post(tool_name="kanban_block", args=args, result='{"ok": true}', session_id="s", tool_call_id="cw") is None
 
 
 def test_tiny_ttl_is_raised_so_ask_still_fails_open(tmp_path, monkeypatch):
