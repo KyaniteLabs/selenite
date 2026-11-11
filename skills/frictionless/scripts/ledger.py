@@ -99,14 +99,25 @@ APPROVAL_KEY = 71  # approval keys are cut here, so "approval:" + key fits the 8
 # Redaction runs on every key and note the ledger writes, and on miner samples. Order matters:
 # whole secrets first, then the generic long-run rule.
 _REDACT = [
+    # A PEM block (or a lone header someone pasted) is removed whole.
+    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----(?:.*?-----END [A-Z ]*PRIVATE KEY-----)?", re.S),
+     "<private-key>"),
+    (re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*"), "<token>"),  # JWT, any length
     (re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+"), "<email>"),
     (re.compile(r"://[^/\s:@]+:[^@\s]+@"), "://<cred>@"),
     (re.compile(r"(?i)\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 <token>"),
-    (re.compile(r"(?i)\b([\w-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|auth)[\w-]*)"
-                r"(\s*[=:]\s*)(\"[^\"]*\"|'[^']*'|\S+)"), r"\1\2<secret>"),
+    # key=value / key: value. A value the bearer rule already replaced keeps its scheme word, so
+    # "Authorization: Bearer <token>" stays readable.
+    (re.compile(r"(?i)\b([\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|auth)"
+                r"[\w-]*)(\s*[=:]\s*)(?!(?:bearer|basic|token)\s+<token>)(\"[^\"]*\"|'[^']*'|\S+)"),
+     r"\1\2<secret>"),
+    # "password hunter2" with no separator; a plain word ("password reset") is left alone.
+    (re.compile(r"(?i)\b(password|passphrase|passwd)(\s+)(?!<secret>)(?=\S*[^\sA-Za-z])\S+"), r"\1\2<secret>"),
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "<token>"),
     (re.compile(r"\b(?:sk-proj-|sk-|ghp_|gho_|ghs_|ghu_|github_pat_|xox[abprs]-|glpat-)[A-Za-z0-9_\-]{8,}"), "<token>"),
     (re.compile(r"(?<![\w/+=])(?=[A-Za-z0-9_\-/+=]*\d)(?=[A-Za-z0-9_\-/+=]*[A-Za-z])[A-Za-z0-9_\-/+=]{32,}"), "<token>"),
+    # Card numbers: 13-19 digits, optionally grouped with spaces or dashes.
+    (re.compile(r"(?<![\d.])\d(?:[ -]?\d){12,18}(?![\d.])"), "<card>"),
     (re.compile(r"\b\d{1,3}(\.\d{1,3}){3}\b"), "<ip>"),
     # IPv6: needs "::" or a hex letter, so clock times like 12:30:45 stay readable.
     (re.compile(r"(?i)(?<![\w:.])(?=[0-9a-f:]*(?:::|[a-f]))[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}(?![\w:])"), "<ip>"),

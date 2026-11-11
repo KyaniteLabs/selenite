@@ -20,7 +20,8 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     c.add_argument("--kind", choices=["dependency", "needs_input", "capability", "transient"])
     c.add_argument("--age-hours", type=float)
     a = sub.add_parser("audit", help="read-only audit of kanban boards + instruction files")
-    a.add_argument("--root", action="append", type=Path, help="Hermes home(s); default: $HERMES_HOME and every ~/.hermes* directory")
+    a.add_argument("--root", action="append", type=Path, help="Hermes home(s); default: the active home ($HERMES_HOME, else ~/.hermes)")
+    a.add_argument("--all-homes", action="store_true", help="scan every ~/.hermes* directory, not just the active home")
     a.add_argument("--rules", action="append", type=Path, help="instruction files to score (default: known agent rule files)")
     a.add_argument("--no-rules", action="store_true")
     a.add_argument("--skills", action="store_true", help="also score every SKILL.md under the known skill directories")
@@ -49,10 +50,10 @@ def handle(args: argparse.Namespace, settings: dict | None = None) -> int:
         print(json.dumps(v.to_dict(), indent=2) if args.json else f"{v.label} ({v.confidence}) — {v.action}")
         return 0
     if args.cmd == "audit":
-        boards = [_audit.audit_board(db) for db in _audit.find_boards(args.root or _audit.default_roots())]
-        paths = [] if args.no_rules else list(args.rules or _audit.default_rule_paths())
+        boards = [_audit.audit_board(db) for db in _audit.find_boards(args.root or _audit.default_roots(args.all_homes))]
+        paths = [] if args.no_rules else list(args.rules or _audit.default_rule_paths(args.all_homes))
         if args.skills:
-            paths += _audit.skill_paths()
+            paths += _audit.skill_paths(args.all_homes)
         rules = _audit.audit_rules(paths)
         summary = _audit.summarize(boards)
         if args.judge and args.counts:

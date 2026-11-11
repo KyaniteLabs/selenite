@@ -144,7 +144,8 @@ def test_status_drops_badges_for_cards_unblocked_or_archived_on_the_board(monkey
     for t in ("t_arch", "t_ready", "t_still", "t_gone"):
         ledger.add("blocked", f"kanban:{t}")
     _board({"t_arch": "archived", "t_ready": "ready", "t_still": "blocked"})
-    assert api.status()["blocked_tasks"] == ["t_gone", "t_still"]  # unknown stays: can't prove it moved
+    # t_gone is on no board that read cleanly, so it was deleted: its badge goes too.
+    assert api.status()["blocked_tasks"] == ["t_still"]
 
 
 def test_a_45_day_old_block_still_badges_in_status():

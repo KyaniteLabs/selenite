@@ -113,7 +113,7 @@ def _card_statuses(ids: list[str]) -> dict[str, str]:
             return _status_cache["statuses"]
     try:
         audit = _fake_gates._core().audit
-        statuses = audit.card_statuses(ids, audit.find_boards([_fake_gates._home()]))
+        statuses = audit.card_statuses(ids, audit.find_boards([_fake_gates._home()]), mark_missing=True)
     except Exception:  # a missing or locked board never hides a badge, it just can't clear one
         statuses = {}
     with _lock:
@@ -123,7 +123,7 @@ def _card_statuses(ids: list[str]) -> dict[str, str]:
 
 def _blocked(rows: list[dict], fixed: set[str]) -> list[str]:
     """Cards still waiting on a person: logged blocked, not fixed since, and not since unblocked,
-    archived or finished on the board (Hermes fires no hook for an unblock or an archive)."""
+    archived, finished or deleted on the board (Hermes fires no hook for an unblock or an archive)."""
     ids = sorted({r["key"].split(":", 1)[1] for r in rows
                   if r["kind"] == "blocked" and r["key"].startswith("kanban:") and r["key"] not in fixed})
     statuses = _card_statuses(ids) if ids else {}

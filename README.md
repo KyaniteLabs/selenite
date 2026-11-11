@@ -80,7 +80,7 @@ antibeaurocracy audit --judge "llm -m some-model"   # optional second opinion, s
 
 - **Reads:**
   - Your agent homes, when you run `cleanse.py` or the tool's `cleanse` action. That covers skill folders, the Hermes plugins folder, Claude Code `settings.json` hook commands, any runbook path you pass, and the fake-gate ledger. `mine.py` reads your own messages in Claude Code (`~/.claude/projects`), Codex (`~/.codex/sessions`) and Hermes (`$HERMES_HOME/state.db`, opened read-only), plus any `--path`.
-  - `kanban.db` files under `$HERMES_HOME`, opened with SQLite `mode=ro`, for the fake-gate audit, tool and dashboard card. The CLI audit also scans every `~/.hermes*` directory.
+  - `kanban.db` files under `$HERMES_HOME`, opened with SQLite `mode=ro`, for the fake-gate audit, tool and dashboard card. The CLI audit scans the active home only; `--all-homes` adds every `~/.hermes*` directory.
   - The CLI audit (not the plugin hooks or tools) reads the agent rule files it finds, such as `~/.claude/CLAUDE.md`, `~/AGENTS.md`, `~/.agents/rules/*.md` and each Hermes home's `SOUL.md`, and prints up to eight example gate lines from each. Selenite's own skills are skipped. Use `--no-rules` to skip this, or `--counts` for numbers only.
 - **Writes:**
   - The ledger, reports and proposals in the state folder (folder 0700, files 0600): `$SELENITE_STATE`, else `$XDG_STATE_HOME/selenite`, else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite`. Each `cleanse.py` run writes a report there and one ledger row with its finding count; if no folder takes the write (a read-only home, the normal case in an agent seat) it prints one line saying so and still prints the findings. Ledger notes are redacted before they are written.

@@ -119,15 +119,31 @@ def typo_density(text: str) -> float:
     return 100.0 * typo_hits(text) / words
 
 
+# Text the person is quoting rather than saying: fenced or inline code, "> " quote lines and
+# double-quoted spans. A pasted log that says "wtf" or a quoted complaint is not their mood.
+_QUOTED = re.compile(
+    r"```.*?(?:```|\Z)|~~~.*?(?:~~~|\Z)|`[^`\n]*`|^[ \t]*>.*$|\"[^\"\n]*\"|\u201c[^\u201d\n]*\u201d",
+    re.S | re.M,
+)
+
+
+def own_words(text: str) -> str:
+    """The message with quoted, fenced and pasted spans removed."""
+    return _QUOTED.sub(" ", text or "")
+
+
 def overload(text: str) -> list[str]:
     """Overload reasons for one message ([] when calm).
 
-    One reason is information, not overload. Callers switch to Calm only on
-    two distinct reasons in one message, or a reason in two messages in a row
-    (see calm_due()).
+    Only the person's own words count (see own_words()). One reason is
+    information, not overload. Callers switch to Calm only on two distinct
+    reasons in one message, or a reason in two messages in a row (see calm_due()).
     """
+    if not is_human_text(text):
+        return []
+    text = own_words(text)
     reasons = [c for c in classify(text) if c in OVERLOAD]
-    if is_human_text(text) and len(text.split()) >= 8 and typo_hits(text) >= 2 and typo_density(text) >= 6:
+    if len(text.split()) >= 8 and typo_hits(text) >= 2 and typo_density(text) >= 6:
         reasons.append("typo_burst")
     return reasons
 

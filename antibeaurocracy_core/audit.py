@@ -53,12 +53,18 @@ def _ro(path: Path) -> sqlite3.Connection:
     return con
 
 
-def card_statuses(task_ids: Iterable[str], dbs: Iterable[Path]) -> dict[str, str]:
+MISSING = "missing"
+
+
+def card_statuses(task_ids: Iterable[str], dbs: Iterable[Path], mark_missing: bool = False) -> dict[str, str]:
     """Each card's current status (blocked, ready, archived...), read-only. Hermes fires no hook when a
     person unblocks or archives a card, so a badge is checked against the board itself. Ids missing
-    from every board are left out: unknown is not cleared."""
+    from every board are left out: unknown is not cleared. With ``mark_missing``, an id that is on no
+    board, when every board was read cleanly, is reported as ``MISSING`` (the card was deleted)."""
     want = {str(t) for t in task_ids if t}
     out: dict[str, str] = {}
+    read_ok = 0
+    clean = True
     for db in dbs:
         todo = sorted(want - out.keys())
         if not todo:
@@ -74,8 +80,12 @@ def card_statuses(task_ids: Iterable[str], dbs: Iterable[Path]) -> dict[str, str
                     out.update({str(r["id"]): str(r["status"]) for r in con.execute(q, part) if r["status"]})
             finally:
                 con.close()
+            read_ok += 1
         except sqlite3.Error:
+            clean = False
             continue
+    if mark_missing and clean and read_ok:
+        out.update({t: MISSING for t in want - out.keys()})
     return out
 
 
@@ -90,12 +100,15 @@ def find_boards(roots: Iterable[Path]) -> list[Path]:
     return out
 
 
-def default_roots() -> list[Path]:
+def default_roots(all_homes: bool = False) -> list[Path]:
+    """The active Hermes home ($HERMES_HOME, else ~/.hermes). ``all_homes`` adds every ~/.hermes*."""
     env = os.environ.get("HERMES_HOME")
-    roots = [Path(env)] if env else []
-    for q in sorted(Path.home().glob(".hermes*")):
-        if q.is_dir() and q not in roots:
-            roots.append(q)
+    active = Path(env) if env else Path.home() / ".hermes"
+    roots = [active] if env or active.is_dir() else []
+    if all_homes:
+        for q in sorted(Path.home().glob(".hermes*")):
+            if q.is_dir() and q not in roots:
+                roots.append(q)
     return roots
 
 
@@ -260,13 +273,13 @@ def audit_rules(paths: Iterable[Path]) -> list[dict]:
     return sorted(out, key=lambda r: -r["gate_density_per_1k"])
 
 
-def default_rule_paths() -> list[Path]:
+def default_rule_paths(all_homes: bool = False) -> list[Path]:
     home = Path.home()
     pats = [
         "~/.claude/CLAUDE.md", "~/.claude/rules/*.md", "~/AGENTS.md", "~/.codex/AGENTS.md", "~/.gemini/GEMINI.md",
         "~/.agents/rules/*.md", "~/.config/kilo/AGENTS.md",
     ]
-    for root in default_roots():  # every Hermes home: its persona, rules and per-profile personas
+    for root in default_roots(all_homes):  # the Hermes home(s): persona, rules, per-profile personas
         r = str(root)
         pats += [f"{r}/SOUL.md", f"{r}/AGENTS.md", f"{r}/profiles/*/SOUL.md"]
     out: list[Path] = []
@@ -277,10 +290,10 @@ def default_rule_paths() -> list[Path]:
     return [p for p in out if p.is_file() and not (p in seen or seen.add(p))]
 
 
-def skill_paths() -> list[Path]:
+def skill_paths(all_homes: bool = False) -> list[Path]:
     home = Path.home()
     roots = [home / ".claude/skills", home / ".agents/skills", home / ".codex/skills"]
-    for h in default_roots():
+    for h in default_roots(all_homes):
         roots += [h / "skills", *sorted((h / "profiles").glob("*/skills"))]
     return sorted({p for r in roots if r.is_dir() for p in r.rglob("SKILL.md")})
 

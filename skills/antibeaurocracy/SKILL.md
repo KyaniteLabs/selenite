@@ -62,7 +62,7 @@ If you have no shell, run the same check in your head:
 ## Auditing a whole system
 
 ```bash
-antibeaurocracy audit                 # read-only: boards under $HERMES_HOME and every ~/.hermes* home, plus rule files
+antibeaurocracy audit                 # read-only: boards in the active Hermes home (--all-homes: every ~/.hermes*), plus rule files
 antibeaurocracy audit --json --top 40
 antibeaurocracy audit --root /path/to/hermes-home --rules path/to/AGENTS.md
 ```
