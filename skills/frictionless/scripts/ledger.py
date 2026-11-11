@@ -37,6 +37,11 @@ import time
 from collections import Counter
 from pathlib import Path
 
+if __package__:
+    from . import pane
+else:
+    import pane
+
 
 def _state_from_env() -> Path:
     """The folder Selenite prefers: explicit, then XDG, then the Hermes home, then ~/.local/state."""
@@ -247,6 +252,7 @@ def add(kind: str, key: str, note: str = "", agent: str = "") -> dict | None:
                 fd = os.open(state / "ledger.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
                 with os.fdopen(fd, "a") as fh:
                     fh.write(json.dumps(row) + "\n")
+            pane.broadcast("ledger.updated", {"kind": kind})
             return row
         except OSError:  # read-only home, full disk, no permission: the next folder may take it
             continue

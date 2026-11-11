@@ -140,6 +140,7 @@ def build(days: int = 30) -> Path | None:
         fh.write("\n".join(L))
     for old in sorted(state.glob("proposal-*.md"), key=lambda f: f.stat().st_mtime)[:-KEEP]:
         old.unlink(missing_ok=True)
+    ledger.pane.broadcast("proposal.updated", {})
     return out
 
 

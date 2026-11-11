@@ -405,6 +405,7 @@ def write(report: dict) -> Path | None:
                 old.unlink(missing_ok=True)
             except OSError:
                 pass
+        ledger.pane.broadcast("cleanse.updated", {"count": len(report["findings"])})
         return out
     return None
 

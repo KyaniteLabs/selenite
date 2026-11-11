@@ -3,7 +3,7 @@ name: antibeaurocracy
 description: Use when an agent is about to block, park, hold, relay, ask for an ACK or wait on another seat; when a board has more blocked than running work; when a human complains the agents are bureaucratic; or when auditing rules, SOULs and skills for gate language. Classifies each wait as WALL / HUMAN / MACHINERY / DEPENDENCY / FAKE and tells you what to do instead.
 license: MIT
 metadata:
-  version: 0.5.1
+  version: 0.6.0
   author: KyaniteLabs
   hermes:
     tags: [kanban, governance, agents]

@@ -45,7 +45,7 @@ def test_register_matches_manifest():
     assert [n for n, _ in ctx.skills] == ["frictionless", "antibeaurocracy", "antipedantry"]
     assert all(path.exists() for _, path in ctx.skills)
     assert ctx.commands == ["frictionless", "antibeaurocracy", "fake-gate"]
-    assert [t for t, _ in ctx.tools] == ["selenite_ledger", "bureaucracy_classify", "bureaucracy_audit"]
+    assert [t for t, _ in ctx.tools] == ["selenite_ledger", "selenite_show", "bureaucracy_classify", "bureaucracy_audit"]
     assert all(f"  - {hook}\n" in manifest for hook in ctx.hooks)
     assert manifest.count("\n  - ") - manifest.split("optional_env:")[1].count("\n  - ") == len(ctx.hooks)
     for tool, _ in ctx.tools:

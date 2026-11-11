@@ -24,7 +24,7 @@ Walls always stand: credentials, spend, publishing or deploying, destructive ste
 |---|---|
 | `skills/` | The three facet skills (`frictionless`, `antibeaurocracy`, `antipedantry`) in the open [Agent Skills](https://agentskills.io) format. They work with any agent that loads `SKILL.md`: Claude Code, Codex, OpenCode, Hermes and others. |
 | `antibeaurocracy_core/`, `bin/` | The fake-gate classifier and board audit: stdlib Python 3.10+, no dependencies, and the `antibeaurocracy` CLI. |
-| `__init__.py`, `plugin.yaml` | A Hermes plugin. It registers the three skills, the `/frictionless`, `/antibeaurocracy` and `/fake-gate` commands, the `selenite_ledger`, `bureaucracy_classify` and `bureaucracy_audit` tools, and eight hooks. |
+| `__init__.py`, `plugin.yaml` | A Hermes plugin. It registers the three skills, the `/frictionless`, `/antibeaurocracy` and `/fake-gate` commands, the `selenite_ledger`, `selenite_show`, `bureaucracy_classify` and `bureaucracy_audit` tools, and eight hooks. |
 | `install.sh` | Links the skills into each agent it finds and the CLI into `~/.local/bin`, creates the state folder (0700) and checks the ledger works. Add `--hermes` to also link the plugin and enable it in Hermes. Idempotent; it never overwrites a real file or folder, and warns when a real folder hides a skill link. A read-only target (an agent seat, a managed Mac, a container) is skipped, not fatal: every target is attempted and the last line counts linked, skipped and failed. `--no-enable` links the plugin but leaves `hermes plugins enable` to you. |
 | `desktop/` | The Hermes Desktop page, status chip and Kanban badges (`plugin.js`), plus the Chakra Petch subsets it embeds. |
 | `dashboard/` | The web dashboard tab and its backend routes (`plugin_api.py`, plus `fake_gates_api.py` for the fake-gate card), served by Hermes under `/api/plugins/selenite/`. |
@@ -54,6 +54,8 @@ git clone <this repo> ~/src/selenite && ~/src/selenite/install.sh            # t
 Hermes picks up the plugin on its next gateway restart. In Hermes, the `hooks` setting (or `SELENITE_HOOKS=0`) turns every hook off and keeps everything else. If you ran the standalone antibeaurocracy plugin before, disable it: running both doubles the fake-gate hooks, and the installer warns when it finds one.
 
 The `/frictionless` command starts an agent turn through the Hermes gateway. Enable Hermes's `allow_gateway_injection` setting for the gateway to accept that handoff; otherwise Selenite prints the instructions for you to send manually.
+
+The Desktop page reacts to agent tool calls through local Desktop events: ledger changes, cleanse reports and evolve proposals refresh it, and `selenite_show` opens its route and scrolls to a section or focuses an item while the pane is enabled. Events carry only short ids, a ledger kind or a finding count, never file contents, transcripts, tokens or home paths. With no Desktop client, delivery is a logged no-op; older Hermes builds without the event bridge still run the tools. `/frictionless status` gives pane guidance: check Selenite in **Capabilities -> Plugins**, where enabling the pane is the one step a person does, then open its page.
 
 One Selenite per machine: if `~/.local/share/selenite` or another Hermes home already has the plugin, `--hermes` reuses that copy instead of adding a second checkout of the same plugin name, which Hermes refuses to admit (`Two workspace members are both named 'selenite'`).
 

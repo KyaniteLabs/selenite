@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 (2026-11-11)
+
+- Agent tool calls now refresh the Desktop page through local `ledger.updated`,
+  `cleanse.updated` and `proposal.updated` events, with only kinds/counts and no private text.
+- New `selenite_show` tool sends `view.set` to open the enabled page's route, scroll to
+  a real section and focus an optional short item id; unknown views return an error.
+- Live events supersede older REST requests, and listeners are removed on plugin disposal.
+  The guarded bridge keeps tools working on older Hermes builds and without Desktop.
+- `/frictionless status` and the skill explain the person's one pane-enabling step in
+  Capabilities -> Plugins; the plugin and its bundled facets are now version 0.6.0.
+
 ## 0.5.1 (2026-11-11)
 
 - **Agent approvals are fake gates; authority walls stand.** Reviewer, security, QA and legal
