@@ -1,7 +1,7 @@
 import pytest
 
 from antibeaurocracy_core import DEPENDENCY, FAKE, HUMAN, MACHINERY, WALL, classify, configure
-from antibeaurocracy_core.classify import ACTIONS
+from antibeaurocracy_core.classify import ACK, ACTIONS
 
 WALLS = [
     ("npm publish fails: ENEEDAUTH, no working token on this host", "credentials"),
@@ -327,3 +327,29 @@ def test_ordinary_work_is_not_an_evidenced_gate_or_credential_wall(text):
 
 def test_human_legal_team_is_never_agent_bureaucracy():
     assert classify("legal team needs to review").cls == WALL
+
+
+# Dogfood 2026-11-11: the PM seat's own queue. A person's spoken hold, their "yes", or a decision
+# waiting on them by name is that person's call; an agent's re-check on a reversible merge is a fake gate.
+@pytest.mark.parametrize("text", [
+    "catalog repins wait until after 14:00 because Simon said no upstream PR bump",
+    "upstream catalog PR text needs Simon's yes before posting",
+    "CheckYourself pause decision waiting on Simon",
+    "the owner told us to wait until the audit lands",
+])
+def test_dogfood_person_holds_are_human(text):
+    # A publish step that also needs a person's yes may read as WALL (publish) first; either way it is never FAKE.
+    assert classify(text).cls in (HUMAN, WALL)
+
+
+@pytest.mark.parametrize("text", [
+    "Iolite 0.5.0 merge waiting for Security agent delta re-check before I merge to internal main",
+    "waiting on the security agent to re-check",
+])
+def test_dogfood_agent_recheck_is_ack(text):
+    v = classify(text)
+    assert (v.cls, v.subtype) == (FAKE, ACK)
+
+
+def test_dogfood_person_mentioned_without_a_hold_is_not_human():
+    assert classify("the user said the test failed").cls != HUMAN

@@ -143,7 +143,7 @@ _SEAT = r"(liam|platform|security|design|engineering|governance|income|chief.?sc
 _ROLE = (r"(ceo|cto|cfo|coo|founders?|owner|operator|user|human|boss|board|executives?|manager|legal|customers?|"
          r"clients?|person|simon)")
 _NOT_A_PERSON = r"(?!-|('s)?\s+(agent|bot|seat|module|lane|worker|service|process)s?\b)"
-_NOUN = r"(approval|approvals|ok|okay|sign-?off|go|word|green-?light|blessing|decision|call|ack|ruling|verdict)"
+_NOUN = r"(approval|approvals|ok|okay|yes(/yes)?|consent|sign-?off|go|word|green-?light|blessing|decision|call|ack|ruling|verdict)"
 # weak: the role is only referenced ("ACK from the CEO"); needs a wait word or gate phrase to count
 _HUMAN_AUTHORITY = re.compile(
     # the source of the wait: "ACK from the CEO", "HOLD per the owner", "approved by the founder"
@@ -158,6 +158,10 @@ _HUMAN_AUTHORITY_STRONG = re.compile(
     rf"decides?|countersigns?|ratif\w*|sign(s|ed)? off)\b|"
     rf"\b{_ROLE} to (approv\w*|sign(s|ed)? off|decide|ratif\w*|countersign\w*|green-?light|"
     rf"expose|provide|grant|create|open|enable)\b|"
+    # the person's spoken stop: "because Simon said no upstream bump", "the owner told us to wait"
+    rf"\b{_ROLE} (said|says|asked|told (us|me|you|them))( to)? (no|not|don'?t|do not|wait|hold|stop|pause)\b|"
+    # the wait names the person directly: "decision waiting on Simon", "blocked on the owner"
+    rf"\b(waiting (for|on)|awaiting|blocked on) (the |my |our )?(ceo|cto|cfo|coo|founders?|owner|operator|boss|board|executives?|manager|legal|simon)\b{_NOT_A_PERSON}|"
     # a seat named as the builder of a missing capability: "need Liam/Platform to expose a GUI wrapper"
     rf"\b(need|needs|needing) {_SEAT}(?:/\w+){{0,3}} to (expose|provide|grant|create|open|enable|build)\b)", _I)
 
@@ -217,7 +221,7 @@ def _build_fake() -> list[tuple[str, re.Pattern]]:
             r"which (seat|agent|team) owns|ownership (unclear|unresolved|dispute))", _I)),
         (ACK, re.compile(
             rf"(\bACK (from|by)\b|\bawait(ing)? ACK\b|acknowledg(e|ment) (from|by) {seats}|sign-?off (from|by) {seats}|(approval|go-?ahead|ok) (from|by) {seats}|"
-            rf"(awaiting|await|wait(ing)? (for|on)) (the |my |our )?{approvers}('s)? (approval|go-?ahead|green light|ok\b|okay|confirmation|sign-?off|ack|to (sign[ -]?off|approv\w*|confirm|review))\b|"
+            rf"(awaiting|await|wait(ing)? (for|on)) (the |my |our )?{approvers}('s)? (approval|go-?ahead|green light|ok\b|okay|confirmation|sign-?off|ack|verdict|(delta )?(re-?)?(check|review)|to (sign[ -]?off|approv\w*|confirm|review|re-?check))\b|"
             rf"\b{approvers} (needs? to|must|has to|to) (sign[ -]?off|approv\w*|confirm|review)\b|"
             rf"\buntil (the )?{approvers} (reviews?|approves?|signs? off|acks?|confirms?|okays?|clears? it)\b)", _I)),
         (CEREMONY, re.compile(
