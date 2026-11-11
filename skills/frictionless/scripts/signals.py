@@ -124,7 +124,7 @@ def typo_density(text: str) -> float:
 # Text the person is quoting rather than saying: fenced or inline code, "> " quote lines and
 # double-quoted spans. A pasted log that says "wtf" or a quoted complaint is not their mood.
 _QUOTED = re.compile(
-    r"```.*?(?:```|\Z)|~~~.*?(?:~~~|\Z)|`[^`\n]*`|^[ \t]*>[^\r\n]*|\"[^\"\n]*\"|\u201c[^\u201d\n]*\u201d",
+    r"```.*?(?:```|\Z)|~~~.*?(?:~~~|\Z)|`[^`\n]*`|^[ \t]*>[^\r\n]*|(?<![\w])\"[^\"\n]*\"|\u201c[^\u201d\n]*\u201d",
     re.S | re.M,
 )
 

@@ -60,7 +60,7 @@ def test_seat_roles_and_noun_approvals_are_people():
     for text in (
         "needs CEO approval to submit.",
         "CEO word on the catalog description copy.",
-        "technical capability gap, need Liam/Platform to expose a GUI wrapper",
+        "technical capability gap, need Platform to expose a GUI wrapper",
         "the CEO's approval",
     ):
         assert classify(text).cls == HUMAN, text
@@ -85,7 +85,7 @@ def test_publish_with_ceo_approval_is_still_a_wall():
 
 
 def test_capability_wall_escalates_instead_of_closing():
-    v = classify("appeal is Simon-held, no agent can clear it")
+    v = classify("appeal is operator-held, no agent can clear it")
     assert v.cls == WALL
     assert v.subtype == "declared-capability"
     assert v.confidence >= 0.6  # above the action threshold: escalate, never "close the card"

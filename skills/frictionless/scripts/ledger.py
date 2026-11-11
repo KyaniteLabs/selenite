@@ -167,7 +167,7 @@ _REDACT = [
     # key=value / key: value. A value the bearer rule already replaced keeps its scheme word, so
     # "Authorization: Bearer <token>" stays readable.
     (re.compile(r"(?i)\b((?:[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)[\w-]*|"
-                r"(?:[\w-]+[-_])?auth(?:[-_][\w-]+)*|authorization|authentication)"
+                r"[\w-]*(?:oauth|auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth)(?:[-_][\w-]+)*|authorization|authentication)"
                 r")(\s*[=:]\s*)(?!(?:bearer|basic|token)\s+<token>)(\"[^\"]*\"|'[^']*'|\S+)"),
      r"\1\2<secret>"),
     # "password hunter2" with no separator; a plain word ("password reset") is left alone.

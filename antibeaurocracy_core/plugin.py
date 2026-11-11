@@ -289,14 +289,19 @@ _SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
 def _kanban_dbs(board: str | None) -> list[Path]:
-    """Where Hermes keeps kanban.db, from its documented layout (no private imports): HERMES_KANBAN_DB
-    pins one file; otherwise the root is HERMES_KANBAN_HOME or the Hermes home, the default board's DB
-    is <root>/kanban.db and a named board's is <root>/kanban/boards/<slug>/kanban.db. The named board
-    comes first, then every other board, since task ids are unique across boards."""
+    """Where Hermes keeps kanban.db: an explicit DB pin, shared kanban home, or Hermes root."""
     pin = os.environ.get("HERMES_KANBAN_DB", "").strip()
     if pin:
         return [Path(pin).expanduser()]
-    root = Path(os.environ.get("HERMES_KANBAN_HOME", "").strip() or _hermes_home()).expanduser()
+    kanban_home = os.environ.get("HERMES_KANBAN_HOME", "").strip()
+    if kanban_home:
+        root = Path(kanban_home).expanduser()
+    else:
+        try:
+            from hermes_constants import get_default_hermes_root  # type: ignore
+            root = Path(get_default_hermes_root())
+        except Exception:
+            root = _hermes_home()
     slug = str(board or os.environ.get("HERMES_KANBAN_BOARD") or "default").strip().lower()
     first = []
     if slug == "default":

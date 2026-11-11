@@ -224,3 +224,37 @@ def test_cleanse_generated_is_utc_with_offset():
 def test_no_stale_backfill_copy():
     for f in ("desktop/plugin.js", "dashboard/dist/index.js"):
         assert "backfill" not in (REPO / f).read_text()
+
+
+def test_kanban_root_matches_real_hermes_profile_resolution(tmp_path, monkeypatch):
+    source = os.environ.get("SELENITE_TEST_HERMES_SOURCE")
+    if not source or not (Path(source) / "hermes_constants.py").is_file():
+        pytest.skip("real Hermes source is not configured")
+    sys.path.insert(0, source)
+    try:
+        from hermes_constants import get_default_hermes_root
+    finally:
+        sys.path.remove(source)
+
+    hermes_root = tmp_path / "hermes-root"
+    monkeypatch.setenv("HERMES_HOME", str(hermes_root / "profiles" / "worker"))
+    monkeypatch.delenv("HERMES_KANBAN_HOME", raising=False)
+    monkeypatch.delenv("HERMES_KANBAN_DB", raising=False)
+    from antibeaurocracy_core.plugin import _kanban_dbs
+    assert _kanban_dbs(None)[0] == get_default_hermes_root() / "kanban.db"
+
+    shared_root = tmp_path / "shared-kanban"
+    monkeypatch.setenv("HERMES_KANBAN_HOME", str(shared_root))
+    assert _kanban_dbs(None)[0] == shared_root / "kanban.db"
+
+
+def test_classifiers_use_role_words_for_authority_and_capability():
+    import importlib
+    classifier = importlib.import_module("antibeaurocracy_core.classify")
+    assert classifier._SEAT == r"(platform|security|design|engineering|governance|income|chief.?scientist)"
+    assert classifier._ROLE == (
+        r"(ceo|cto|cfo|coo|founders?|owner|operator|user|human|boss|board|executives?|manager|legal|customers?|"
+        r"clients?|person)"
+    )
+    assert classifier._PRINCIPAL == r"(ceo|cto|cfo|coo|founders?|owner|operator|boss)"
+    assert classifier.classify("Appeal is owner-held; no agent can clear it").cls == "WALL"

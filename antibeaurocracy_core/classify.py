@@ -75,14 +75,14 @@ _WALL = [
         # up to three words (possessives included) between the verb and the secret.
         r"\b(missing|expired|invalid|revoked|no(?! (output|input|context|more) )|no working|needs?(?! no\b| zero\b)|"
         r"requir(e|es|ed|ing)(?! no\b| zero\b)|rotat\w*|share|paste|blocked on|waiting (on|for)|only \w+ (has|holds|knows)) ([\w'’.-]+ ){0,3}"
-        r"(credentials?|tokens?|api[ -]?keys?|passwords?|secrets?|2fa|otp)(?![\w-])|"  # not "credential-free"
+        r"(credentials?|tokens?(?![ \t]+(?:budget|of[ \t]+context)\b)|api[ -]?keys?|passwords?|secrets?|2fa|otp)(?![\w-])|"  # not "credential-free" or LLM token budgets
         # a person has to sign in: "waiting on Ana to log in to npm", "needs to authenticate with PyPI"
-        r"\b(needs?|waiting (for|on)|awaiting) (\w+ ){0,6}(credentials?|tokens?|(api|deploy|ssh|access)[ -]?keys?|passwords?|secrets?|2fa|otp)\b(?!-free\b)|"
+        r"\b(needs?|waiting (for|on)|awaiting) (\w+ ){0,6}(credentials?|tokens?(?![ \t]+(?:budget|of[ \t]+context)\b)|(api|deploy|ssh|access)[ -]?keys?|passwords?|secrets?|2fa|otp)\b(?!-free\b)|"
         r"\b(to|must|has to|needs? to|have to) (log ?in|sign ?in|authenticate|re-?auth\w*)\b|"
         # "waiting for the GitHub token", "blocked on credentials for…", "need the SSH key", "provide the
         # passphrase", "need someone to log in to the AWS console", "waiting for access to the private repo"
         r"\b(need(s|ed|ing)?|waiting (for|on)|await\w*|blocked on|provide|send)(?! no\b| zero\b) (an? |the |new |our |my |your |their )?(\w+ ){0,3}"
-        r"(credentials?|tokens?|api[ -]?keys?|ssh[ -]?keys?|private keys?|passwords?|passphrases?|secrets?|2fa|otp|mfa)\b(?!-)|"
+        r"(credentials?|tokens?(?![ \t]+(?:budget|of[ \t]+context)\b)|api[ -]?keys?|ssh[ -]?keys?|private keys?|passwords?|passphrases?|secrets?|2fa|otp|mfa)\b(?!-)|"
         r"\b(need(s|ed|ing)?|waiting for|await\w*|requires?|ha(s|ve) to|must) (\w+ ){0,2}to (log|sign) ?in\b|"
         r"\b(need(s|ed|ing)?|waiting (for|on)|await\w*|blocked on|requires?|requesting) (\w+ ){0,2}access (to|for)\b|"
         r"\bre-?auth(enticate)?\b|oauth (flow|login|consent)|sudo password|"
@@ -117,8 +117,10 @@ _WALL = [
 # so it is the person's queue, not an agent-to-agent gate.
 _INFRA = re.compile(r"(terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall))", _I)
 _INFRA_FAULT = re.compile(r"\b(failed|fails|errored|error|timed out|time ?out|connection refused|dry-run)\b", _I)
-_WALL_FAMILY_ACTION = re.compile(r"\b(remove|overwrite|disable)\b.{0,40}\b(production|customer|2fa)\b", _I)
-
+_WALL_FAMILY_ACTION = re.compile(
+    r"\b(remov\w*|overwrit\w*|disabl\w*|reset\w*|rotat\w*|turn off|rewrit\w*|announc\w*|publish\w*|delet\w*|drop\w*|wipe\w*|purge\w*|erase\w*|"
+    r"destroy\w*|revoke\w*|force[- ]push)\b.{0,60}\b(production|prod|live|customer|user|passwords?|mfa|2fa|certificates?|certs?|"
+    r"volumes?|history|announcements?|launch)\b", _I)
 # The loose net enforce mode checks before it refuses anything. It is meant to over-match: any word
 # from a wall family (money, infra, deletion, credentials, publishing, legal, freezes) or a person's
 # role anywhere in the full text means the agent is nudged, never refused. A miss here costs one
@@ -129,7 +131,7 @@ WALL_FAMILY = re.compile(
     r"prod\w*|live|deploy\w*|terraform|kubectl|helm|namespace|cluster|database|db|table|schema|migrat\w*|"
     r"delet\w*|drop\w*|wipe\w*|purg\w*|eras\w*|destroy\w*|destructive|truncat\w*|force|irreversibl\w*|"
     r"rewrit\w*|history|reset|rm|revok\w*|"
-    r"credential\w*|token\w*|keys?|secrets?|passwords?|auth\w*|login|oauth|sudo|40[123]|permission\w*|"
+    r"credential\w*|token(?![ \t]+(?:budget|of[ \t]+context)\b)\w*|keys?|secrets?|passwords?|auth\w*|login|oauth|mfa|2fa|certificates?|sudo|40[123]|permission\w*|"
     r"publish\w*|public|npm|pypi|email\w*|tweet\w*|post|announce\w*|customers?|users?|clients?|"
     r"legal|lawyer|licen[cs]\w*|gdpr|hipaa|privacy|trademark|copyright|terms|"
     r"freeze|frozen|e-?stop|incident|embargo|kill switch|security|"
@@ -146,15 +148,15 @@ _HUMAN = re.compile(
 # Seat names this org actually uses; product/growth/content are deliberately absent (common nouns).
 # Seats are agents, not people: a wait ON a seat's approval is fake-gate territory per the shipped
 # contract ("waiting on platform approval" is FAKE). Seats appear only in the capability-infinitive
-# form ("need Liam/Platform to expose a GUI wrapper"), where the seat is who must BUILD, not gate.
-_SEAT = r"(liam|platform|security|design|engineering|governance|income|chief.?scientist)"
+# form ("need the platform seat/Platform to expose a GUI wrapper"), where the seat is who must BUILD, not gate.
+_SEAT = r"(platform|security|design|engineering|governance|income|chief.?scientist)"
 _ROLE = (r"(ceo|cto|cfo|coo|founders?|owner|operator|user|human|boss|board|executives?|manager|legal|customers?|"
-         r"clients?|person|simon)")
+         r"clients?|person)")
 _NOT_A_PERSON = r"(?!-|('s)?\s+(agent|bot|seat|module|lane|worker|service|process)s?\b)"
 _NOUN = r"(approvals?|ok|okay|yes(/yes)?|consent|sign-?offs?|go|words?|green-?light|blessing|decisions?|calls?|ack|rulings?|verdicts?|adjudicat\w*|hands)"
 # The people who hold authority here (not "user" or "customer"): their word may carry one or two
 # describing words before the noun ("the CEO's explicit word", "CEO drain word", "Owner adjudication").
-_PRINCIPAL = r"(ceo|cto|cfo|coo|founders?|owner|operator|boss|simon)"
+_PRINCIPAL = r"(ceo|cto|cfo|coo|founders?|owner|operator|boss)"
 # weak: the role is only referenced ("ACK from the CEO"); needs a wait word or gate phrase to count
 _HUMAN_AUTHORITY = re.compile(
     # the source of the wait: "ACK from the CEO", "HOLD per the owner", "approved by the founder"
@@ -170,11 +172,11 @@ _HUMAN_AUTHORITY_STRONG = re.compile(
     rf"decides?|countersigns?|ratif\w*|sign(s|ed)? off)\b|"
     rf"\b{_ROLE} to (approv\w*|sign(s|ed)? off|decide|ratif\w*|countersign\w*|green-?light|"
     rf"expose|provide|grant|create|open|enable)\b|"
-    # the person's spoken stop: "because Simon said no upstream bump", "the owner told us to wait"
+    # the person's spoken stop: "because the operator said no upstream bump", "the owner told us to wait"
     rf"\b{_ROLE} (said|says|asked|told (us|me|you|them))( to)? (no|not|don'?t|do not|wait|hold|stop|pause)\b|"
-    # the wait names the person directly: "decision waiting on Simon", "blocked on the owner"
-    rf"\b(waiting (for|on)|awaiting|blocked on) (the |my |our )?(ceo|cto|cfo|coo|founders?|owner|operator|boss|board|executives?|manager|legal|simon)\b{_NOT_A_PERSON}|"
-    # a seat named as the builder of a missing capability: "need Liam/Platform to expose a GUI wrapper"
+    # the wait names the person directly: "decision waiting on the operator", "blocked on the owner"
+    rf"\b(waiting (for|on)|awaiting|blocked on) (the |my |our )?(ceo|cto|cfo|coo|founders?|owner|operator|boss|board|executives?|manager|legal)\b{_NOT_A_PERSON}|"
+    # a seat named as the builder of a missing capability: "need the platform seat/Platform to expose a GUI wrapper"
     rf"\b(need|needs|needing) {_SEAT}(?:/\w+){{0,3}} to (expose|provide|grant|create|open|enable|build)\b)", _I)
 
 # A person with authority named anywhere in a needs_input ask: the worker is asking that person.
@@ -198,9 +200,9 @@ _DEPENDENCY = re.compile(r"\b(waiting on (task|card|parent|pr|issue) [#\w-]+|dep
 # principal can take. Surfaced by the Income seat dogfood: without this, such cards read as
 # "close the card" (stale-wait) when the only honest move is to escalate.
 _CAPABILITY_WALL = re.compile(
-    r"\b(simon|ceo|owner|principal)s?[- ]held\b|"
+    r"\b(ceo|owner|operator|principal)s?[- ]held\b|"
     r"\bno (agent|seat|bot|worker|tool) can (clear|lift|grant|approve|resolve|undo)\b|"
-    r"\bonly (simon|the ceo|the owner|a human|the principal) can\b|"
+    r"\bonly (the ceo|the owner|the operator|a human|the principal) can\b|"
     r"\bappeal\w* (is|are|rests?|sits) with\b", _I)
 
 # Generic agent roles. Teams add their own seat names with configure(seats=[...]); none ship here.

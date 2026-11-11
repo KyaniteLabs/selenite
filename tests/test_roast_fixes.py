@@ -126,6 +126,21 @@ def test_redaction_keeps_the_auth_scheme_word():
     assert ledger.redact("Authorization: Bearer abcdef0123456789abcdef") == "Authorization: Bearer <token>"
 
 
+@pytest.mark.parametrize("raw", [
+    "oauth=synthetic-secret-value",
+    "GITHUB_OAUTH=synthetic-secret-value",
+    "authkey=synthetic-secret-value",
+    "basicauth: user:synthetic-password",
+    "authcode=synthetic-secret-value",
+    "preauth_key: synthetic-secret-value",
+])
+def test_redaction_catches_auth_assignments(raw):
+    redacted = ledger.redact(raw)
+    assert "synthetic-secret-value" not in redacted
+    assert "synthetic-password" not in redacted
+    assert "<secret>" in redacted
+
+
 def test_redaction_keeps_noncard_numbers_and_authority_words():
     text = "deploy at 1731326400000 failed; authority: ceo approved; t_1731326400123"
     assert ledger.redact(text) == text
@@ -140,6 +155,12 @@ def test_calm_ignores_quoted_fenced_and_pasted_text():
     assert signals.overload("> wtf\n> this is annoying\nhere is the log") == []
     assert signals.overload("```\nshit happens, frustrating\n```\nsee above") == []
     assert set(signals.overload("wtf, this is annoying")) == {"curse", "frustration"}
+
+
+def test_an_inch_mark_does_not_quote_the_following_complaint():
+    from conftest import signals
+    text = 'my 27" monitor is broken wtf, stop asking me, this "fix" is so frustrating'
+    assert set(signals.overload(text)) == {"frustration", "curse", "over_asking"}
 
 
 def test_audit_defaults_to_the_active_hermes_home(tmp_path, monkeypatch):

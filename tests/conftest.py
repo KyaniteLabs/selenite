@@ -11,6 +11,9 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
+_HERMES_SOURCE = os.environ.get("SELENITE_TEST_HERMES_SOURCE")
+if _HERMES_SOURCE and (Path(_HERMES_SOURCE) / "hermes_constants.py").is_file():
+    sys.path.insert(0, _HERMES_SOURCE)
 _BASE = Path(tempfile.mkdtemp(prefix="selenite-tests-"))
 HOME = _BASE / "home"
 STATE = _BASE / "state"

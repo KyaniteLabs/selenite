@@ -18,7 +18,7 @@ from conftest import HOME, cleanse, ledger, mine
 
 @pytest.mark.parametrize("text", [
     "needs credentials", "need a token", "needs a new token", "requires credentials",
-    "needs the API key", "Blocked: requires production deploy credentials from Simon",
+    "needs the API key", "Blocked: requires production deploy credentials from the operator",
 ])
 def test_credentials_wall_takes_the_common_phrasings(text):
     v = classify(text)

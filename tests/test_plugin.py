@@ -204,16 +204,28 @@ def test_command_starts_an_agent_turn_and_tells_the_human(monkeypatch):
     assert "Load and follow" not in out and "Cleanse mode" in out   # the human gets a status line
 
 
-def test_command_uses_the_gateway_session_key_from_context(monkeypatch):
-    class GatewayCtx(_InjectCtx):
-        def get_session_env(self, name):
-            assert name == "HERMES_SESSION_KEY"
-            return "gateway-session"
-
-    ctx = GatewayCtx(True)
+def test_command_uses_the_gateway_session_key_fallback(monkeypatch):
+    monkeypatch.setenv("HERMES_SESSION_KEY", "gateway-session")
+    ctx = _InjectCtx(True)
     monkeypatch.setattr(plugin, "_ctx", ctx)
     out = plugin.frictionless_command("calm")
     assert ctx.sent[0][1] == "gateway-session"
+    assert out.startswith("Selenite: handed")
+
+
+def test_command_uses_real_hermes_session_accessor_when_available(monkeypatch):
+    try:
+        from gateway.session_context import get_session_env
+    except ImportError:
+        pytest.skip("Hermes gateway session context is not present in this source snapshot")
+    from gateway.session_context import scoped_session_key
+    assert plugin.get_session_env is get_session_env
+    monkeypatch.setenv("HERMES_SESSION_KEY", "stale-process-env")
+    ctx = _InjectCtx(True)
+    monkeypatch.setattr(plugin, "_ctx", ctx)
+    with scoped_session_key("task-local-session"):  # the gateway binds the key per task
+        out = plugin.frictionless_command("calm")
+    assert ctx.sent[0][1] == "task-local-session"
     assert out.startswith("Selenite: handed")
 
 

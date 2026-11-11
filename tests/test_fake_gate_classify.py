@@ -92,6 +92,28 @@ def test_wall_family_waits_stay_walls_on_direct_classification():
         assert plugin.slash(f"check {text}").startswith("WALL ")
 
 
+@pytest.mark.parametrize("text", [
+    "Awaiting ACK before I reset the customer passwords",
+    "reset customer passwords",
+    "Awaiting ACK before rotating the signing certificate",
+    "Awaiting ACK before disabling MFA for all users",
+    "disabling MFA for all users",
+    "Awaiting ACK before I remove the live volumes",
+    "Awaiting ACK before I rewrite main history",
+    "Awaiting ACK before I announce the launch",
+])
+def test_wall_family_action_overrides_fake_ack(text):
+    assert classify(text).cls == WALL
+
+
+@pytest.mark.parametrize("text", [
+    "blocked on token budget",
+    "needs 2000 more tokens of context",
+])
+def test_llm_token_budget_is_not_a_credentials_wall(text):
+    assert classify(text).cls != WALL
+
+
 def test_human_questions_are_not_agent_gates():
     assert classify("Should I rename the module to core?").cls == HUMAN
     assert classify("Which do you prefer, A or B?").cls == HUMAN
@@ -297,8 +319,8 @@ def test_agent_approval_ceremony_is_an_evidenced_fake_gate(text):
 
 
 @pytest.mark.parametrize("text", [
-    "needs Simon to paste the new deploy key",
-    "need prod database password from Simon",
+    "needs the operator to paste the new deploy key",
+    "need prod database password from the operator",
     "waiting for the API token from the owner",
 ])
 @pytest.mark.parametrize("age_hours", [None, 72])
@@ -351,9 +373,9 @@ def test_human_legal_team_is_never_agent_bureaucracy():
 # Dogfood 2026-11-11: the PM seat's own queue. A person's spoken hold, their "yes", or a decision
 # waiting on them by name is that person's call; an agent's re-check on a reversible merge is a fake gate.
 @pytest.mark.parametrize("text", [
-    "catalog repins wait until after 14:00 because Simon said no upstream PR bump",
-    "upstream catalog PR text needs Simon's yes before posting",
-    "CheckYourself pause decision waiting on Simon",
+    "catalog repins wait until after 14:00 because the operator said no upstream PR bump",
+    "upstream catalog PR text needs the operator's yes before posting",
+    "CheckYourself pause decision waiting on the operator",
     "the owner told us to wait until the audit lands",
 ])
 def test_dogfood_person_holds_are_human(text):
