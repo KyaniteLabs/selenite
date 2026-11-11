@@ -5,12 +5,12 @@ The maintainer's clicks only, on Nov 11 by 11:00 AM PT. The repo is public and t
 ## Before the PR can open
 
 1. **GitHub repo:** launched 2026-11-10; `main` mirrors Forgejo.
-2. **Check the pin exists on GitHub:** `gh api repos/KyaniteLabs/selenite/commits/6c8a46629b3cf799cff4cc0bae0179dbd07b21cc --jq .sha`
+2. **Check the pin exists on GitHub:** `gh api repos/KyaniteLabs/selenite/commits/51e780482936e7211a829e26271795cf76c44f92 --jq .sha`
 3. **Validate the pinned tree, not today's main:**
    ```sh
    mkdir -p ~/hackathon-submit/selenite && cd ~/hackathon-submit/selenite
    git clone https://github.com/KyaniteLabs/selenite.git product
-   git -C product archive 6c8a46629b3cf799cff4cc0bae0179dbd07b21cc | (mkdir pinned && tar -x -C pinned)
+   git -C product archive 51e780482936e7211a829e26271795cf76c44f92 | (mkdir pinned && tar -x -C pinned)
    hermes plugins validate pinned --json      # expect ok true, no warnings
    ```
 4. `catalog/PR-BODY.md` has the validate, CI and live-install receipts filled. Only the demo link is left; paste it into the last box. The banner is already the catalog `image`.
