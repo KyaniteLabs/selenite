@@ -23,27 +23,24 @@ const FONTS = {
 
 
 
-// Identity: Selenite is white satin spar (docs/DESIGN-PREFLIGHT.md §3, §7). On dark
-// chrome the identity ink is the host's primary text (near-white); on light chrome
-// it falls back to host ink, and the icon carries the identity. State never rides
-// on colour alone: every state has a text label next to it. Calm stone colours
-// Walnut (Simon, 2026-11-10): the page paints a lighter, translucent take on
-// his Walnut system's warm ground, one fixed mode, no black and no white. Gate is Walnut's
-// amber cream, load is its faint sand, approval and fix are its pastel blue and
-// green (PF §7; tokens from ~/.local/share/walnut/design-system).
+// Identity: Selenite is white satin spar (docs/DESIGN-PREFLIGHT.md §3, §7).
+// Walnut (Simon, 2026-11-10), round 6: a light, translucent sand film from his
+// Walnut system with Walnut's dark ink as text, one fixed mode, no black. Every
+// text tone passes WCAG AA over any wallpaper behind the film. State colours are
+// ink-weight Walnut pastels, and every state also has a text label.
 const CSS = `
 ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-style:normal;font-weight:${w};font-display:swap;src:url(data:font/woff;base64,${b}) format('woff')}`).join('\n')}
-.sel-host{container-type:inline-size;width:100%;min-height:100%;color-scheme:dark;background:rgba(122,110,98,.74);-webkit-backdrop-filter:blur(28px) saturate(1.15);backdrop-filter:blur(28px) saturate(1.15);color:#fffaf2;--ui-bg-primary:transparent;--ui-bg-editor:transparent;--ui-surface-background:transparent;--ui-bg-secondary:rgba(255,248,238,.08);--ui-bg-elevated:rgba(255,248,238,.10);--ui-bg-card:rgba(255,248,238,.09);--ui-bg-tertiary:rgba(255,248,238,.08);--ui-bg-input:rgba(59,52,46,.28);--ui-control-hover-background:rgba(255,248,238,.14);--ui-control-active-background:rgba(255,248,238,.20);--ui-row-hover-background:rgba(255,248,238,.10);--ui-selection-background:rgba(255,248,238,.22);--ui-text-primary:#fffaf2;--ui-text-secondary:#f3ebdf;--ui-text-tertiary:#e6dccf;--ui-text-quaternary:#d8ccbd;--ui-stroke-primary:rgba(255,250,242,.30);--ui-stroke-secondary:rgba(255,250,242,.22);--ui-stroke-tertiary:rgba(255,250,242,.20);--ui-stroke-quaternary:rgba(255,250,242,.10);--ui-accent:#f7d4ae;--ui-blue:#c6d8f3;--ui-green:#c9dead;--ui-red:#f5cec6}
-@media (prefers-reduced-transparency:reduce){.sel-host{background:#74685d;-webkit-backdrop-filter:none;backdrop-filter:none;--ui-bg-card:#6a5f55;--ui-bg-secondary:#6f6359}}
-.sel{--sel-id:#fffaf2;--sel-gate:#f7d4ae;--sel-load:#d8ccbd;--sel-appr:#c6d8f3;--sel-fix:#c9dead;
-  --sel-display:'${FACE}',var(--font-sans);font-family:var(--font-sans);font-size:13px;line-height:1.45;color:var(--ui-text-primary);
+.sel-host{container-type:inline-size;width:100%;min-height:100vh;box-sizing:border-box;color-scheme:light;background:rgba(243,235,223,.88);-webkit-backdrop-filter:blur(28px) saturate(1.1);backdrop-filter:blur(28px) saturate(1.1);color:#3b342e;--ui-bg-primary:transparent;--ui-bg-editor:transparent;--ui-surface-background:transparent;--ui-bg-secondary:rgba(255,250,242,.40);--ui-bg-elevated:rgba(255,250,242,.55);--ui-bg-card:rgba(255,250,242,.45);--ui-bg-tertiary:rgba(255,250,242,.35);--ui-bg-input:rgba(255,250,242,.70);--ui-control-hover-background:rgba(59,52,46,.07);--ui-control-active-background:rgba(59,52,46,.12);--ui-row-hover-background:rgba(59,52,46,.05);--ui-selection-background:rgba(59,52,46,.14);--ui-text-primary:#3b342e;--ui-text-secondary:#4a423a;--ui-text-tertiary:#5a5047;--ui-text-quaternary:#62574d;--ui-stroke-primary:rgba(59,52,46,.28);--ui-stroke-secondary:rgba(59,52,46,.20);--ui-stroke-tertiary:rgba(59,52,46,.14);--ui-stroke-quaternary:rgba(59,52,46,.08);--ui-accent:#3b342e;--ui-blue:#375684;--ui-green:#46622a;--ui-red:#8f3a33}
+@media (prefers-reduced-transparency:reduce){.sel-host{background:#f3ebdf;-webkit-backdrop-filter:none;backdrop-filter:none;--ui-bg-card:#fbf5ec;--ui-bg-secondary:#f8f1e7}}
+.sel{--sel-id:#3b342e;--sel-gate:#3b342e;--sel-load:#7d7064;--sel-appr:#375684;--sel-fix:#46622a;
+  --sel-display:'${FACE}',var(--font-sans,system-ui,sans-serif);font-family:var(--font-sans,system-ui,sans-serif);font-size:13px;line-height:1.45;color:var(--ui-text-primary);
   box-sizing:border-box;width:100%;max-width:1120px;margin:0 auto;padding:24px 28px 48px;display:flex;flex-direction:column;gap:20px}
 .sel *,.sel *::before,.sel *::after{box-sizing:border-box}
 .sel-head{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px}
 .sel-mark{display:flex;align-items:center;gap:10px;margin-right:auto}
 .sel-word{margin:0;font-family:var(--sel-display);font-weight:600;font-size:20px;letter-spacing:.06em;line-height:1;text-transform:uppercase}
 .sel-sub{font-size:11.5px;color:var(--ui-text-tertiary);margin-top:3px}
-.sel-label{margin:0;font-family:var(--sel-display);font-weight:500;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ui-text-tertiary)}
+.sel-label{margin:0;font-family:var(--sel-display);font-weight:600;font-size:13.5px;letter-spacing:.02em;color:var(--ui-text-primary)}
 .sel-card{background:var(--ui-bg-card);border:1px solid var(--ui-stroke-tertiary);border-radius:10px;padding:16px;min-width:0}
 .sel-load{display:flex;align-items:center;gap:14px;padding:14px 16px}
 .sel-load-state{font-family:var(--sel-display);font-weight:600;font-size:15px;letter-spacing:.02em}
@@ -70,7 +67,7 @@ ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-s
 .sel-rank{font-family:var(--sel-display);font-weight:500;font-size:12px;color:var(--ui-text-secondary);text-align:right}
 .sel-key{font-family:var(--font-mono);font-size:12px;overflow-wrap:anywhere}
 .sel-note{font-size:12px;color:var(--ui-text-secondary);overflow-wrap:anywhere}
-.sel-bar{position:relative;height:6px;border-radius:3px;background:color-mix(in srgb,var(--sel-gate) 12%,transparent)}
+.sel-bar{position:relative;height:6px;border-radius:3px;background:color-mix(in srgb,var(--sel-gate) 10%,transparent)}
 .sel-bar>i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--sel-gate)}
 .sel-count{font-family:var(--font-mono);font-size:12px;font-variant-numeric:tabular-nums;text-align:right;color:var(--ui-text-secondary)}
 .sel-fixed{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ui-text-secondary)}
@@ -99,7 +96,7 @@ ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-s
 .sel-inline{font-size:12.5px;color:var(--ui-text-secondary);display:flex;align-items:center;gap:10px;margin:0}
 .sel-glyph{flex:none;color:var(--sel-id)}
 .sel-chip-n{font-family:var(--sel-display);font-weight:500;letter-spacing:.04em}
-.sel-tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border:1px solid var(--ui-stroke-tertiary);border-radius:4px;font-family:var(--sel-display);font-weight:500;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ui-text-secondary);white-space:nowrap}
+.sel-tag{display:inline-flex;align-items:center;height:22px;padding:0 8px;border:1px solid var(--ui-stroke-quaternary);background:var(--ui-bg-secondary);border-radius:4px;font-weight:500;font-size:12px;color:var(--ui-text-secondary);white-space:nowrap}
 .sel-tag b{font-family:var(--font-mono);font-weight:500;letter-spacing:0;margin-left:6px;color:var(--ui-text-primary)}
 .sel-next{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;padding:14px 16px;border:1px solid color-mix(in srgb,var(--sel-id) 22%,var(--ui-stroke-tertiary));border-radius:8px;background:color-mix(in srgb,var(--sel-id) 4%,transparent)}
 .sel-next-top{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
@@ -118,7 +115,7 @@ ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-s
 .sel-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 @container (max-width:760px){.sel{padding:16px}.sel-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.sel-cols{grid-template-columns:minmax(0,1fr)}
   .sel-row{grid-template-columns:20px minmax(0,1fr) 40px 88px}.sel-row .sel-bar{display:none}
-  .sel-ev{grid-template-columns:8px 72px minmax(0,1fr) auto}.sel-ev .sel-note{display:none}
+  .sel-ev{grid-template-columns:8px 72px minmax(0,1fr) auto}.sel-ev .sel-key{display:none}
   .sel-find{grid-template-columns:minmax(0,1fr) 40px}.sel-find .sel-tag{display:none}}
 @container (max-width:420px){.sel-stats{grid-template-columns:minmax(0,1fr)}.sel-row{grid-template-columns:minmax(0,1fr) 40px}.sel-rank{display:none}.sel-row>:last-child{grid-column:1/-1;justify-self:start}}
 `
@@ -139,7 +136,7 @@ const EN = {
     prefix: 'Load: ',
     clear: 'Clear', rising: 'Rising', high: 'High',
     whyClear: 'No overload signals in the last 24 hours.',
-    whyRising: n => `${n} Calm ${n === 1 ? 'trigger' : 'triggers'} in the last 24 hours. Agents answer in one line.`,
+    whyRising: n => `${n} Calm ${n === 1 ? 'trigger' : 'triggers'} in the last 24 hours.`,
     whyHigh: n => `${n} Calm triggers in the last 24 hours. Agents stop explaining and only act.`,
     last: when => `last signal ${when}`
   },
@@ -168,7 +165,7 @@ const EN = {
     label: 'Totals',
     gates: 'Human gates', approvals: 'Approval prompts', calm: 'Calm triggers', fixes: 'Fixes landed',
     kinds: n => `${n} ${n === 1 ? 'kind' : 'kinds'}`,
-    fixedOf: (f, n) => `${f} of ${n} recurring gates fixed`,
+    fixedOf: (f, n) => `${f} of ${n} gate kinds marked fixed`,
     noneToFix: 'No gates to fix'
   },
   gates: {
@@ -180,7 +177,7 @@ const EN = {
   },
   evolve: {
     title: 'Evolve', none: 'no proposal yet', drafted: when => `drafted ${when}`,
-    about: 'A proposal turns the ledger into ways to sharpen Selenite. Optional: skipping it degrades nothing. You review it as a pull request; nothing changes silently.',
+    about: 'A proposal turns the ledger into ways to sharpen Selenite. You review it as a pull request; nothing changes silently.',
     draft: 'Draft proposal', drafting: 'Drafting…', copy: 'Copy /frictionless evolve', region: 'Latest evolve proposal'
   },
   cleanse: {
@@ -246,7 +243,7 @@ function Blade({ size = 16, title }) {
     role: title ? 'img' : undefined, 'aria-label': title, 'aria-hidden': title ? undefined : true,
     children: [
       jsx('path', { d: 'M2.6 17.4 15.9 3.9 21.3 2.6 20.6 8.3 7.2 21.5 4.9 21 4.4 19.6 2.9 19.1Z', fill: 'currentColor', fillOpacity: 0.92 }),
-      jsx('path', { d: 'M5.4 18.6 17.9 5.9M8.3 19.5 19.6 8.1', stroke: 'var(--ui-bg-card, #000)', strokeOpacity: 0.4, strokeWidth: 0.9, strokeLinecap: 'round' })
+      jsx('path', { d: 'M5.4 18.6 17.9 5.9M8.3 19.5 19.6 8.1', stroke: '#3b342e', strokeOpacity: 0.35, strokeWidth: 0.9, strokeLinecap: 'round' })
     ]
   })
 }
@@ -476,7 +473,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
             jsxs('span', { className: 'sel-count', children: [jsx('span', { 'aria-hidden': true, children: `×${g.n}` }), jsx('span', { className: 'sel-sr', children: t('gates.times', g.n) })] }),
             g.fixed
               ? jsx('span', { className: 'sel-fixed', children: t('gates.fixed') })
-              : jsx(Button, { size: 'xs', variant: 'ghost', 'aria-label': t('gates.markKey', g.key),
+              : jsx(Button, { size: 'xs', variant: 'secondary', 'aria-label': t('gates.markKey', g.key),
                   disabled: markFix.isPending && markFix.variables === g.key, onClick: () => markFix.mutate(g.key), children: t('gates.mark') })
           ] }, g.key)) }, 'l')]),
       jsxs('div', { className: 'sel-sec', children: [

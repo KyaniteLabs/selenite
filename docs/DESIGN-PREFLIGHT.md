@@ -93,6 +93,8 @@ Rejected metaphors:
   - **Kanban badge:** the host's `neutral` tone.
 - **Fourth note from Simon, 2026-11-10: "make it slightly brighter or lighter. and make it translucent".** The ground is now a lighter walnut (`#7a6e62` at 74% opacity) with a 28px backdrop blur, so the host's glass or wallpaper shows through. Cards are cream films (`rgba(255,248,238,.09)`), and text steps up one Walnut level (`#fffaf2` primary) to hold contrast on the lighter ground. With `prefers-reduced-transparency`, the page falls back to solid `#74685d`.
 - **Assumption:** forcing the Walnut ground inside the page is right even when the host runs another theme; Simon's own host already runs the Walnut skin. Pending Simon's eye.
+- **Round 6, contrast repair (2026-11-10).** A tastecheck pass on the round-5 page returned HOLD: 151 of 156 text pairs failed WCAG AA over the real wallpaper (median 3.76:1). An independent Opus roast agreed: cream text on a lighter translucent film can't pass, because the backdrop decides the contrast. The fix flips polarity. The film is now Walnut's light sand, `rgba(243,235,223,.88)` with a 28px blur, and text is Walnut's dark ink `#3b342e` (7.9:1 over black, 10.2:1 over the dunes). That keeps Simon's three asks: lighter, translucent, no black. State colours darken to ink-weight versions of the same Walnut pastels so each passes AA on sand, and each keeps its text label. The reduced-transparency fallback is solid `#f3ebdf`.
+- **Assumption:** the light-sand film reads as "Walnut" to Simon, since it uses Walnut's own text colour as ground and its ink as text. A darker all-passing Walnut film is shown beside it as option A. Pending Simon's eye.
 
 ## 8. Landed mark
 
