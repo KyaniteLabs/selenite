@@ -100,7 +100,8 @@ def test_cli_refuses_to_judge_no_reason(args, stdin):
 
 def test_cli_version():
     r = _cli("--version")
-    assert (r.returncode, r.stdout.strip()) == (0, "antibeaurocracy 0.5.0")
+    from antibeaurocracy_core import __version__
+    assert (r.returncode, r.stdout.strip()) == (0, f"antibeaurocracy {__version__}")
 
 
 def test_headline_with_no_boards_says_so():

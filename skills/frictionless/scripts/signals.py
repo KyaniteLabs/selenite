@@ -61,10 +61,12 @@ OVERLOAD = {"curse", "frustration", "over_asking", "stopping_short", "repeat_wor
 # "cannot", "robot" and "screenshot" must never count. It measures load, not
 # spelling, and one hit is never enough (see overload()).
 _TYPO = re.compile(
-    r"\b(?:teh|adn|hte|taht|wiht|yoiu|tge|ahve|waht|thsi|jsut|becuase|plese|pleae|thier)\b"
+    r"\b(?:teh|adn|hte|taht|wiht|yoiu|tge|ahve|waht|thsi|jsut|becuase|plese|pleae|thier|buidl|broekn|agian)\b"
     r"|([a-z])\1{3,}|\?{3,}",
     re.I,
 )
+# Paths, URLs and identifiers are technical tokens, not evidence of typing load.
+_TECHNICAL = re.compile(r"[/\\_:=@]|\w[.-]\w")
 
 
 def _load_extra() -> dict[str, list[str]]:
@@ -110,7 +112,7 @@ def classify(text: str) -> list[str]:
 
 
 def typo_hits(text: str) -> int:
-    return len(_TYPO.findall(text))
+    return sum(len(_TYPO.findall(word)) for word in text.split() if not _TECHNICAL.search(word))
 
 
 def typo_density(text: str) -> float:
@@ -143,7 +145,7 @@ def overload(text: str) -> list[str]:
         return []
     text = own_words(text)
     reasons = [c for c in classify(text) if c in OVERLOAD]
-    if len(text.split()) >= 8 and typo_hits(text) >= 2 and typo_density(text) >= 6:
+    if len(text.split()) >= 4 and typo_hits(text) >= 2 and typo_density(text) >= 6:
         reasons.append("typo_burst")
     return reasons
 

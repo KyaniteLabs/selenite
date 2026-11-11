@@ -29,6 +29,31 @@ def test_real_overload(text, expected):
     assert set(signals.overload(text)) == expected
 
 
+@pytest.mark.parametrize("text", [
+    "fix teh buidl pls its broekn agian",
+    "teh buidl is broekn agian",
+    "fix the buidl pls its broekn agian",
+])
+def test_short_typo_bursts_are_detected(text):
+    assert "typo_burst" in signals.overload(text)
+
+
+@pytest.mark.parametrize("text", [
+    "fix the build pls",
+    "fix the build pls it is broken again",
+    "fix teh build pls",
+    "check teh_buidl and broekn_agian then run the build pls",
+    "check teh-buidl-broekn-agian then run the build pls",
+    "check https://example.test/teh/buidl/broekn/agian then run the build pls",
+    "check /tmp/teh/buidl/broekn/agian then run the build pls",
+    r"check C:\teh\buidl\broekn\agian then run the build pls",
+    "check teh.py buidl.py broekn.py agian.py and run the build pls",
+    "check `teh buidl broekn agian` then run the build pls",
+])
+def test_terse_prose_and_technical_tokens_are_not_typo_bursts(text):
+    assert "typo_burst" not in signals.overload(text)
+
+
 def test_harness_text_is_ignored():
     assert signals.overload("<system-reminder>wtf just do it</system-reminder>") == []
 

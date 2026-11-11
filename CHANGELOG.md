@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.1 (2026-11-11)
+
+- **Agent approvals are fake gates; authority walls stand.** Reviewer, security, QA and legal
+  agents waiting to sign off match `F1-ack`. Credential handoffs to a person match a high-confidence
+  wall and never suggest closing or rerouting the card. Human legal review and CEO approvals stay
+  with people; credentials, spending, publishing, deploying and deletion outrank stale waits.
+- **Calm catches short typo bursts.** Common transpositions in a message of four or more words
+  can trigger `typo_burst`; it still takes at least two hits. Normal terse prose, code identifiers,
+  URLs and file paths do not count as typo bursts, and Calm keeps its two-signal rule.
+- **Desktop category limitation (F1).** The installed Capabilities card hardcodes agent plugins
+  to `general` and derives its icon from that category. Hermes's `plugin.yaml` schema accepts
+  neither `category` nor `icon` for that card; the dashboard's `Sparkles` icon belongs to a different
+  surface. The catalog remains `automation`. No Hermes changes or ignored manifest fields added.
+
 ## 0.5.0 (in catalog review; not yet merged)
 
 ### Dogfood gap fixes (2026-11-11)

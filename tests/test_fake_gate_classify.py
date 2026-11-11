@@ -3,7 +3,7 @@ import json
 import pytest
 
 from antibeaurocracy_core import DEPENDENCY, FAKE, HUMAN, MACHINERY, WALL, classify, configure
-from antibeaurocracy_core.classify import ACTIONS
+from antibeaurocracy_core.classify import ACK, ACTIONS
 
 WALLS = [
     ("npm publish fails: ENEEDAUTH, no working token on this host", "credentials"),
@@ -282,3 +282,93 @@ def test_round4_fakes_are_not_hidden(text):
 @pytest.mark.parametrize("text", ["kubectl apply dry-run failed", "helm upgrade failed"])
 def test_round4_failing_infra_alone_is_machinery(text):
     assert classify(text).cls == MACHINERY
+
+
+@pytest.mark.parametrize("text", [
+    "waiting for the reviewer agent to sign off before I start",
+    "waiting for security agent approval",
+    "QA agent needs to confirm tests",
+    "legal agent to review",
+])
+def test_agent_approval_ceremony_is_an_evidenced_fake_gate(text):
+    v = classify(text)
+    assert v.cls == FAKE and v.subtype == "F1-ack", v
+    assert v.confidence >= 0.6 and v.evidenced
+
+
+@pytest.mark.parametrize("text", [
+    "needs Simon to paste the new deploy key",
+    "need prod database password from Simon",
+    "waiting for the API token from the owner",
+])
+@pytest.mark.parametrize("age_hours", [None, 72])
+def test_credential_handoffs_are_walls_that_never_suggest_closing(text, age_hours):
+    v = classify(text, age_hours=age_hours)
+    assert v.cls == WALL and "credentials" in v.subtype, v
+    assert v.confidence >= 0.8 and v.evidenced
+    assert "human" in v.action.lower()
+    assert not any(word in v.action.lower() for word in ("close", "reroute", "route around", "unpark"))
+
+
+@pytest.mark.parametrize("text,cls", [
+    ("legal to review", WALL),
+    ("waiting on CEO approval", HUMAN),
+])
+def test_human_approvals_stay_with_people(text, cls):
+    v = classify(text)
+    assert v.cls == cls, v
+    if cls == HUMAN:
+        assert v.confidence >= 0.8
+
+
+@pytest.mark.parametrize("text,subtype", [
+    ("waiting for security agent approval to spend $50", "spend"),
+    ("waiting for the reviewer agent to sign off before I publish the package", "publish"),
+    ("QA agent needs to confirm tests before I deploy to prod", "publish"),
+    ("legal agent to review before I delete the database", "destructive"),
+])
+def test_authority_walls_outrank_agent_approval_and_staleness(text, subtype):
+    v = classify(text, age_hours=72)
+    assert v.cls == WALL and subtype in v.subtype, v
+    assert v.confidence >= 0.8 and "close" not in v.action.lower()
+
+
+@pytest.mark.parametrize("text", [
+    "waiting for the reviewer agent to finish the build",
+    "waiting for QA to finish tests",
+    "review the API token documentation",
+])
+def test_ordinary_work_is_not_an_evidenced_gate_or_credential_wall(text):
+    v = classify(text)
+    assert v.cls != WALL
+    assert not v.evidenced and v.confidence < 0.6
+
+
+def test_human_legal_team_is_never_agent_bureaucracy():
+    assert classify("legal team needs to review").cls == WALL
+
+
+# Dogfood 2026-11-11: the PM seat's own queue. A person's spoken hold, their "yes", or a decision
+# waiting on them by name is that person's call; an agent's re-check on a reversible merge is a fake gate.
+@pytest.mark.parametrize("text", [
+    "catalog repins wait until after 14:00 because Simon said no upstream PR bump",
+    "upstream catalog PR text needs Simon's yes before posting",
+    "CheckYourself pause decision waiting on Simon",
+    "the owner told us to wait until the audit lands",
+])
+def test_dogfood_person_holds_are_human(text):
+    # A publish step that also needs a person's yes may read as WALL (publish) first; either way it is never FAKE.
+    assert classify(text).cls in (HUMAN, WALL)
+
+
+@pytest.mark.parametrize("text", [
+    "Iolite 0.5.0 merge waiting for Security agent delta re-check before I merge to internal main",
+    "waiting on the security agent to re-check",
+])
+def test_dogfood_agent_recheck_is_ack(text):
+    v = classify(text)
+    assert (v.cls, v.subtype) == (FAKE, ACK)
+
+
+def test_dogfood_person_mentioned_without_a_hold_is_not_human():
+    assert classify("the user said the test failed").cls != HUMAN
