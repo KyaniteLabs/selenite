@@ -36,6 +36,7 @@ ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-s
   box-sizing:border-box;width:100%;max-width:1120px;margin:0 auto;padding:24px 28px 48px;display:flex;flex-direction:column;gap:20px}
 .sel *,.sel *::before,.sel *::after{box-sizing:border-box}
 .sel [data-selenite-view]:focus,.sel [data-selenite-item]:focus{outline:2px solid var(--ui-accent);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.sel *,.sel *::before,.sel *::after,.sel-host *,.sel-chip{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 .sel-head{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px}
 .sel-mark{display:flex;align-items:center;gap:10px;margin-right:auto}
 .sel-word{margin:0;font-family:var(--sel-display);font-weight:600;font-size:20px;letter-spacing:.06em;line-height:1;text-transform:uppercase}
@@ -560,7 +561,7 @@ function Chip({ prefs, status }) {
   const tip = t('chip.status', t(`load.${loadKey(s.load)}`).toLowerCase(), open)
   // Name says what it does; the tooltip (announced as the description) says the state.
   return jsx(Tip, { label: tip, children: jsxs('button', {
-    type: 'button', className: STATUSBAR_BTN, 'aria-label': t('chip.open'), onClick: () => host.navigate(PATH),
+    type: 'button', className: STATUSBAR_BTN + ' sel-chip', 'aria-label': t('chip.open'), onClick: () => host.navigate(PATH),
     children: [jsx(Blade, { size: 12 }), chipStyle === 'count' && open ? jsx('span', { className: 'sel-chip-n', children: open }) : null]
   }) })
 }

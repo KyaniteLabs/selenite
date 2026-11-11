@@ -13,7 +13,7 @@ version: "0.5.0"
 docs_url: https://github.com/KyaniteLabs/selenite/blob/3a21a21114f0a6b5ba5f5932044ff56fe3553a52/README.md
 readme: true
 image: https://raw.githubusercontent.com/KyaniteLabs/selenite/3a21a21114f0a6b5ba5f5932044ff56fe3553a52/docs/banner.png
-platforms: [linux]  # add macos once the Mac capture runs it
+platforms: [linux, macos]  # Windows stays out: install.sh is POSIX sh
 known_issues:
   - "Loads on the next gateway restart. Disable a standalone antibeaurocracy plugin first, or the fake-gate hooks run twice."
   - "The fake-gate classifier is deterministic and phrase-based; text it has no evidence for is recorded, never nudged or asked."

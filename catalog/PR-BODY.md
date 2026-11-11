@@ -30,7 +30,7 @@ Why it's a plugin and not an MCP server: the value is at the hook. It acts while
 - [x] `hermes plugins validate` at the pinned SHA: ok, no warnings ([hermes-validate job](https://github.com/KyaniteLabs/selenite/actions/runs/42952520278)).
 - [x] Tests at the pinned SHA, Python 3.10–3.14 and against Hermes: [CI run](https://github.com/KyaniteLabs/selenite/actions/runs/42952520278).
 - [x] Live install: `hermes plugins install` of the pinned SHA (`6603e37`) into a clean Hermes home enables headlessly; validate ok with no warnings; [CI 42952520278](https://github.com/KyaniteLabs/selenite/actions/runs/42952520278) green.
-- [ ] Demo video: REPLACE with link.
+- [x] Demo video: [launch post on X](https://x.com/KyaniteLabs_/status/2120363932087099522).
 
 ## Relation to other KyaniteLabs entries
 

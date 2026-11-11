@@ -47,17 +47,19 @@ One product: **Selenite** is the product, and its three skills are its facets. T
 ## Install
 
 ```bash
-git clone <this repo> ~/src/selenite && ~/src/selenite/install.sh            # the skill, for every agent found
+git clone https://github.com/KyaniteLabs/selenite.git ~/src/selenite && ~/src/selenite/install.sh            # the skill, for every agent found
 ~/src/selenite/install.sh --hermes                                          # and the Hermes plugin
 ```
 
-Hermes picks up the plugin on its next gateway restart. In Hermes, the `hooks` setting (or `SELENITE_HOOKS=0`) turns every hook off and keeps everything else. If you ran the standalone antibeaurocracy plugin before, disable it: running both doubles the fake-gate hooks, and the installer warns when it finds one.
+Hermes picks up the plugin on its next gateway restart. **In Hermes Desktop the page, status chip and Kanban badges start switched off**: Desktop ships every plugin's desktop half opt-in, and `hermes plugins enable` turns on only the agent half. Open **Capabilities ▸ Plugins**, search for Selenite and switch it on. In Hermes, the `hooks` setting (or `SELENITE_HOOKS=0`) turns every hook off and keeps everything else. If you ran the standalone antibeaurocracy plugin before, disable it: running both doubles the fake-gate hooks, and the installer warns when it finds one.
 
 The `/frictionless` command starts an agent turn through the Hermes gateway. Enable Hermes's `allow_gateway_injection` setting for the gateway to accept that handoff; otherwise Selenite prints the instructions for you to send manually.
 
 The Desktop page reacts to agent tool calls through local Desktop events: ledger changes, cleanse reports and evolve proposals refresh it, and `selenite_show` opens its route and scrolls to a section or focuses an item while the pane is enabled. Events carry only short ids, a ledger kind or a finding count, never file contents, transcripts, tokens or home paths. With no Desktop client, delivery is a logged no-op; older Hermes builds without the event bridge still run the tools. `/frictionless status` gives pane guidance: check Selenite in **Capabilities -> Plugins**, where enabling the pane is the one step a person does, then open its page.
 
 One Selenite per machine: if `~/.local/share/selenite` or another Hermes home already has the plugin, `--hermes` reuses that copy instead of adding a second checkout of the same plugin name, which Hermes refuses to admit (`Two workspace members are both named 'selenite'`).
+
+**macOS:** the plugin runs on macOS as well as Linux. The full unit suite passes on a Mac (Python 3.14), the state folder is `~/.local/state/selenite`, and `install.sh` is plain POSIX `sh`, so it works with the stock macOS shell. Windows is not listed: the installer is a shell script and was not run there.
 
 In a sandbox or a seat with a read-only home, the installer skips the folders it cannot write and still links the rest. `--hermes` ends with `hermes plugins enable selenite`; on a source checkout that command may first finish a pending Hermes update and rebuild its desktop app, so pass `--no-enable` when a caller has its own timeout and run the printed command yourself.
 

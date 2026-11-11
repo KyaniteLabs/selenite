@@ -621,9 +621,23 @@ def test_docs_match_code():
 
 def test_judge_parses_one_class_word():
     from antibeaurocracy_core import judge
-    assert judge.parse("I think this is a WALL.") == "WALL"
     assert judge.parse("fake") == "FAKE"
+    assert judge.parse("WALL.") == "WALL"
     assert judge.parse("no idea") == ""
+
+
+def test_judge_parse_phrasings():
+    from antibeaurocracy_core import judge
+    assert judge.parse("Short reasoning.\nANSWER: DEPENDENCY") == "DEPENDENCY"            # plain
+    assert judge.parse("Not FAKE, this is a WALL") == ""                                   # negation, no ANSWER line
+    assert judge.parse("Not FAKE, this is a WALL\nANSWER: WALL") == "WALL"                # negation, answered
+    assert judge.parse("<think>maybe FAKE? no, HUMAN</think>\nANSWER: WALL") == "WALL"    # think block
+    assert judge.parse("<think>ANSWER: FAKE</think>") == ""                                # only inside think
+    assert judge.parse("<think>unclosed FAKE ANSWER: FAKE") == ""                          # unclosed think
+    assert judge.parse("It is HUMAN or MACHINERY") == ""                                   # two classes, no answer
+    assert judge.parse("ANSWER: HUMAN\nwait\nANSWER: MACHINERY") == "MACHINERY"           # last ANSWER wins
+    assert judge.parse("answer: fake") == "FAKE"
+    assert judge.parse("ANSWER: MAYBE") == ""
 
 
 def test_judge_lists_disagreements_only(tmp_path):
