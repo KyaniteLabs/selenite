@@ -8,7 +8,9 @@
 kind: gate | calm | audit | cleanse | approval | blocked | miss | fp | fix | reopen
 key:  a short stable slug for the friction (e.g. gh-login, npm-otp).
 Keys and notes are redacted when written (emails, IPs, tokens, secrets, the
-home path) and truncated: keys to 80 characters, notes to 200.
+home path) and truncated: notes to 200 characters. A key longer than 80 characters
+is cut to 71 and given a short hash, so two long keys never merge, and the
+returned row says truncated: true.
 
 Where state lives: $SELENITE_STATE, when set, is the only folder read or written
 (so one seat on a shared host never reads another's friction). Otherwise
@@ -135,6 +137,18 @@ ROTATE_BYTES = 4 * 1024 * 1024  # one rotated file is kept; older history is dro
 KINDS = {"gate", "calm", "audit", "cleanse", "approval", "blocked", "miss", "fp", "fix", "reopen"}
 APPROVAL_KEY = 71  # approval keys are cut here, so "approval:" + key fits the 80-character key limit
 
+
+def _redact_card(match: re.Match[str]) -> str:
+    digits = [int(d) for d in match.group() if d.isdigit()]
+    checksum = 0
+    for i, digit in enumerate(digits):
+        if (len(digits) - i) % 2 == 0:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        checksum += digit
+    return "<card>" if checksum % 10 == 0 else match.group()
+
 # Redaction runs on every key and note the ledger writes, and on miner samples. Order matters:
 # whole secrets first, then the generic long-run rule.
 _REDACT = [
@@ -147,8 +161,9 @@ _REDACT = [
     (re.compile(r"(?i)\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 <token>"),
     # key=value / key: value. A value the bearer rule already replaced keeps its scheme word, so
     # "Authorization: Bearer <token>" stays readable.
-    (re.compile(r"(?i)\b([\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|auth)"
-                r"[\w-]*)(\s*[=:]\s*)(?!(?:bearer|basic|token)\s+<token>)(\"[^\"]*\"|'[^']*'|\S+)"),
+    (re.compile(r"(?i)\b((?:[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)[\w-]*|"
+                r"(?:[\w-]+[-_])?auth(?:[-_][\w-]+)*|authorization|authentication)"
+                r")(\s*[=:]\s*)(?!(?:bearer|basic|token)\s+<token>)(\"[^\"]*\"|'[^']*'|\S+)"),
      r"\1\2<secret>"),
     # "password hunter2" with no separator; a plain word ("password reset") is left alone.
     (re.compile(r"(?i)\b(password|passphrase|passwd)(\s+)(?!<secret>)(?=\S*[^\sA-Za-z])\S+"), r"\1\2<secret>"),
@@ -156,7 +171,7 @@ _REDACT = [
     (re.compile(r"\b(?:sk-proj-|sk-|ghp_|gho_|ghs_|ghu_|github_pat_|xox[abprs]-|glpat-)[A-Za-z0-9_\-]{8,}"), "<token>"),
     (re.compile(r"(?<![\w/+=])(?=[A-Za-z0-9_\-/+=]*\d)(?=[A-Za-z0-9_\-/+=]*[A-Za-z])[A-Za-z0-9_\-/+=]{32,}"), "<token>"),
     # Card numbers: 13-19 digits, optionally grouped with spaces or dashes.
-    (re.compile(r"(?<![\d.])\d(?:[ -]?\d){12,18}(?![\d.])"), "<card>"),
+    (re.compile(r"(?<![\w.])\d(?:[ -]?\d){12,18}(?![\w.])"), _redact_card),
     (re.compile(r"\b\d{1,3}(\.\d{1,3}){3}\b"), "<ip>"),
     # IPv6: needs "::" or a hex letter, so clock times like 12:30:45 stay readable.
     (re.compile(r"(?i)(?<![\w:.])(?=[0-9a-f:]*(?:::|[a-f]))[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}(?![\w:])"), "<ip>"),
@@ -199,6 +214,17 @@ def _rotate(state: Path | None = None) -> None:
         pass
 
 
+KEY_MAX = 80
+
+
+def clip_key(key: str) -> tuple[str, bool]:
+    """A key that fits KEY_MAX, and whether it was cut. A cut key keeps 71 characters plus "~" and
+    an 8-character hash of the whole key, so distinct long keys stay distinct and the cut is visible."""
+    if len(key) <= KEY_MAX:
+        return key, False
+    return key[:KEY_MAX - 9] + "~" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:8], True
+
+
 def add(kind: str, key: str, note: str = "", agent: str = "") -> dict | None:
     """Append one row to the first state folder that takes it.
 
@@ -208,8 +234,11 @@ def add(kind: str, key: str, note: str = "", agent: str = "") -> dict | None:
     """
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {sorted(KINDS)}")
-    row = {"ts": time.time(), "kind": kind, "key": redact(key)[:80], "note": redact(note)[:200],
+    clipped, cut = clip_key(redact(key))
+    row = {"ts": time.time(), "kind": kind, "key": clipped, "note": redact(note)[:200],
            "agent": redact(agent or os.environ.get("SELENITE_AGENT", ""))[:40]}
+    if cut:
+        row["truncated"] = True
     for state in state_dirs():
         try:
             state.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -302,7 +331,10 @@ def main() -> int:
     sub.add_parser("state-dir", help="print the first state folder that accepts a write")
     ns = ap.parse_args()
     if ns.cmd == "add":
-        print(json.dumps(add(ns.kind, ns.key, ns.note, ns.agent)))
+        row = add(ns.kind, ns.key, ns.note, ns.agent)
+        if row and row.get("truncated"):
+            print(f"ledger: key longer than {KEY_MAX} characters, stored as {row['key']!r}", file=sys.stderr)
+        print(json.dumps(row))
     elif ns.cmd == "state-dir":
         state = writable_state()
         if state is None:

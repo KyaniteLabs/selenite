@@ -297,6 +297,9 @@ def frictionless_command(raw_args: str, *, session_key: str | None = None) -> st
     what = f"{mode.capitalize()} mode" if mode else "your request"
     inject = getattr(_ctx, "inject_message", None)
     try:
+        if not session_key:
+            get_session_env = getattr(_ctx, "get_session_env", None)
+            session_key = get_session_env("HERMES_SESSION_KEY") if get_session_env else None
         sent = bool(inject(prompt, session_key=session_key or None)) if inject else False
     except Exception as exc:  # noqa: BLE001 - a failed hand-off must still answer the human
         logger.warning("frictionless: could not start an agent turn: %s", exc)

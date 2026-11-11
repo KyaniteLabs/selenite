@@ -74,8 +74,8 @@ _WALL = [
         # "needs credentials", "needs Ana's credentials", "requires the npm token", "missing npm token":
         # up to three words (possessives included) between the verb and the secret.
         r"\b(missing|expired|invalid|revoked|no(?! (output|input|context|more) )|no working|needs?(?! no\b| zero\b)|"
-        r"requir(e|es|ed|ing)(?! no\b| zero\b)|rotat\w*|share|paste|only \w+ (has|holds|knows)) ([\w'’-]+ ){0,3}"
-        r"(credentials?|tokens?|api[ -]?keys?|passwords?|secrets?|2fa|otp)\b(?!-)|"  # not "credential-free"
+        r"requir(e|es|ed|ing)(?! no\b| zero\b)|rotat\w*|share|paste|blocked on|waiting (on|for)|only \w+ (has|holds|knows)) ([\w'’.-]+ ){0,3}"
+        r"(credentials?|tokens?|api[ -]?keys?|passwords?|secrets?|2fa|otp)(?![\w-])|"  # not "credential-free"
         # a person has to sign in: "waiting on Ana to log in to npm", "needs to authenticate with PyPI"
         r"\b(to|must|has to|needs? to|have to) (log ?in|sign ?in|authenticate|re-?auth\w*)\b|"
         r"\bre-?auth(enticate)?\b|oauth (flow|login|consent)|sudo password|"
@@ -102,13 +102,15 @@ _WALL = [
         r"\b(legal (review|team|sign-?off|approval|counsel)|(approval|sign-?off|ok) from legal|lawyer|licen[cs]e (\w+ )?(review|compat\w*)|contract signature|sign (the |a )?contract|"
         r"terms of service|gdpr|hipaa|privacy review|trademark|copyright)\b", _I)),
     ("named-freeze", re.compile(
-        r"\b(security hold|(ceo|board|exec\w*) (freeze|hold)|code freeze|change freeze|FROZEN by|incident hold|e-?stop|kill switch|embargo)\b", _I)),
+        r"\b(?:(security hold|(ceo|board|exec\w*) (freeze|hold)|code freeze|change freeze|FROZEN by|incident hold|e-?stop|kill switch|embargo)\b"
+        r"|frozen\s*[:;\u2014-]|frozen until\b|freeze (?:is )?(?:on|in (?:effect|place)|until)\b|(?:repin|merge|release|deploy|publish|plugin)s? freeze\b)", _I)),
 ]
 
 # A question addressed to a person. Hermes treats needs_input as the worker's human channel,
 # so it is the person's queue, not an agent-to-agent gate.
 _INFRA = re.compile(r"(terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall))", _I)
 _INFRA_FAULT = re.compile(r"\b(failed|fails|errored|error|timed out|time ?out|connection refused|dry-run)\b", _I)
+_WALL_FAMILY_ACTION = re.compile(r"\b(remove|overwrite|disable)\b.{0,40}\b(production|customer|2fa)\b", _I)
 
 # The loose net enforce mode checks before it refuses anything. It is meant to over-match: any word
 # from a wall family (money, infra, deletion, credentials, publishing, legal, freezes) or a person's
@@ -142,7 +144,10 @@ _SEAT = r"(liam|platform|security|design|engineering|governance|income|chief.?sc
 _ROLE = (r"(ceo|cto|cfo|coo|founders?|owner|operator|user|human|boss|board|executives?|manager|legal|customers?|"
          r"clients?|person|simon)")
 _NOT_A_PERSON = r"(?!-|('s)?\s+(agent|bot|seat|module|lane|worker|service|process)s?\b)"
-_NOUN = r"(approval|approvals|ok|okay|sign-?off|go|word|green-?light|blessing|decision|call|ack|ruling|verdict)"
+_NOUN = r"(approvals?|ok|okay|sign-?offs?|go|words?|green-?light|blessing|decisions?|call|ack|rulings?|verdicts?|adjudicat\w*|hands)"
+# The people who hold authority here (not "user" or "customer"): their word may carry one or two
+# describing words before the noun ("the CEO's explicit word", "CEO drain word", "Owner adjudication").
+_PRINCIPAL = r"(ceo|cto|cfo|coo|founders?|owner|operator|boss|simon)"
 # weak: the role is only referenced ("ACK from the CEO"); needs a wait word or gate phrase to count
 _HUMAN_AUTHORITY = re.compile(
     # the source of the wait: "ACK from the CEO", "HOLD per the owner", "approved by the founder"
@@ -151,6 +156,7 @@ _HUMAN_AUTHORITY = re.compile(
 _HUMAN_AUTHORITY_STRONG = re.compile(
     # the person's own word as a noun: "the founder's OK", "needs CEO approval", "CEO word on the copy"
     rf"(\b(the |my |our |needs? |pending |awaiting |without )?{_ROLE}(?:'s)? {_NOUN}\b|"
+    rf"\b{_PRINCIPAL}(?:'s|’s)?{_NOT_A_PERSON} ([\w-]+ ){{0,2}}{_NOUN}\b|"
     # the person as the subject: "the CEO must countersign", "CEO has not signed", "until the CEO approves",
     # and the infinitive form after the role: "needs the CEO to approve", "waiting on the owner to sign off"
     rf"\b{_ROLE} (must|has to|needs to|has not|hasn't|has yet to|approves?|approved|signs?|signed|"
@@ -159,6 +165,11 @@ _HUMAN_AUTHORITY_STRONG = re.compile(
     rf"expose|provide|grant|create|open|enable)\b|"
     # a seat named as the builder of a missing capability: "need Liam/Platform to expose a GUI wrapper"
     rf"\b(need|needs|needing) {_SEAT}(?:/\w+){{0,3}} to (expose|provide|grant|create|open|enable|build)\b)", _I)
+
+# A person with authority named anywhere in a needs_input ask: the worker is asking that person.
+_PRINCIPAL_NAMED = re.compile(rf"\b{_PRINCIPAL}\b{_NOT_A_PERSON}", _I)
+# HOLD offered as one of the answers ("GO-DATA vs HOLD", "CONSOLE / HOLD") is a choice, not a parked card.
+_HOLD_OPTION = re.compile(r"((\bvs\.?|/|\bor)\s*(?-i:HOLD)\b|(?-i:\bHOLD)\s*(\bvs\.?|/|\bor\b))", _I)
 
 _WAIT_WORD = re.compile(r"\b(await\w*|waiting|approv\w*|ack|ok|okay|sign-?off|go(-?ahead)?|word|hold|decision|decide|ruling|call|need(s|ed)?)\b", _I)
 
@@ -331,6 +342,10 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
     walls = [(n, h) for n, h in walls if h]
     fakes = [(sub, _hits(p, t)) for sub, p in _FAKE]
     fakes = [(s, h) for s, h in fakes if h]
+    if kind == "needs_input" and _HOLD_OPTION.search(t):
+        holds = len(re.findall(r"(?-i:\bHOLD\b)", t))
+        if holds and holds <= len(_HOLD_OPTION.findall(t)):  # every HOLD is offered as an answer
+            fakes = [(s, h) for s, h in fakes if s != PARKING]
     # An infra command reported as failing, with nothing waiting on anyone, is a fault, not a wall.
     if (walls and not fakes and all(_INFRA.fullmatch(h) for _, hs in walls for h in hs)
             and _INFRA_FAULT.search(t)):
@@ -338,6 +353,11 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
     if walls:
         names = ", ".join(n for n, _ in walls)
         return Verdict(WALL, names, 0.9, f"authority wall: {names}", ACTIONS[WALL], [h for _, hs in walls for h in hs])
+
+    # Give direct classifier callers the gate's safety override for an explicit destructive or
+    # security-control action. The loose family guard alone also matches incidental mentions.
+    if wall_family(t) and _WALL_FAMILY_ACTION.search(t):
+        return Verdict(WALL, "", 0.6, "possible authority wall", ACTIONS[WALL], [t])
 
     # 2. A question addressed to a person is the person's queue, never an agent gate.
     human = _hits(_HUMAN, t)
@@ -387,6 +407,11 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
 
     # 7. needs_input is the worker's channel to a person. It stays HUMAN unless the text itself shows
     # an agent gate or a fault, in which case that wins with a little less certainty.
+    # 7a. A needs_input ask that names a person with authority is that person's question, whatever
+    # ceremony words ("ratify", "attest") or decision options it carries.
+    if kind == "needs_input" and _PRINCIPAL_NAMED.search(t):
+        return Verdict(HUMAN, "", 0.7, "needs_input naming a person with authority", ACTIONS[HUMAN],
+                       _hits(_PRINCIPAL_NAMED, t))
     if kind == "needs_input" and not (fakes or mach):
         return Verdict(HUMAN, "", 0.7, "filed as needs_input", ACTIONS[HUMAN], ["kind=needs_input"])
 
@@ -435,7 +460,7 @@ RULES = (
     "5 HUMAN: a wait or gate phrase whose source is a person with authority ('from the CEO', 'per the owner', "
     "'the founder's OK', 'the CEO must sign'); a bare role noun, or an agent named after a role, does not count",
     "6 DEPENDENCY: a HOLD with an explicit expiry date, or a hold that names where the work runs or a queue cap",
-    "7 HUMAN: kind=needs_input with no gate or fault phrase in the text",
+    "7 HUMAN: kind=needs_input naming a person with authority (CEO, owner, operator...), or with no gate or fault phrase",
     "8 MACHINERY: a fault phrase, or a wait on a running check (CI, build, tests), with no gate phrase",
     "9 FAKE F1-F5: an agent-to-agent gate phrase (confidence 0.7-0.95, less when mixed with a fault or filed as needs_input)",
     "10 HUMAN (0.5): an approval or review from a named party that is not a configured seat ('approval from CoS')",
