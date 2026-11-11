@@ -86,4 +86,5 @@ Rejected metaphors:
 - The owner picked round 14 E on 2026-11-10: a thick raw satin-spar shard, set diagonally, with an off-centre, moderately pointed tip. This follows the owner's corrections: a shard like a raw selenite wand, "more angled, more pointy but not ultra pointy, and not centered".
 - Files: `branding/selenite.png` (1024² master, transparent), `branding/selenite-{512,192,32}.png`, and `icon.png` (512², the epoch-hermes plugin-icon convention).
 - The concept SVG in `assets/icon.svg` stays as a construction note only.
-- The 2:1 catalog banner and the catalog `image` field are still to come, pinned to a reviewed commit.
+- The 2:1 catalog banner is `docs/banner.png` (1200×600; the icon plus the SELENITE lockup in Chakra Petch Bold 700 and Medium 500, pearl ink `#ECE9E2` on dark).
+- The catalog `image` field stays out until the banner exists at a reviewed commit on the public GitHub repo, so the raw.githubusercontent.com URL can be pinned to that sha.
