@@ -93,7 +93,7 @@ _HUMAN_KINDS = frozenset({"needs_input", "capability"})  # Hermes: both surface 
 # Kanban keys with an open blocked badge. Completion checks this set, and rereads the ledger only when
 # another process (a worker) has written to it since the last read.
 _blocked_now: set[str] = set()
-_blocked_seen_mtime = [None]
+_blocked_seen_sig = [None]
 
 STREAK_MAX = 256  # sessions remembered for the two-signal rule
 _streak: "OrderedDict[str, bool]" = OrderedDict()  # session -> previous message had a reason
@@ -208,12 +208,9 @@ def kanban_task_blocked(task_id=None, reason=None, assignee=None, board=None, **
 
 
 def _open_badges() -> set[str]:
-    try:
-        mtime = ledger.LEDGER.stat().st_mtime_ns
-    except OSError:
-        mtime = 0
-    if mtime != _blocked_seen_mtime[0]:
-        _blocked_seen_mtime[0] = mtime
+    sig = ledger.signature()  # every state folder: a row in a fallback folder still clears a badge
+    if sig != _blocked_seen_sig[0]:
+        _blocked_seen_sig[0] = sig
         rows = list(ledger.rows(90))
         fixed = ledger.fixed_keys(source=rows)
         _blocked_now.clear()

@@ -10,7 +10,6 @@ routes make no other network calls.
 """
 import importlib
 import importlib.util
-import os
 import sys
 import threading
 import time
@@ -63,11 +62,9 @@ _lock = threading.Lock()
 
 
 def _all_rows() -> list[dict]:
-    """Every well-formed row, re-read only when the ledger file changes."""
-    try:
-        st = os.stat(ledger.LEDGER)
-        sig = (st.st_mtime_ns, st.st_size, st.st_ino)
-    except FileNotFoundError:
+    """Every well-formed row from every state folder, re-read only when a ledger file changes."""
+    sig = ledger.signature()
+    if not sig:
         return []
     with _lock:
         if _cache["sig"] != sig:
@@ -164,7 +161,7 @@ def overview(days: int = Days) -> dict:
         "categories": sorted(signals.CATEGORIES),
         "series": series,
         "blocked_tasks": _blocked(rows, fixed),
-        "has_ledger": ledger.LEDGER.exists(),
+        "has_ledger": bool(ledger.signature()),
         "state_dir": _state_dir(),
     }
 

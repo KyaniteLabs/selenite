@@ -118,7 +118,7 @@ def build(days: int = 30) -> Path:
     L += ["", "## Sharpen Selenite (signal quality)", ""]
     L += [f"- Missed overload (add a pattern): {ledger.redact(r['note'] or r['key'])}" for r in misses[:10]]
     L += [f"- False positive (narrow a pattern): {ledger.redact(r['note'] or r['key'])}" for r in fps[:10]]
-    L += [f"- Category `{c}` silent for {n} cycle(s): " + ("move it to references/compost.md" if n >= PRUNE_AFTER
+    L += [f"- Category `{c}` silent for {n} cycle{'' if n == 1 else 's'}: " + ("move it to references/compost.md" if n >= PRUNE_AFTER
           else f"prune if still silent after {PRUNE_AFTER}") for c, n in sorted(silent.items()) if n]
     if not (misses or fps or any(silent.values())):
         L.append("- no changes suggested")

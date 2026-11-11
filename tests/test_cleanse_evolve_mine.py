@@ -161,7 +161,7 @@ def test_evolve_prune_needs_two_real_cycles(monkeypatch):
     clock[0] += 2 * 86400
     _fresh_report(2)
     text = evolve.build(30).read_text()
-    assert "Category `curse` silent for 2 cycle(s): move it to references/compost.md" in text
+    assert "Category `curse` silent for 2 cycles: move it to references/compost.md" in text
     assert stat.S_IMODE((ledger.STATE / "evolve-state.json").stat().st_mode) == 0o600
 
 

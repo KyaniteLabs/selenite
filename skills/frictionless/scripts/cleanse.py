@@ -76,6 +76,11 @@ def tilde(p: Path | str) -> str:
     return "~" + s[len(h):] if s == h or s.startswith(h + os.sep) else s
 
 
+def plural(n: int, word: str) -> str:
+    """'1 card', '7 cards': the count and the noun agree, no '(s)'."""
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
 def finding(stone: str, where, check: str, problem: str, fix: str, *, n: int = 0, severity: int = 0) -> dict:
     return {"stone": stone, "where": tilde(where), "check": check, "problem": problem, "fix": fix,
             "interruptions": n, "severity": severity}
@@ -250,7 +255,7 @@ def check_runbooks(ctx: dict) -> list[dict]:
                 continue
             hits = sum(1 for ln in lines if any(p.search(ln) for p in pats))
             if hits:
-                out.append(finding("runbook", f, "manual-steps", f"{hits} manual step(s) a human is told to do",
+                out.append(finding("runbook", f, "manual-steps", f"{plural(hits, 'manual step')} a human is told to do",
                                    "Turn each into one idempotent command that prints PASS or FAIL, or automate it.",
                                    severity=SOMETIMES))
     return out
@@ -273,7 +278,7 @@ def check_fake_gates(ctx: dict) -> list[dict]:
     cards = [c for c, fake in last.items() if fake]
     if cards:
         out.append(finding("fake-gate", "kanban", "fake-waits",
-                           f"{len(cards)} card(s) waited on another agent with no real wall",
+                           f"{plural(len(cards), 'card')} waited on another agent with no real wall",
                            "Run `antibeaurocracy audit` and clear the shared cause it names.", n=len(cards)))
     return out
 
@@ -378,7 +383,7 @@ def latest() -> dict | None:
 
 def render(report: dict, top: int = 15) -> str:
     fs = report["findings"]
-    lines = [f"Selenite cleanse: {len(fs)} finding(s) across {len(report['by_stone'])} kind(s) of stone."]
+    lines = [f"Selenite cleanse: {plural(len(fs), 'finding')} across {plural(len(report['by_stone']), 'kind')} of stone."]
     for i, f in enumerate(fs[:top], 1):
         weight = f"×{f['interruptions']}" if f["interruptions"] else SEVERITY_NAME.get(f["severity"], "")
         lines.append(f"{i}. [{f['stone']}, {weight}] {f['problem']} ({f['where']})\n   fix: {f['fix']}")

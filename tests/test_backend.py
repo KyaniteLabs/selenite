@@ -104,3 +104,22 @@ def test_cleanse_routes(http):
     latest = http.get(U + "/cleanse").json()["cleanse"]
     assert latest["total"] == first["cleanse"]["total"] and len(latest["findings"]) <= 25
     assert str(HOME) not in json.dumps(latest)
+
+
+def test_rows_in_a_fallback_state_folder_reach_the_pane(tmp_path, monkeypatch):
+    """A skill-only agent with no HERMES_HOME writes to a fallback folder; the pane must still see it,
+    even before the preferred ledger file exists and after the fallback changes."""
+    led = api.ledger
+    fallback = tmp_path / "fallback"
+    fallback.mkdir()
+    monkeypatch.setattr(led, "state_dirs", lambda: [led.STATE, fallback])
+    for p in (led.LEDGER, led.ROTATED):
+        p.unlink(missing_ok=True)
+    row = {"ts": time.time(), "kind": "gate", "key": "fallback-only", "note": "", "agent": "x"}
+    (fallback / "ledger.jsonl").write_text(json.dumps(row) + "\n")
+    o = api.overview(30)
+    assert o["has_ledger"] is True and [g["key"] for g in o["gates"]] == ["fallback-only"]
+    time.sleep(0.01)
+    with (fallback / "ledger.jsonl").open("a") as fh:
+        fh.write(json.dumps({**row, "ts": time.time(), "key": "fallback-two"}) + "\n")
+    assert {g["key"] for g in api.overview(30)["gates"]} == {"fallback-only", "fallback-two"}

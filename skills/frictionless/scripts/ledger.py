@@ -165,6 +165,20 @@ def rows(days: int = 3650):
             yield from _read(path, since)
 
 
+def signature() -> tuple:
+    """A cheap fingerprint of every ledger file rows() reads. It changes whenever any of them does,
+    so a cache keyed on it never misses rows written to a fallback state folder."""
+    sig = []
+    for state in state_dirs():
+        for path in (state / "ledger.1.jsonl", state / "ledger.jsonl"):
+            try:
+                st = path.stat()
+            except OSError:
+                continue
+            sig.append((str(path), st.st_mtime_ns, st.st_size, st.st_ino))
+    return tuple(sig)
+
+
 def _read(path: Path, since: float):
     if not path.exists():
         return
