@@ -47,7 +47,7 @@ else:  # run as a script
 
 HOME = Path.home()
 SELF_SKILL = Path(__file__).resolve().parent.parent
-SELF_SKILLS = ("frictionless", "antibeaurocracy", "antipedantry")  # Selenite's three facets, side by side
+SELF_SKILLS = ("frictionless", "antibeaurocracy", "antipedantry", "anticowardice")  # Selenite's four facets, side by side
 KEEP = 10
 DESC_LIMIT = 1024  # Agent Skills spec: description is at most 1024 characters
 APPROVAL_REPEAT = 3  # the same approval this often in the window is an allowlist candidate

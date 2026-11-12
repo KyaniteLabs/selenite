@@ -580,7 +580,7 @@ def register(ctx) -> None:
         except (ValueError, TypeError, AttributeError) as exc:
             logger.warning("antibeaurocracy doctrine section not registered: %s", exc)
 
-    # Skills are registered once, by Selenite's register, for all three facets.
+    # Skills are registered once, by Selenite's register, for all four facets.
 
     if hasattr(ctx, "register_automation_blueprint"):
         ctx.register_automation_blueprint(

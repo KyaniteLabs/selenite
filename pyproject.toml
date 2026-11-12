@@ -6,7 +6,7 @@
 [project]
 name = "selenite"
 version = "0.6.0"
-description = "Takes friction off the human: steps handed to a person, fake gates between agents, and checks that cannot change the decision."
+description = "Takes friction off the human: steps handed to a person, fake gates between agents, checks that cannot change the decision, and replies that hedge where they could commit."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -21,7 +21,7 @@ classifiers = [
 antibeaurocracy = "antibeaurocracy_core.cli:main"
 
 [tool.setuptools]
-packages = ["antibeaurocracy_core"]
+packages = ["antibeaurocracy_core", "anticowardice_core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

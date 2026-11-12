@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **New facet: `anticowardice`** (closes #54). Selenite now also catches epistemic cowardice: a hedge,
+  caveat, "ready to X" or question that avoids a call the agent has the evidence and authority to make.
+  Eight deterministic detectors (hedge, ready-to, caveat-exit, narrow read, false deference,
+  over-correction, sycophancy, vague status), no model call. A sentence that names a wall (credentials,
+  spend, publishing or deploying, destructive steps, legal, a named freeze), a wait on a person's approval or a user hold ("please hold", "plan only") is left alone, and so is a sentence next to one.
+- New `post_llm_call` hook, `cowardice_check` tool and `/anticowardice` command. `cowardice_mode` is
+  `observe` by default (counts-only ledger under `plugin-data/anticowardice/`) or `nudge` (one note on the
+  next turn). Neither mode blocks anything. The Check Yourself boundary doc gains the vague-status line.
+
 ## 0.6.0 (2026-11-11)
 
 - Agent tool calls now refresh the Desktop page through local `ledger.updated`,

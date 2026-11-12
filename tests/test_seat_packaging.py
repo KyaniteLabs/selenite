@@ -157,7 +157,7 @@ def test_install_continues_past_a_failed_link_and_exits_only_at_the_end(tmp_path
     assert "FAIL " in done.stderr and "Could not link:" in done.stderr
     assert (home / ".local/bin/antibeaurocracy").is_symlink()  # work after the failure still ran
     assert _last_line(done.stdout).startswith("Selenite install: ")
-    assert "(0 read-only), 3 failed." in done.stdout
+    assert "(0 read-only), 4 failed." in done.stdout
 
 
 # --- D3: one Selenite per machine -------------------------------------------

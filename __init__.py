@@ -2,12 +2,13 @@
 
 Selenite is the stone used to clear the other stones, and it needs no
 cleansing itself: no upkeep, self-trimming state. This Hermes plugin wraps
-Selenite's three provider-agnostic facet skills and registers:
+Selenite's four provider-agnostic facet skills and registers:
 
-  skills   frictionless, antibeaurocracy, antipedantry   (skills/<name>/SKILL.md)
+  skills   frictionless, antibeaurocracy, antipedantry, anticowardice   (skills/<name>/SKILL.md)
   commands /frictionless [cleanse|gate|calm|evolve|status] [text]
-           /antibeaurocracy [audit|check|mode|ledger], /fake-gate <reason>
-  tools    selenite_ledger (add, summary, cleanse), selenite_show, bureaucracy_classify, bureaucracy_audit
+           /antibeaurocracy [audit|check|mode|ledger], /fake-gate <reason>, /anticowardice [<text>|mode]
+  tools    selenite_ledger (add, summary, cleanse), selenite_show, bureaucracy_classify, bureaucracy_audit,
+           cowardice_check
   hooks    pre_llm_call            -> Calm-mode context on the two-signal rule (never inside a kanban worker)
            post_approval_response  -> a human "once"/"session" on a safe, non-wall prompt logs an approval row;
                                       a human "always" logs that approval as fixed
@@ -17,6 +18,9 @@ Selenite's three provider-agnostic facet skills and registers:
                                       any badged card a person unblocked or archived)
            pre_tool_call, transform_tool_result, on_kanban_dispatch_tick
                                    -> the fake-gate facet (antibeaurocracy_core/plugin.py)
+           post_llm_call           -> the anticowardice facet (anticowardice_core/plugin.py): ledger the finished
+                                      turn's findings and, in cowardice_mode "nudge", hold one note that
+                                      pre_llm_call adds to that session's next turn. Never blocks anything.
 
 Hooks never approve, unblock or edit a card. Only fake_gate_mode "ask" hands a
 kanban_block back with a question, at most max_refusals times, and fails open.
@@ -67,11 +71,13 @@ pane = ledger.pane
 # Hermes and the tests both load this file as a package, so the facet imports relatively.
 from .antibeaurocracy_core import FAKE, HUMAN, WALL, WALLS_TEXT  # noqa: E402
 from .antibeaurocracy_core import plugin as fake_gates  # noqa: E402
+from .anticowardice_core import plugin as cowardice  # noqa: E402
 
-SKILLS = {  # one product, three facets of one intent: fewer steps, waits and checks reach the human
+SKILLS = {  # one product, four facets of one intent: fewer steps, waits and checks reach the human
     "frictionless": "Clear and recharge every other tool in the stack so fewer steps reach the human.",
     "antibeaurocracy": "Tell a real wall from a wait between agents that will end up on the human's desk.",
     "antipedantry": "Tell rigor from checks that cannot change the decision but still delay it.",
+    "anticowardice": "Tell a real wall from a hedge, caveat or question that avoids a call the agent can already make.",
 }
 
 MODES = ("cleanse", "gate", "calm", "evolve")
@@ -150,10 +156,9 @@ def _safe(fn):
 
 # --- hooks -----------------------------------------------------------------
 
-@_safe
-def pre_llm_call(session_id=None, user_message=None, parent_session_id=None, sender_id=None, **_kw):
+def _calm_context(session_id, user_message, parent_session_id, sender_id) -> str | None:
     # A kanban worker's "user message" is its card, not a person, so Calm never fires inside one.
-    if not _hooks_on() or parent_session_id or not isinstance(user_message, str) or os.environ.get("HERMES_KANBAN_TASK"):
+    if parent_session_id or not isinstance(user_message, str) or os.environ.get("HERMES_KANBAN_TASK"):
         return None
     if not _calm_sender_ok(sender_id):
         return None
@@ -162,7 +167,18 @@ def pre_llm_call(session_id=None, user_message=None, parent_session_id=None, sen
     if not signals.calm_due(reasons, previous):
         return None
     ledger.add("calm", "+".join(sorted(set(reasons))), agent="hermes")
-    return {"context": CALM_CONTEXT.format(reasons=", ".join(sorted(set(reasons))))}
+    return CALM_CONTEXT.format(reasons=", ".join(sorted(set(reasons))))
+
+
+@_safe
+def pre_llm_call(session_id=None, user_message=None, parent_session_id=None, sender_id=None, **_kw):
+    """Calm-mode context on the two-signal rule, plus the anticowardice note held after this session's
+    last turn (only when cowardice_mode is "nudge"). Either, both or neither."""
+    if not _hooks_on():
+        return None
+    notes = [n for n in (_calm_context(session_id, user_message, parent_session_id, sender_id),
+                         cowardice.take_nudge(session_id)) if n]
+    return {"context": "\n\n".join(notes)} if notes else None
 
 
 def allowlist_candidate(pattern_key, surface, choice, decided_by) -> bool:
@@ -434,5 +450,7 @@ def register(ctx) -> None:
                  kanban_task_blocked, kanban_task_completed, on_kanban_task_updated):
         ctx.register_hook(hook.__name__, hook)
     fake_gates.HOOKS_ON = _hooks_on  # one off switch for every hook Selenite runs
+    cowardice.HOOKS_ON = _hooks_on
     fake_gates.on_tick(_tick_reconcile)
     fake_gates.register(ctx)
+    cowardice.register(ctx)

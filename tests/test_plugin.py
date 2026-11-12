@@ -42,10 +42,11 @@ def test_register_matches_manifest():
     ctx = Ctx()
     plugin.register(ctx)
     manifest = (REPO / "plugin.yaml").read_text(encoding="utf-8")
-    assert [n for n, _ in ctx.skills] == ["frictionless", "antibeaurocracy", "antipedantry"]
+    assert [n for n, _ in ctx.skills] == ["frictionless", "antibeaurocracy", "antipedantry", "anticowardice"]
     assert all(path.exists() for _, path in ctx.skills)
-    assert ctx.commands == ["frictionless", "antibeaurocracy", "fake-gate"]
-    assert [t for t, _ in ctx.tools] == ["selenite_ledger", "selenite_show", "bureaucracy_classify", "bureaucracy_audit"]
+    assert ctx.commands == ["frictionless", "antibeaurocracy", "fake-gate", "anticowardice"]
+    assert [t for t, _ in ctx.tools] == ["selenite_ledger", "selenite_show", "bureaucracy_classify", "bureaucracy_audit",
+                                         "cowardice_check"]
     assert all(f"  - {hook}\n" in manifest for hook in ctx.hooks)
     assert manifest.count("\n  - ") - manifest.split("optional_env:")[1].count("\n  - ") == len(ctx.hooks)
     for tool, _ in ctx.tools:
@@ -62,7 +63,8 @@ def test_versions_agree():
                 for n in plugin.SKILLS}
     v_core = re.search(r'^__version__ = "([\d.]+)"', (REPO / "antibeaurocracy_core/__init__.py").read_text(encoding="utf-8"), re.M).group(1)
     v_dash = json.loads((REPO / "dashboard/manifest.json").read_text(encoding="utf-8"))["version"]
-    assert {v_manifest, v_skill, v_py, v_core, v_dash} | v_skills == {v_manifest}
+    v_cow = re.search(r'^__version__ = "([\d.]+)"', (REPO / "anticowardice_core/__init__.py").read_text(encoding="utf-8"), re.M).group(1)
+    assert {v_manifest, v_skill, v_py, v_core, v_cow, v_dash} | v_skills == {v_manifest}
 
 
 def test_one_signal_is_not_calm():

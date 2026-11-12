@@ -6,23 +6,26 @@ api_version: 1
 description: >
   Selenite takes friction off the human, treated as accessibility, and clears it
   at the source. One test runs through all of it: does this step, wait or check
-  earn its cost to the person? Three facets apply it. Gate: steps handed to a
+  earn its cost to the person? Four facets apply it. Gate: steps handed to a
   person (logins, approvals, manual runbook steps). Fake gates: one agent parking
   work on another for a reason that isn't real, which ends up as a stale board a
   person must untangle. Pedantry: checks that cannot change the decision but
-  still delay or escalate it. Walls always stand: credentials, spend, publishing
+  still delay or escalate it. Cowardice: a hedge, caveat or question that avoids a
+  call the agent already has the evidence and authority to make. Walls always stand: credentials, spend, publishing
   or deploying, destructive, legal, a named freeze, or a question only a person
   can answer. A read-only cleanse pass ranks what to clear across skills,
   plugins, hooks, approvals, runbooks and boards from Selenite's ledger and
-  the fake-gate ledger (pedantry is not in it yet). Selenite needs no upkeep itself. Disclosure: the hooks add context to
+  the fake-gate ledger (pedantry and cowardice are not in it yet). Selenite needs no upkeep itself. Disclosure: the hooks add context to
   the agent's prompt in Calm mode, and in fake_gate_mode "nudge" or "ask" they
   add a note to, or hand back with a question, a kanban block that reads as
-  agent bureaucracy. They never approve, delete or edit a card.
+  agent bureaucracy. In cowardice_mode "nudge" a hook adds one note to the next turn when the last reply hedged, announced
+  instead of acting, ended on a fixable caveat, or matched any other of its eight modes (narrow read, false deference,
+  over-correction, sycophancy, vague status); nothing is ever blocked. They never approve, delete or edit a card.
 author: KyaniteLabs
 license: MIT
 requires_hermes: ">=0.23.0"
 tags: [workflow, ergonomics, accessibility, human-in-the-loop, kanban, governance]
-provides_tools: [selenite_ledger, selenite_show, bureaucracy_classify, bureaucracy_audit]
+provides_tools: [selenite_ledger, selenite_show, bureaucracy_classify, bureaucracy_audit, cowardice_check]
 provides_hooks:
   - pre_llm_call
   - post_approval_response
@@ -32,6 +35,7 @@ provides_hooks:
   - pre_tool_call
   - transform_tool_result
   - on_kanban_dispatch_tick
+  - post_llm_call
 config_schema:
   hooks:
     type: bool
@@ -87,6 +91,19 @@ config_schema:
     type: int
     default: 60
     description: "How often the dispatcher tick refreshes plugin-data/antibeaurocracy/snapshot.json (counts only) and emits selenite:snapshot."
+  cowardice_mode:
+    type: str
+    default: observe
+    description: >
+      What to do when a finished reply hedges where the evidence is clear, announces a step instead of taking it,
+      ends on a fixable caveat, reads a broad instruction narrowly, asks what the context answers, flips a claim
+      after criticism, agrees without checking, or reports status without verifying. "observe" (default) only
+      writes counts to the ledger. "nudge" also adds one note to that session's next turn. Nothing is ever
+      blocked. A sentence that names a known wall or hold, or sits next to one, is left alone. English only.
+  cowardice_ledger:
+    type: bool
+    default: true
+    description: "Record each finding's mode and session id to plugin-data/anticowardice/ledger.jsonl (0600, rotates at 4 MB). Never message text."
 optional_env:
   - name: SELENITE_STATE
     description: "Where the private ledger and reports live (else HERMES_HOME/plugin-data/selenite, XDG state, or ~/.local/state/selenite)"
