@@ -131,6 +131,7 @@ def test_wall_family_action_overrides_fake_ack(text):
     "out of tokens",
     "the model ran out of tokens",
     "need 1000 tokens for context length",
+    "Need the vault token for context length checks from secops agent",
     "token limit reached",
     "more tokens for the context window",
     "LLM context window is full",
@@ -157,6 +158,14 @@ def test_token_for_context_service_remains_a_credential_wall():
         "credentials",
         0.9,
     )
+
+
+@pytest.mark.parametrize("text", [
+    "Need a token for the context broker; waiting on platform agent to mint it",
+    "Need the token for context service from the ops agent",
+])
+def test_singular_credential_tokens_for_context_services_are_not_model_capacity(text):
+    assert classify(text).cls == WALL
 
 
 def test_human_questions_are_not_agent_gates():

@@ -17,7 +17,8 @@ Read-only apart from its own report under the state folder (0600, newest 10
 kept) and, when run from the command line, one ledger row with the finding
 count. The state folder is $SELENITE_STATE, else $XDG_STATE_HOME/selenite, else
 $HERMES_HOME/plugin-data/selenite, else ~/.local/state/selenite; a read-only
-home falls through to the next one and, if none takes it, prints one line and
+home falls through to the next one. XDG state uses a by-home/<hash> subfolder
+for each active Hermes home. If none takes the write, it prints one line and
 still prints the findings. Paths in the report are shown with the home prefix
 as ~. Stdlib only.
 

@@ -12,7 +12,8 @@ you name directly, which is then read as your own words line by line.
 Privacy: the aggregate report holds only counts and category names, and no
 host name. Report and excerpts go to the Selenite state folder ($SELENITE_STATE,
 else $XDG_STATE_HOME/selenite, else $HERMES_HOME/plugin-data/selenite, else
-~/.local/state/selenite: the first that takes a write), mode 0600, never into the repo. Samples
+~/.local/state/selenite: the first that takes a write), mode 0600, never into the repo. Under XDG
+state, each active Hermes home uses a by-home/<hash> subfolder. Samples
 are redacted by ledger.redact (emails, IPv4 and IPv6, URLs with credentials,
 key=value secrets, bearer and prefixed tokens, long token runs, the home path)
 and only the newest SAMPLE_KEEP files are kept.

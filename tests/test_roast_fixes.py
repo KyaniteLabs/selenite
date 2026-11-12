@@ -172,17 +172,62 @@ def test_redaction_catches_quoted_and_command_credentials(raw, expected):
     assert ledger.redact(raw) == expected
 
 
+@pytest.mark.parametrize("text,secret", [
+    ("mysql --password=FLAG_SECRET db", "FLAG_SECRET"),
+    ("psql --password=FLAG_SECRET", "FLAG_SECRET"),
+    ("tool --token=FLAG_SECRET", "FLAG_SECRET"),
+    ("tool --api-key=FLAG_SECRET", "FLAG_SECRET"),
+    ("tool --client-secret=FLAG_SECRET", "FLAG_SECRET"),
+    ("gh auth login --with-token=FLAG_SECRET", "FLAG_SECRET"),
+    ("java -Dpassword=FLAG_SECRET", "FLAG_SECRET"),
+    ("gradle -Ptoken=FLAG_SECRET", "FLAG_SECRET"),
+    ("args: [--token=FLAG_SECRET]", "FLAG_SECRET"),
+    ("restic --password-command='echo FLAG_SECRET'", "FLAG_SECRET"),
+    ("cli -password=FLAG_SECRET", "FLAG_SECRET"),
+    ("wget --http-password=FLAG_SECRET", "FLAG_SECRET"),
+    ("--secret: FLAG_SECRET", "FLAG_SECRET"),
+    (r'{"password": "before \"FLAG_SECRET\" after"}', "FLAG_SECRET"),
+    ('Authorization: Digest username="bob", realm="r", nonce="n", uri="/", response="FLAG_SECRET"',
+     "FLAG_SECRET"),
+    ("curl -sSLubob:FLAG_SECRET", "FLAG_SECRET"),
+    ('{"auth": {"password": "FLAG_SECRET"}}', "FLAG_SECRET"),
+    ("cookies = {'sid': 'FLAG_SECRET'}", "FLAG_SECRET"),
+    ("curl --proxy-user bob:FLAG_SECRET", "FLAG_SECRET"),
+    ("docker login -u bob -pFLAG_SECRET", "FLAG_SECRET"),
+    ("sshpass -pFLAG_SECRET", "FLAG_SECRET"),
+    ("mariadb -pFLAG_SECRET", "FLAG_SECRET"),
+    ("redis-cli -a FLAG_SECRET", "FLAG_SECRET"),
+    ("podman login -p FLAG_SECRET", "FLAG_SECRET"),
+    ("SSHPASS=FLAG_SECRET", "FLAG_SECRET"),
+    ("token: |\n  FLAG_SECRET", "FLAG_SECRET"),
+    ("AWS4-HMAC-SHA256 Signature=FLAG_SECRET", "FLAG_SECRET"),
+])
+def test_redaction_catches_round_seven_secret_shapes(text, secret):
+    assert secret not in ledger.redact(text)
+
+
 def test_redaction_keeps_mysql_ports_prompt_form_and_token_limits():
     port = "mysql -h db1 -P 3306 -u root mydb"
     prompt = "mysql -u root -p mydb"
     assert ledger.redact(port) == port
     assert ledger.redact(prompt) == prompt
+    for command in ("Mysql -u root -pFLAG_SECRET", "MYSQL -u root -pFLAG_SECRET"):
+        assert "FLAG_SECRET" not in ledger.redact(command)
+    uppercase_port = "MYSQL -u root -P 3306 db"
+    assert ledger.redact(uppercase_port) == uppercase_port
     assert ledger.redact("set max_tokens=4000") == "set max_tokens=4000"
+    for text in (
+        "num_tokens=4000", "total_tokens=4000", "min_tokens_in_prompt=4000",
+        "max_tokens_to_sample=4000", "tokenizer=cl100k_base", "password: required",
+        "--max_tokens_to_sample=4000",
+    ):
+        assert ledger.redact(text) == text
 
 
 @pytest.mark.parametrize("payload", [
     pytest.param("auth" + "_x" * 200, id="auth-segments"),
     pytest.param("token-" * 600, id="repeated-token"),
+    pytest.param("--" + "token" * 600 + "=S", id="flag-key"),
 ])
 def test_redaction_handles_adversarial_key_names_promptly(payload):
     code = (

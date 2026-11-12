@@ -66,6 +66,16 @@ def _last_line(text: str) -> str:
     return text.strip().splitlines()[-1]
 
 
+def test_install_verifies_the_ledger_with_isolated_python(tmp_path):
+    home = tmp_path / "home"
+    done = _install(home)
+
+    assert done.returncode == 0, done.stderr
+    assert "PASS: ledger works" in done.stdout
+    assert "no writable state folder" not in done.stderr
+    assert (home / "state").is_dir()
+
+
 # --- D1: cleanse.py, read-only state folder ---------------------------------
 
 def test_cleanse_falls_back_to_a_writable_state_folder(tmp_path, monkeypatch, capsys):

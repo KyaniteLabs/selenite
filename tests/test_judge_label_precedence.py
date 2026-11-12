@@ -37,6 +37,19 @@ def test_prompt_still_formats_and_names_every_class():
     "1. ANSWER: FAKE",
     "ANSWER: [FAKE]",
     "__ANSWER:__ FAKE",
+    "ANSWER: _FAKE_",
+    'ANSWER: "FAKE"',
+    "ANSWER: (FAKE)",
+    "2) ANSWER: FAKE",
+    "Final answer: FAKE",
 ])
 def test_parse_accepts_common_markdown_answer_lines(text):
     assert judge.parse(text) == "FAKE"
+
+
+@pytest.mark.parametrize("text", [
+    "ANSWER: [WALL|HUMAN|MACHINERY|DEPENDENCY|FAKE]",
+    "ANSWER: <FAKE|WALL>",
+])
+def test_parse_rejects_echoed_class_templates(text):
+    assert judge.parse(text) == ""

@@ -22,10 +22,12 @@ from .classify import FAKE
 CLASSES = ("WALL", "HUMAN", "MACHINERY", "DEPENDENCY", "FAKE")
 _CLASS = "|".join(CLASSES)
 _ANSWER_LINE = re.compile(
-    r"^[\s>*_#\-\d.]*ANSWER[*_`\[<\s]*:[*_`\[<\s]*(" + _CLASS + r")\b",
+    r'^[\s>*#\-\d.)]*[*_`]*(?:FINAL[ \t]+)?ANSWER[*_`]*[ \t]*:[ \t]*[*_`\[<({"\']*[ \t]*('
+    + _CLASS
+    + r')[\s*_`\]}>"\')},.!?:;]*$',
     re.IGNORECASE | re.MULTILINE,
 )
-_BARE = re.compile(r"\W*(" + _CLASS + r")\W*", re.I)
+_BARE = re.compile(rf"(?:(?!\|)[\W_])*({_CLASS})(?:(?!\|)[\W_])*", re.IGNORECASE)
 _THINK = re.compile(r"<think(?:ing)?>.*?(?:</think(?:ing)?>|\Z)", re.I | re.S)
 
 PROMPT = """Classify why this kanban card is blocked. Think briefly if you must, then end with a final line of the form
