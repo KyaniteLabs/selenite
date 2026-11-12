@@ -206,7 +206,7 @@ def _load_plugin(home, monkeypatch, settings=None, name="selenite_fg_plugin"):
 
 def _ledger(home):
     p = home / "plugin-data" / "antibeaurocracy" / "ledger.jsonl"
-    return [json.loads(x) for x in p.read_text().splitlines()] if p.exists() else []
+    return [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()] if p.exists() else []
 
 
 def test_register_surface(tmp_path, monkeypatch):
@@ -330,7 +330,7 @@ def test_snapshot_per_home_with_inflight_guard(tmp_path, monkeypatch):
         if (tmp_path / "plugin-data" / "antibeaurocracy" / "snapshot.json").exists() and not mod._snapshot_running:
             break
         time.sleep(0.02)
-    snap = json.loads((tmp_path / "plugin-data" / "antibeaurocracy" / "snapshot.json").read_text())
+    snap = json.loads((tmp_path / "plugin-data" / "antibeaurocracy" / "snapshot.json").read_text(encoding="utf-8"))
     assert snap["summary"]["blocked"] == 6
     assert len([e for e in ctx.events if e[0] == "snapshot"]) == 1
     other = tmp_path / "other"
@@ -387,7 +387,7 @@ def test_a_declared_kind_is_never_refused_or_nudged(tmp_path, monkeypatch, mode)
     args = {"task_id": "t", "reason": "Product must record the ruling", "kind": "needs_input"}
     assert ctx.hooks["pre_tool_call"](tool_name="kanban_block", args=args, session_id="s", tool_call_id="c") is None
     assert ctx.hooks["transform_tool_result"](tool_name="kanban_block", args=args, result="ok", session_id="s", tool_call_id="c") is None
-    rows = [json.loads(l) for l in (tmp_path / "plugin-data/antibeaurocracy/ledger.jsonl").read_text().splitlines()]
+    rows = [json.loads(l) for l in (tmp_path / "plugin-data/antibeaurocracy/ledger.jsonl").read_text(encoding="utf-8").splitlines()]
     assert rows[0]["event"] == "block_attempt" and rows[0]["declared"] == "needs_input"
     assert rows[1]["event"] == "declared"
 
@@ -425,7 +425,7 @@ def test_refusal_store_lock_times_out(tmp_path):
             "from pathlib import Path; from antibeaurocracy_core.gates import RefusalStore, LockTimeout, decide;"
             "rs = RefusalStore(Path(sys.argv[2]), lock_timeout_s=0.1)\n"
             "try:\n rs.transition('k', lambda p: decide('enforce', True, p, 2)); print('no')\n"
-            "except LockTimeout: print('timeout')"), str(ROOT), str(p)], capture_output=True, text=True, timeout=10)
+            "except LockTimeout: print('timeout')"), str(ROOT), str(p)], capture_output=True, text=True, encoding="utf-8", timeout=10)
     assert out.stdout.strip() == "timeout", out.stderr
     assert rs.lock_timeout_s == 0.1
 
@@ -578,14 +578,14 @@ def test_dashboard_overview_has_no_people_or_paths(tmp_path, monkeypatch):
 def test_files_the_skill_references_are_tracked(skill):
     import re
     try:
-        tracked = set(subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True,
+        tracked = set(subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
                                      check=True).stdout.split())
     except (OSError, subprocess.CalledProcessError):
         pytest.skip("not a git checkout (e.g. an sdist)")
     if not tracked:
         pytest.skip("not a git checkout (e.g. an sdist)")
     skill_dir = Path("skills") / skill
-    text = (ROOT / skill_dir / "SKILL.md").read_text()
+    text = (ROOT / skill_dir / "SKILL.md").read_text(encoding="utf-8")
     for ref in set(re.findall(r"\((references/[\w./-]+)\)|`(references/[\w./-]+)`", text)):
         path = (skill_dir / (ref[0] or ref[1])).as_posix()
         assert path in tracked, f"{path} is referenced by SKILL.md but not tracked"
@@ -594,9 +594,9 @@ def test_files_the_skill_references_are_tracked(skill):
 def test_docs_match_code():
     import antibeaurocracy_core  # noqa: F401
     C = sys.modules["antibeaurocracy_core.classify"]
-    skill = (ROOT / "skills/antibeaurocracy/SKILL.md").read_text()
-    tax = (ROOT / "skills/antibeaurocracy/references/taxonomy.md").read_text()
-    readme = (ROOT / "README.md").read_text()
+    skill = (ROOT / "skills/antibeaurocracy/SKILL.md").read_text(encoding="utf-8")
+    tax = (ROOT / "skills/antibeaurocracy/references/taxonomy.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
     head = skill.split("---")[1]
     assert "HUMAN" in head  # the description names all the legitimate classes
     for phrase in ("Want me to", "OK to proceed", "awaiting go-ahead"):
@@ -658,7 +658,7 @@ def test_judge_cli_runs_a_command_without_a_shell(tmp_path):
     script = tmp_path / "judge.py"
     script.write_text("import sys; sys.stdin.read(); print('DEPENDENCY')\n")
     out = subprocess.run([sys.executable, "-m", "antibeaurocracy_core.cli", "audit", "--root", str(tmp_path), "--no-rules",
-                          "--judge", f"{sys.executable} {script}"], cwd=ROOT, capture_output=True, text=True)
+                          "--judge", f"{sys.executable} {script}"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
     assert out.returncode == 0, out.stderr
     assert "Second opinion" in out.stdout and "judge **DEPENDENCY**" in out.stdout
 
@@ -666,7 +666,7 @@ def test_judge_cli_runs_a_command_without_a_shell(tmp_path):
 def test_judge_refuses_counts_mode(tmp_path):
     _board(tmp_path)
     out = subprocess.run([sys.executable, "-m", "antibeaurocracy_core.cli", "audit", "--root", str(tmp_path), "--counts",
-                          "--judge", "cat"], cwd=ROOT, capture_output=True, text=True)
+                          "--judge", "cat"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
     assert out.returncode == 2 and "--counts" in out.stderr
 
 
@@ -724,7 +724,7 @@ def test_one_list_of_walls_on_every_surface(tmp_path, monkeypatch):
     from antibeaurocracy_core.classify import classify
     mod, _ = _load_plugin(tmp_path, monkeypatch, name="sel_walls")
     v = classify(RELAY)
-    docs = (ROOT / "skills/frictionless/SKILL.md").read_text()
+    docs = (ROOT / "skills/frictionless/SKILL.md").read_text(encoding="utf-8")
     surfaces = {"calm": _selenite("sel_walls").CALM_CONTEXT, "doctrine": mod.DOCTRINE,
                 "explain": mod._explain(v), "question": mod._question(v), "frictionless skill": docs}
     for name, text in surfaces.items():
@@ -767,7 +767,7 @@ def test_no_private_hermes_imports():
     import ast
     for f in [*ROOT.glob("*.py"), *ROOT.glob("antibeaurocracy_core/*.py"), *ROOT.glob("dashboard/*.py"),
               *ROOT.glob("skills/*/scripts/*.py")]:
-        for node in ast.walk(ast.parse(f.read_text())):
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
             if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == "hermes_cli":
                 # This sanctioned public bridge is the only Hermes CLI import plugins need.
                 assert node.module == "hermes_cli.plugin_events", f

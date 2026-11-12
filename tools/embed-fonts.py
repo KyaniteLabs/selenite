@@ -23,7 +23,7 @@ for name, weight in WEIGHTS.items():
 block = "const FONTS = {\n" + ",\n".join(entries) + "\n}"
 
 js = ROOT / "desktop/plugin.js"
-src = js.read_text()
+src = js.read_text(encoding="utf-8")
 new, n = re.subn(r"(// --- FONTS \(generated\) -+\n).*?(\n// --- /FONTS)", lambda m: m.group(1) + block + m.group(2), src, flags=re.S)
 if n != 1:
     raise SystemExit("FONTS markers not found")

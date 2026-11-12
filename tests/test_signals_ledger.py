@@ -75,7 +75,7 @@ def test_ledger_permissions_and_no_host():
     ledger.add("gate", "gh-login", "n")
     assert stat.S_IMODE(os.stat(ledger.STATE).st_mode) == 0o700
     assert stat.S_IMODE(os.stat(ledger.LEDGER).st_mode) == 0o600
-    row = json.loads(ledger.LEDGER.read_text().splitlines()[0])
+    row = json.loads(ledger.LEDGER.read_text(encoding="utf-8").splitlines()[0])
     assert set(row) == {"ts", "kind", "key", "note", "agent"}
 
 

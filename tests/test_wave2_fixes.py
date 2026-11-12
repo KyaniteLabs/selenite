@@ -114,7 +114,7 @@ def test_s8_fake_gate_ledger_write_gives_up_at_the_deadline(tmp_path, monkeypatc
 
 # --- S9
 def test_s9_desktop_file_has_a_reduced_motion_rule():
-    js = (REPO / "desktop" / "plugin.js").read_text()
+    js = (REPO / "desktop" / "plugin.js").read_text(encoding="utf-8")
     assert js.count("prefers-reduced-motion") >= 1
 
 

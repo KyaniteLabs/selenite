@@ -39,7 +39,7 @@ def _newest_report() -> tuple[dict | None, float]:
     """The newest readable miner report and its mtime. Reports overlap in time, so summing them double-counts."""
     for f in ledger.newest("report-*.json"):
         try:
-            rep = json.loads(f.read_text())
+            rep = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
         if isinstance(rep, dict):
@@ -60,7 +60,7 @@ def _state_path() -> Path:
 def _load_state() -> tuple[float, float, dict[str, int]]:
     """(last cycle, last report consumed, silence per category). Any damage resets it."""
     try:
-        st = json.loads(_state_path().read_text())
+        st = json.loads(_state_path().read_text(encoding="utf-8"))
         return (float(st.get("last", 0)), float(st.get("report", 0)),
                 {c: max(0, int(st["silent"].get(c, 0))) for c in CATEGORIES})
     except Exception:  # missing, unreadable, not JSON, wrong shape, bad numbers: start over
@@ -83,7 +83,7 @@ def advance_cycle(fired: Counter, now: float, report_mtime: float = 0.0, calm: b
         target = ledger.writable_state()
         if target is not None:  # every folder read-only: the proposal still drafts, the cycle just isn't saved
             fd = os.open(target / "evolve-state.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w") as fh:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 json.dump(st, fh)
     return silent
 
@@ -136,7 +136,7 @@ def build(days: int = 30) -> Path | None:
 
     out = state / f"proposal-{time.strftime('%Y%m%dT%H%M%S')}.md"
     fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as fh:
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
         fh.write("\n".join(L))
     for old in sorted(state.glob("proposal-*.md"), key=lambda f: f.stat().st_mtime)[:-KEEP]:
         old.unlink(missing_ok=True)
