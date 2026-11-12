@@ -29,7 +29,7 @@ def test_credential_mentions_that_deny_the_wall(text):
 
 @pytest.mark.parametrize("text", [
     "T014 needs the CEO's explicit word: GO-DATA vs HOLD",
-    "CEO hands required: Nucbox console access. CONSOLE / HOLD",
+    "CEO hands required: build host console access. CONSOLE / HOLD",
     "Owner adjudication needed on the merge order",
     "CEO words needed to ratify the plan",
     "CEO drain word: attest the receipt",
