@@ -5,4 +5,4 @@ from .classify import (  # noqa: F401
     WALLS, WALLS_TEXT, Verdict, classify, configure, wall_family,
 )
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"

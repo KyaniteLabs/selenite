@@ -546,7 +546,7 @@ def test_echo_dedupe_ignores_board_name_and_refused_calls(tmp_path, monkeypatch)
 
 
 def test_dashboard_ledger_counts_survive_junk_lines(tmp_path, monkeypatch):
-    pytest.importorskip("fastapi")
+    pytest.importorskip("fastapi", reason="backend tests need FastAPI: pip install -r requirements-test.txt")
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     d = tmp_path / "plugin-data" / "antibeaurocracy"
     d.mkdir(parents=True)
@@ -562,7 +562,7 @@ def test_dashboard_ledger_counts_survive_junk_lines(tmp_path, monkeypatch):
 
 
 def test_dashboard_overview_has_no_people_or_paths(tmp_path, monkeypatch):
-    pytest.importorskip("fastapi")
+    pytest.importorskip("fastapi", reason="backend tests need FastAPI: pip install -r requirements-test.txt")
     _board(tmp_path)
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     spec = importlib.util.spec_from_file_location("ab_dash", ROOT / "dashboard" / "fake_gates_api.py")
@@ -621,9 +621,23 @@ def test_docs_match_code():
 
 def test_judge_parses_one_class_word():
     from antibeaurocracy_core import judge
-    assert judge.parse("I think this is a WALL.") == "WALL"
     assert judge.parse("fake") == "FAKE"
+    assert judge.parse("WALL.") == "WALL"
     assert judge.parse("no idea") == ""
+
+
+def test_judge_parse_phrasings():
+    from antibeaurocracy_core import judge
+    assert judge.parse("Short reasoning.\nANSWER: DEPENDENCY") == "DEPENDENCY"            # plain
+    assert judge.parse("Not FAKE, this is a WALL") == ""                                   # negation, no ANSWER line
+    assert judge.parse("Not FAKE, this is a WALL\nANSWER: WALL") == "WALL"                # negation, answered
+    assert judge.parse("<think>maybe FAKE? no, HUMAN</think>\nANSWER: WALL") == "WALL"    # think block
+    assert judge.parse("<think>ANSWER: FAKE</think>") == ""                                # only inside think
+    assert judge.parse("<think>unclosed FAKE ANSWER: FAKE") == ""                          # unclosed think
+    assert judge.parse("It is HUMAN or MACHINERY") == ""                                   # two classes, no answer
+    assert judge.parse("ANSWER: HUMAN\nwait\nANSWER: MACHINERY") == "MACHINERY"           # last ANSWER wins
+    assert judge.parse("answer: fake") == "FAKE"
+    assert judge.parse("ANSWER: MAYBE") == ""
 
 
 def test_judge_lists_disagreements_only(tmp_path):
@@ -750,10 +764,16 @@ def test_a_pinned_kanban_db_wins(tmp_path, monkeypatch):
 
 
 def test_no_private_hermes_imports():
-    import re as _re
+    import ast
     for f in [*ROOT.glob("*.py"), *ROOT.glob("antibeaurocracy_core/*.py"), *ROOT.glob("dashboard/*.py"),
               *ROOT.glob("skills/*/scripts/*.py")]:
-        assert not _re.search(r"^\s*(from|import) hermes_cli\b", f.read_text(), _re.M), f
+        for node in ast.walk(ast.parse(f.read_text())):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == "hermes_cli":
+                # This sanctioned public bridge is the only Hermes CLI import plugins need.
+                assert node.module == "hermes_cli.plugin_events", f
+                assert [n.name for n in node.names] == ["broadcast_plugin_event"], f
+            elif isinstance(node, ast.Import):
+                assert not any(n.name.split(".")[0] == "hermes_cli" for n in node.names), f
 
 
 # Check Yourself boundary (docs/CHECKYOURSELF-BOUNDARY.md): its gate owns kanban_complete, Selenite owns kanban_block.

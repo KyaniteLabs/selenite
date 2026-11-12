@@ -5,7 +5,7 @@
 
 [project]
 name = "selenite"
-version = "0.5.0"
+version = "0.6.0"
 description = "Takes friction off the human: steps handed to a person, fake gates between agents, and checks that cannot change the decision."
 readme = "README.md"
 license = "MIT"

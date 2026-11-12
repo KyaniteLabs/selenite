@@ -20,6 +20,7 @@ It never writes a kanban row. Card actions stay with whoever owns the card. Its 
 from __future__ import annotations
 
 import json
+import math
 import logging
 import os
 import re
@@ -63,6 +64,7 @@ _snapshot_at: dict[str, float] = {}
 _snapshot_running: set[str] = set()
 _tick_extra: list = []  # Selenite's badge reconcile, set by on_tick()
 _ctx = None
+LEDGER_LOCK_TIMEOUT_S = 3.0  # a stuck writer must not hang the agent's turn
 LEDGER_ROTATE_BYTES = 4 * 1024 * 1024  # same bound as Selenite's own ledger
 HOOKS_ON = lambda: True  # Selenite replaces this with its one off switch  # noqa: E731
 
@@ -143,9 +145,20 @@ def _ledger(event: str, **fields) -> None:
         try:
             try:
                 import fcntl
-                fcntl.flock(lock, fcntl.LOCK_EX)  # two writers never rotate the same file twice
-            except (ImportError, OSError):
-                pass
+            except ImportError:
+                fcntl = None
+            if fcntl is not None:  # two writers never rotate the same file twice
+                deadline = time.monotonic() + LEDGER_LOCK_TIMEOUT_S
+                while True:
+                    try:
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError(f"ledger lock held > {LEDGER_LOCK_TIMEOUT_S}s")
+                        time.sleep(0.02)
+                    except OSError:
+                        break  # flock unsupported here: append anyway, rotation is best effort
             # Selenite needs no cleansing: past LEDGER_ROTATE_BYTES the ledger becomes ledger.1.jsonl (one kept).
             if path.exists() and path.stat().st_size >= LEDGER_ROTATE_BYTES:
                 os.replace(path, path.with_name("ledger.1.jsonl"))
@@ -289,14 +302,19 @@ _SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
 def _kanban_dbs(board: str | None) -> list[Path]:
-    """Where Hermes keeps kanban.db, from its documented layout (no private imports): HERMES_KANBAN_DB
-    pins one file; otherwise the root is HERMES_KANBAN_HOME or the Hermes home, the default board's DB
-    is <root>/kanban.db and a named board's is <root>/kanban/boards/<slug>/kanban.db. The named board
-    comes first, then every other board, since task ids are unique across boards."""
+    """Where Hermes keeps kanban.db: an explicit DB pin, shared kanban home, or Hermes root."""
     pin = os.environ.get("HERMES_KANBAN_DB", "").strip()
     if pin:
         return [Path(pin).expanduser()]
-    root = Path(os.environ.get("HERMES_KANBAN_HOME", "").strip() or _hermes_home()).expanduser()
+    kanban_home = os.environ.get("HERMES_KANBAN_HOME", "").strip()
+    if kanban_home:
+        root = Path(kanban_home).expanduser()
+    else:
+        try:
+            from hermes_constants import get_default_hermes_root  # type: ignore
+            root = Path(get_default_hermes_root())
+        except Exception:
+            root = _hermes_home()
     slug = str(board or os.environ.get("HERMES_KANBAN_BOARD") or "default").strip().lower()
     first = []
     if slug == "default":
@@ -399,6 +417,8 @@ def on_kanban_dispatch_tick(dry_run: bool = False, **_kw):
 
 # ---------------------------------------------------------------- tools
 
+_KINDS = ("dependency", "needs_input", "capability", "transient")
+
 CLASSIFY_SCHEMA = {
     "name": "bureaucracy_classify",
     "description": ("Before you block a card on another agent, classify the reason. Returns WALL (stop and ask the "
@@ -407,7 +427,7 @@ CLASSIFY_SCHEMA = {
                     "proceed. It is a pattern heuristic: if in doubt, treat the wait as a wall."),
     "parameters": {"type": "object", "properties": {
         "text": {"type": "string", "description": "The block or wait reason."},
-        "kind": {"type": "string", "enum": ["dependency", "needs_input", "capability", "transient"]},
+        "kind": {"type": "string", "enum": list(_KINDS), "description": "The kanban block kind, if known."},
         "age_hours": {"type": "number", "description": "How long it has been waiting, if known."},
     }, "required": ["text"]},
 }
@@ -421,13 +441,48 @@ AUDIT_SCHEMA = {
 }
 
 
+def _bad_arguments(detail: str) -> str:
+    return json.dumps({"error": "bad_arguments", "detail": detail})
+
+
+def _check_classify_args(args) -> str | None:
+    """Why these arguments cannot be classified, or None. A wrong type must never turn into a verdict."""
+    if not isinstance(args, dict):
+        return "arguments must be an object with a text string"
+    text = args.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return "text must be a non-empty string (the block or wait reason)"
+    kind = args.get("kind")
+    if kind is not None and kind not in _KINDS:
+        return "kind must be one of " + ", ".join(_KINDS) + " (or omitted)"
+    age = args.get("age_hours")
+    if age is not None:
+        if isinstance(age, str):  # models often send numbers as text, and "3" has always been accepted
+            try:
+                age = float(age)
+            except ValueError:
+                age = None
+        if isinstance(age, bool) or not isinstance(age, (int, float)) or not math.isfinite(age) or age < 0:
+            return "age_hours must be a finite number of hours, 0 or more (or omitted)"
+    return None
+
+
 def tool_classify(args: dict, **_kw) -> str:
-    text = str(args.get("text") or "")
-    return json.dumps(classify(text, kind=args.get("kind"), age_hours=args.get("age_hours")).to_dict())
+    problem = _check_classify_args(args)
+    if problem:
+        return _bad_arguments(problem)
+    v = classify(args["text"], kind=args.get("kind"), age_hours=args.get("age_hours"))
+    return json.dumps(dict(v.to_dict(), low_confidence=_low_confidence(v)))
+
+
+def _low_confidence(v) -> bool:
+    """A FAKE verdict the gate itself would not act on: no matched phrase, or below min_confidence."""
+    return v.cls == FAKE and not (v.evidenced and v.confidence >= _settings.min_confidence(_ctx_settings()))
 
 
 def _boards(home: Path | None = None) -> list[dict]:
-    return [_audit.audit_board(db) for db in _audit.find_boards([home or _hermes_home()])]
+    dbs = _kanban_dbs(None) if home is None else _audit.find_boards([home])
+    return [_audit.audit_board(db) for db in dbs if Path(db).is_file()]
 
 
 def tool_audit(args: dict | None = None, **_kw) -> str:
@@ -455,6 +510,8 @@ def slash(raw_args: str = "", *, platform: str | None = None) -> str:
         if not rest:
             return "Usage: /antibeaurocracy check <reason text>"
         v = classify(rest)
+        if _low_confidence(v):
+            return f"{v.label} ({v.confidence}): low confidence, no action. Read the card yourself."
         return f"{v.label} ({v.confidence}): {v.action}"
     if sub == "mode":
         return f"antibeaurocracy {__version__}: gate mode is {_mode()}. Change it in plugins.entries.{OWNER}.settings.fake_gate_mode."

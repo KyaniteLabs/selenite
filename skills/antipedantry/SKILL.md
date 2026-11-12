@@ -3,7 +3,7 @@ name: antipedantry
 description: Use when a veto, threshold, review round, re-check, preregistration or escalation is about to decide or delay a choice; when a candidate is rejected on one sample or a near-miss; when a human asks "what did this rule cost us?"; or when auditing eval designs, review chains and rules for rigor that cannot change the decision. Separates RIGOR from PEDANTRY and gives the move that dissolves each kind.
 license: MIT
 metadata:
-  version: 0.5.0
+  version: 0.6.0
   author: KyaniteLabs
   hermes:
     tags: [evals, governance, review, agents]

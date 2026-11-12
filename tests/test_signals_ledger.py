@@ -29,8 +29,38 @@ def test_real_overload(text, expected):
     assert set(signals.overload(text)) == expected
 
 
+@pytest.mark.parametrize("text", [
+    "fix teh buidl pls its broekn agian",
+    "teh buidl is broekn agian",
+    "fix the buidl pls its broekn agian",
+])
+def test_short_typo_bursts_are_detected(text):
+    assert "typo_burst" in signals.overload(text)
+
+
+@pytest.mark.parametrize("text", [
+    "fix the build pls",
+    "fix the build pls it is broken again",
+    "fix teh build pls",
+    "check teh_buidl and broekn_agian then run the build pls",
+    "check teh-buidl-broekn-agian then run the build pls",
+    "check https://example.test/teh/buidl/broekn/agian then run the build pls",
+    "check /tmp/teh/buidl/broekn/agian then run the build pls",
+    r"check C:\teh\buidl\broekn\agian then run the build pls",
+    "check teh.py buidl.py broekn.py agian.py and run the build pls",
+    "check `teh buidl broekn agian` then run the build pls",
+])
+def test_terse_prose_and_technical_tokens_are_not_typo_bursts(text):
+    assert "typo_burst" not in signals.overload(text)
+
+
 def test_harness_text_is_ignored():
     assert signals.overload("<system-reminder>wtf just do it</system-reminder>") == []
+
+
+def test_quoted_line_does_not_hide_following_own_words():
+    text = "> A previous neutral message\nwtf this is frustrating, stop asking"
+    assert set(signals.overload(text)) == {"over_asking", "curse", "frustration"}
 
 
 def test_two_signal_rule():
@@ -70,6 +100,31 @@ def test_fix_order():
     assert "a" not in ledger.fixed_keys()
     time.sleep(0.01); ledger.add("fix", "a"); time.sleep(0.01); ledger.add("reopen", "a")
     assert "a" not in ledger.fixed_keys()
+
+
+@pytest.mark.parametrize("text", [
+    "authorization: ApiKey abcdef0123456789",
+    "authorization: Digest username=private, realm=internal",
+    "oauth: Bearer abc.def.ghi",
+    "authorization: scheme-with-arbitrary-format secret-value",
+])
+def test_authorization_headers_redact_the_complete_value(text):
+    redacted = ledger.redact(text)
+    assert "abcdef0123456789" not in redacted
+    assert "username=private" not in redacted
+    assert "abc.def.ghi" not in redacted
+    assert "secret-value" not in redacted
+
+
+@pytest.mark.parametrize("text,secret", [
+    ("private_key=short-secret", "short-secret"),
+    ("credential: short-secret", "short-secret"),
+    ("cookie=session-value", "session-value"),
+    ("sessionid=short-secret", "short-secret"),
+    ("curl -u user:pass https://example.test", "user:pass"),
+])
+def test_common_secret_fields_and_curl_credentials_are_redacted(text, secret):
+    assert secret not in ledger.redact(text)
 
 
 def test_rotation_keeps_history_readable(monkeypatch):

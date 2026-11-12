@@ -130,7 +130,7 @@ def test_cli_reads_min_confidence_and_warns_on_a_bad_config(tmp_path, monkeypatc
 
 
 def test_dashboard_follows_min_confidence_without_a_stale_cache(tmp_path, monkeypatch):
-    pytest.importorskip("fastapi")
+    pytest.importorskip("fastapi", reason="backend tests need FastAPI: pip install -r requirements-test.txt")
     from test_fake_gate_audit_plugin import _board
     _board(tmp_path)
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))

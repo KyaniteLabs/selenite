@@ -336,6 +336,26 @@ def rank(findings: list[dict]) -> list[dict]:
     return sorted(findings, key=lambda f: (-f["interruptions"], -f["severity"], f["stone"], f["where"]))
 
 
+def dedupe(findings: list[dict]) -> list[dict]:
+    """One finding per real file and check. A skill root symlinked into several agents (~/.claude/skills/X
+    pointing at ~/.hermes/skills/X) is one file with one fault, not one per agent that links it.
+    Run after rank(), so the copy that is kept is the one that ranks highest."""
+    seen: set[tuple[str, str, str]] = set()
+    out = []
+    for f in findings:
+        where = str(f["where"])
+        try:
+            real = os.path.realpath(os.path.expanduser(where.replace("~", str(HOME), 1) if where.startswith("~") else where))
+        except (OSError, ValueError):
+            real = where
+        key = (f["stone"], f["check"], real)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(f)
+    return out
+
+
 def _now_iso() -> str:
     """UTC with its offset, so a client in another timezone reads the right age."""
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -350,7 +370,7 @@ def run(days: int = 30, paths: list[Path] | None = None, only: list[Path] | None
             found += check(ctx)
         except Exception as exc:  # one broken adapter must not hide the others
             errors.append(f"{check.__name__}: {type(exc).__name__}")
-    ranked = rank(found)
+    ranked = dedupe(rank(found))
     return {"schema": "selenite.cleanse/1", "generated": _now_iso(),
             "window_days": days, "findings": ranked, "by_stone": dict(Counter(f["stone"] for f in ranked)),
             "errors": errors}
@@ -385,6 +405,7 @@ def write(report: dict) -> Path | None:
                 old.unlink(missing_ok=True)
             except OSError:
                 pass
+        ledger.pane.broadcast("cleanse.updated", {"count": len(report["findings"])})
         return out
     return None
 

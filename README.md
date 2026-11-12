@@ -6,7 +6,7 @@
 
 Friction here means every bit of effort a person spends that a tool could have spent: a login, a copied token, a trip through a dashboard, a command to remember, an approval clicked for the fortieth time, a wall of text to read, a question to answer. That makes it an accessibility problem as much as an agent problem. Every step removed helps the person who is tired, overloaded, on a phone, using a screen reader or keyboard only, or working with ADHD or another disability.
 
-People keep a selenite wand next to their other crystals to clear and recharge them. Selenite does that for your agent stack. It sweeps your skills, plugins, hooks, approval prompts, runbooks and Kanban boards for whatever keeps handing work back to you, ranks it by how often it lands on you, and drafts the fix. When a human step really can't be removed, it shrinks it to one paste-ready command that checks its own result. When your messages show overload, it switches the agent to no questions and one-line replies.
+People keep a selenite wand next to their other crystals to clear and recharge them. Selenite does that for your agent stack. It sweeps your skills, plugins, hooks, approval prompts, runbooks and Kanban boards for whatever keeps handing work back to you, ranks it by how often it lands on you, and drafts the fix. When a human step really can't be removed, it shrinks it to one paste-ready command that checks its own result. When your messages show overload, it cues the agent toward no questions and one-line replies.
 
 One test runs through all of it: **does this step, wait or check earn its cost to the person?** Selenite applies it in three facets:
 
@@ -24,7 +24,7 @@ Walls always stand: credentials, spend, publishing or deploying, destructive ste
 |---|---|
 | `skills/` | The three facet skills (`frictionless`, `antibeaurocracy`, `antipedantry`) in the open [Agent Skills](https://agentskills.io) format. They work with any agent that loads `SKILL.md`: Claude Code, Codex, OpenCode, Hermes and others. |
 | `antibeaurocracy_core/`, `bin/` | The fake-gate classifier and board audit: stdlib Python 3.10+, no dependencies, and the `antibeaurocracy` CLI. |
-| `__init__.py`, `plugin.yaml` | A Hermes plugin. It registers the three skills, the `/frictionless`, `/antibeaurocracy` and `/fake-gate` commands, the `selenite_ledger`, `bureaucracy_classify` and `bureaucracy_audit` tools, and eight hooks. |
+| `__init__.py`, `plugin.yaml` | A Hermes plugin. It registers the three skills, the `/frictionless`, `/antibeaurocracy` and `/fake-gate` commands, the `selenite_ledger`, `selenite_show`, `bureaucracy_classify` and `bureaucracy_audit` tools, and eight hooks. |
 | `install.sh` | Links the skills into each agent it finds and the CLI into `~/.local/bin`, creates the state folder (0700) and checks the ledger works. Add `--hermes` to also link the plugin and enable it in Hermes. Idempotent; it never overwrites a real file or folder, and warns when a real folder hides a skill link. A read-only target (an agent seat, a managed Mac, a container) is skipped, not fatal: every target is attempted and the last line counts linked, skipped and failed. `--no-enable` links the plugin but leaves `hermes plugins enable` to you. |
 | `desktop/` | The Hermes Desktop page, status chip and Kanban badges (`plugin.js`), plus the Chakra Petch subsets it embeds. |
 | `dashboard/` | The web dashboard tab and its backend routes (`plugin_api.py`, plus `fake_gates_api.py` for the fake-gate card), served by Hermes under `/api/plugins/selenite/`. |
@@ -47,13 +47,19 @@ One product: **Selenite** is the product, and its three skills are its facets. T
 ## Install
 
 ```bash
-git clone <this repo> ~/src/selenite && ~/src/selenite/install.sh            # the skill, for every agent found
+git clone https://github.com/KyaniteLabs/selenite.git ~/src/selenite && ~/src/selenite/install.sh            # the skill, for every agent found
 ~/src/selenite/install.sh --hermes                                          # and the Hermes plugin
 ```
 
-Hermes picks up the plugin on its next gateway restart. In Hermes, the `hooks` setting (or `SELENITE_HOOKS=0`) turns every hook off and keeps everything else. If you ran the standalone antibeaurocracy plugin before, disable it: running both doubles the fake-gate hooks, and the installer warns when it finds one.
+Hermes picks up the plugin on its next gateway restart. **In Hermes Desktop the page, status chip and Kanban badges start switched off**: Desktop ships every plugin's desktop half opt-in, and `hermes plugins enable` turns on only the agent half. Open **Capabilities ▸ Plugins**, search for Selenite and switch it on. In Hermes, the `hooks` setting (or `SELENITE_HOOKS=0`) turns every hook off and keeps everything else. If you ran the standalone antibeaurocracy plugin before, disable it: running both doubles the fake-gate hooks, and the installer warns when it finds one.
+
+The `/frictionless` command starts an agent turn through the Hermes gateway. Enable Hermes's `allow_gateway_injection` setting for the gateway to accept that handoff; otherwise Selenite prints the instructions for you to send manually.
+
+The Desktop page reacts to agent tool calls through local Desktop events: ledger changes, cleanse reports and evolve proposals refresh it, and `selenite_show` opens its route and scrolls to a section or focuses an item while the pane is enabled. Events carry only short ids, a ledger kind or a finding count, never file contents, transcripts, tokens or home paths. With no Desktop client, delivery is a logged no-op; older Hermes builds without the event bridge still run the tools. `/frictionless status` gives pane guidance: check Selenite in **Capabilities -> Plugins**, where enabling the pane is the one step a person does, then open its page.
 
 One Selenite per machine: if `~/.local/share/selenite` or another Hermes home already has the plugin, `--hermes` reuses that copy instead of adding a second checkout of the same plugin name, which Hermes refuses to admit (`Two workspace members are both named 'selenite'`).
+
+**macOS:** the plugin runs on macOS as well as Linux. The full unit suite passes on a Mac (Python 3.14), the state folder is `~/.local/state/selenite`, and `install.sh` is plain POSIX `sh`, so it works with the stock macOS shell. Windows is not listed: the installer is a shell script and was not run there.
 
 In a sandbox or a seat with a read-only home, the installer skips the folders it cannot write and still links the rest. `--hermes` ends with `hermes plugins enable selenite`; on a source checkout that command may first finish a pending Hermes update and rebuild its desktop app, so pass `--no-enable` when a caller has its own timeout and run the printed command yourself.
 
@@ -80,10 +86,10 @@ antibeaurocracy audit --judge "llm -m some-model"   # optional second opinion, s
 
 - **Reads:**
   - Your agent homes, when you run `cleanse.py` or the tool's `cleanse` action. That covers skill folders, the Hermes plugins folder, Claude Code `settings.json` hook commands, any runbook path you pass, and the fake-gate ledger. `mine.py` reads your own messages in Claude Code (`~/.claude/projects`), Codex (`~/.codex/sessions`) and Hermes (`$HERMES_HOME/state.db`, opened read-only), plus any `--path`.
-  - `kanban.db` files under `$HERMES_HOME`, opened with SQLite `mode=ro`, for the fake-gate audit, tool and dashboard card. The CLI audit also scans every `~/.hermes*` directory.
+  - `kanban.db` files under `$HERMES_HOME`, opened with SQLite `mode=ro`, for the fake-gate audit, tool and dashboard card. The CLI audit scans the active home only; `--all-homes` adds every `~/.hermes*` directory.
   - The CLI audit (not the plugin hooks or tools) reads the agent rule files it finds, such as `~/.claude/CLAUDE.md`, `~/AGENTS.md`, `~/.agents/rules/*.md` and each Hermes home's `SOUL.md`, and prints up to eight example gate lines from each. Selenite's own skills are skipped. Use `--no-rules` to skip this, or `--counts` for numbers only.
 - **Writes:**
-  - The ledger, reports and proposals in the state folder (folder 0700, files 0600): `$SELENITE_STATE`, else `$XDG_STATE_HOME/selenite`, else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite`. Each `cleanse.py` run writes a report there and one ledger row with its finding count; if no folder takes the write (a read-only home, the normal case in an agent seat) it prints one line saying so and still prints the findings. Ledger notes are redacted before they are written.
+  - The ledger, reports and proposals in the state folder (folder 0700, files 0600): `$SELENITE_STATE`, else `$XDG_STATE_HOME/selenite`, else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite`. Each `cleanse.py` run writes a report there and one ledger row with its finding count; if no folder takes the write (a read-only home, the normal case in an agent seat) it prints one line saying so and still prints the findings. Ledger notes are redacted before they are written. When a user-wide folder (XDG or `~/.local/state`) is only a fallback, each Hermes home keeps its own subfolder there (`by-home/<hash>`), so one home never sees or clears another's gates.
   - `$HERMES_HOME/plugin-data/antibeaurocracy/`: `ledger.jsonl` (0600, rotating at 4 MB: event, tool, card id, verdict, declared kind, confidence, mode and session id, never reason or prompt text), `refusals.json` (per-card question counts in `ask` mode, expiring after `refusal_ttl_hours`) and `snapshot.json` (counts only).
   - The installer creates symlinks (the skills in each agent's skills folder, the CLI in `~/.local/bin`, and with `--hermes` the plugin in `$HERMES_HOME/plugins`) and the state folder. A target it cannot write is skipped and counted, never fatal. With `--hermes` it also runs `hermes plugins enable selenite`, which changes Hermes's config; `--no-enable` leaves that command to you.
   - Selenite never edits another tool, card or rule file. Every fix is a proposal or a change you review.
@@ -105,7 +111,7 @@ What Selenite learns stays on your machine. Reports hold counts and category nam
 ## Tests
 
 ```bash
-python3 -m pip install pytest fastapi httpx && python3 -m pytest -q
+python3 -m pip install -r requirements-test.txt && python3 -m pytest -q
 ```
 
 ## License

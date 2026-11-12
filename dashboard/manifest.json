@@ -3,7 +3,7 @@
   "label": "Selenite",
   "description": "What keeps landing on you: human steps, fake gates between agents and checks that cannot change the decision, ranked, with what cleared.",
   "icon": "Sparkles",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "api": "plugin_api.py",
   "tab": {
     "path": "/selenite",

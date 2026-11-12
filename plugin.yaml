@@ -1,6 +1,6 @@
 name: selenite
 label: Selenite
-version: "0.5.0"
+version: "0.6.0"
 manifest_version: 2
 api_version: 1
 description: >
@@ -22,7 +22,7 @@ author: KyaniteLabs
 license: MIT
 requires_hermes: ">=0.23.0"
 tags: [workflow, ergonomics, accessibility, human-in-the-loop, kanban, governance]
-provides_tools: [selenite_ledger, bureaucracy_classify, bureaucracy_audit]
+provides_tools: [selenite_ledger, selenite_show, bureaucracy_classify, bureaucracy_audit]
 provides_hooks:
   - pre_llm_call
   - post_approval_response
@@ -89,6 +89,6 @@ config_schema:
     description: "How often the dispatcher tick refreshes plugin-data/antibeaurocracy/snapshot.json (counts only) and emits selenite:snapshot."
 optional_env:
   - name: SELENITE_STATE
-    description: "Where the private ledger and reports live (default ~/.local/state/selenite)"
+    description: "Where the private ledger and reports live (else HERMES_HOME/plugin-data/selenite, XDG state, or ~/.local/state/selenite)"
     prompt: "Selenite state directory (or empty)"
     password: false

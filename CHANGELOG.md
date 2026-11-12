@@ -1,6 +1,103 @@
 # Changelog
 
+## 0.6.0 (2026-11-11)
+
+- Agent tool calls now refresh the Desktop page through local `ledger.updated`,
+  `cleanse.updated` and `proposal.updated` events, with only kinds/counts and no private text.
+- New `selenite_show` tool sends `view.set` to open the enabled page's route, scroll to
+  a real section and focus an optional short item id; unknown views return an error.
+- Live events supersede older REST requests, and listeners are removed on plugin disposal.
+  The guarded bridge keeps tools working on older Hermes builds and without Desktop.
+- `/frictionless status` and the skill explain the person's one pane-enabling step in
+  Capabilities -> Plugins; the plugin and its bundled facets are now version 0.6.0.
+
+## 0.5.1 (2026-11-11)
+
+- **Agent approvals are fake gates; authority walls stand.** Reviewer, security, QA and legal
+  agents waiting to sign off match `F1-ack`. Credential handoffs to a person match a high-confidence
+  wall and never suggest closing or rerouting the card. Human legal review and CEO approvals stay
+  with people; credentials, spending, publishing, deploying and deletion outrank stale waits.
+- **Calm catches short typo bursts.** Common transpositions in a message of four or more words
+  can trigger `typo_burst`; it still takes at least two hits. Normal terse prose, code identifiers,
+  URLs and file paths do not count as typo bursts, and Calm keeps its two-signal rule.
+- **Desktop category limitation (F1).** The installed Capabilities card hardcodes agent plugins
+  to `general` and derives its icon from that category. Hermes's `plugin.yaml` schema accepts
+  neither `category` nor `icon` for that card; the dashboard's `Sparkles` icon belongs to a different
+  surface. The catalog remains `automation`. No Hermes changes or ignored manifest fields added.
+
 ## 0.5.0 (in catalog review; not yet merged)
+
+### Dogfood gap fixes (2026-11-11)
+
+- **More credential asks are walls.** "Need the SSH key", "waiting for access to the private repo",
+  "need someone to log in to the AWS console", "need the production database password" and similar
+  were still sorted as stale waits. The pattern now knows more verbs (blocked on, waiting for,
+  provide, send), up to three words before the noun, SSH and private keys, passphrases, MFA, "log in"
+  and "access to". "No credentials required" and "credential-free" still are not walls.
+- **More declared holds are recognised.** "The supervisor owns this repair" counts as work running
+  elsewhere, and "max 2 in progress" or "throttled at 3 running" as a capacity hold. Owner decisions
+  about a public exposure are a publish wall.
+- **Parking advice asks before it dispatches.** F5 now says to get a named owner and an expiry from
+  whoever set the hold, instead of "dispatch it".
+- **`classify` refuses symbol-only input** ("👍") as well as blank input. `antibeaurocracy --version` works.
+- **The web tab reads on a phone.** Long gate names wrap and show in full on hover. "1 Calm trigger" is
+  singular, and the fake-gate headline says "No boards found" or "Nothing blocked" instead of "0 of the
+  blocked (0%)".
+- **One test requirements file.** `requirements-test.txt` pins pytest, FastAPI and httpx for CI and
+  local runs; a missing FastAPI now says why the backend tests skipped.
+
+### Dogfood fixes on real board snapshots (2026-11-11)
+
+- **A plain freeze is a wall.** "frozen: no repins until the deadline", "repin freeze" and "merge freeze
+  is in effect" now read as a named freeze, not a stale wait.
+- **Credentials walls, wider.** "blocked on the owner's AWS credentials" and "waiting for the npm
+  token" are walls too; a possessive or a dotted name no longer hides the credential word.
+- **A needs_input card that names a person is that person's step.** "the CEO's explicit word",
+  "CEO hands required", "Owner adjudication" and similar are HUMAN, and a HOLD offered as one of
+  the answers is no longer read as a parked card.
+- **Long ledger keys say so.** A key over 80 characters keeps a hash suffix so two long keys stay
+  distinct, the row is marked `truncated`, and `add` warns.
+- **The dashboard shows only recurring gates** (asked at least twice), names Kanban cards by title,
+  drops cards that no longer exist, and counts the one-off gates. Rows wrap on narrow screens, and
+  fake-gate rows show what to do instead of a raw code.
+
+### Dogfood fixes (2026-11-11)
+
+- **More credential walls stand.** On top of round two: a possessive or up to three words before the
+  secret ("needs Ana's token to publish"), "only Ana has the PyPI token", "waiting on Ana to log in to
+  npm" and "with his own login". "credential-free" and a custody note that mentions a credential are
+  still not walls.
+- **Public steps stand.** "before posting publicly" and an upstream PR or issue now match the publish
+  wall. Found by running Selenite on the dogfooder's own open holds.
+- **Named holds are not stale.** "blocked until Security reviews" is an agent ack, and "waiting for
+  approval from CoS" (a party that is not a configured seat) is a person's queue, not a dead wait.
+- **Each Hermes home reads only its own ledger.** The shared fallback folder is split by home
+  (`by-home/<tag>`), so a gate from one profile no longer shows in another, and "Mark fixed" in one
+  never clears another's gate.
+- **The dashboard tab:** "Mark fixed" can be undone and a fixed row can be reopened; the picked
+  7d/30d/90d window inverts and carries a check mark; the tab shows Cleanse ("what to clear next")
+  and Evolve, and a drafted proposal confirms itself; every button is at least 44 px.
+
+### Dogfood round-two fixes (2026-11-11)
+
+- **A stale install can't win silently.** `install.sh --hermes` reuses the Selenite copy the machine
+  already loads, so every seat runs that copy. It now warns when that copy differs from the checkout
+  being installed, or is behind its upstream. A live copy 45 commits old was calling "before I drop
+  the users table" a fake gate.
+- **"Needs credentials" is a credentials wall.** The pattern only matched with two spaces, so "needs
+  credentials", "need a token", "requires credentials" and "needs the API key" read as fake. "The
+  production deploy" as a noun is now a publish wall too.
+- **Deliberate holds aren't parking lots.** A card that says where the work runs ("executed by zcode
+  outside the gateway; do not dispatch") or that it waits for room in a capped queue reads as a declared
+  hold, not a fake gate. A bare "HOLD" still does.
+- **Waiting for CI is a running check**, not a stale wait.
+- **`SELENITE_STATE` isolates.** When it is set, it is the only folder read or written, so Evolve and the
+  dashboard no longer mix in other seats' friction. The dashboard reports the folder it writes to.
+- **Cleanse counts a file once.** A skill symlinked into several agents was one finding per agent;
+  findings now dedupe by real path and check (176 → 106 on the dogfood host).
+- **Small ones.** `classify` with no text says "nothing to classify" and exits 2. `mine` prints its
+  samples path readably instead of redacting the user's own file name. `audit --counts` names an
+  unreadable board on stderr, and a locked board gets one retry.
 
 ### Roast round-four fixes (2026-11-11)
 
