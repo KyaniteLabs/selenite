@@ -17,14 +17,17 @@ The net over-matches on purpose: a missed finding costs a nudge, a pushed wall c
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from dataclasses import dataclass, field
 from typing import Iterable, Sequence
 
 try:  # inside the Hermes plugin package the sibling facet is one level up; standalone it is top-level
     from ..antibeaurocracy_core import HUMAN, WALL, WALLS_TEXT, classify, wall_family
+    from ..antibeaurocracy_core.classify import _WALL_FAMILY_ACTION
 except (ImportError, ValueError):
     from antibeaurocracy_core import HUMAN, WALL, WALLS_TEXT, classify, wall_family
+    from antibeaurocracy_core.classify import _WALL_FAMILY_ACTION
 
 HEDGE = "C1-hedge"                # hedging when the evidence is clear
 READY = "C2-ready-to"             # "ready to X" / "suggest we X" instead of doing X
@@ -82,8 +85,8 @@ for are was were been being have has had not can could would should will shall m
 there here what when where which who whom how why also just only very more most some any all each every about
 after before again because while does did doing done get got make made one two""".split())
 _GENERIC = frozenset({"error", "faile", "failu", "fails", "timed", "refus", "denie", "inval", "unabl", "panic"})
-_CODE = re.compile(r"```.*?(```|\Z)|`[^`\n]+`", re.S)
-_QUOTED = re.compile(r"\"[^\"\n]{1,200}\"|“[^”\n]{1,200}”|(?<![\w'])'[^'\n]{1,200}'(?![\w'])")
+_CODE = re.compile(r"```.*?(```|\Z)|~~~.*?(~~~|\Z)|`[^`\n]+`|^[ \t]*>.*$|^(?: {4}|\t).*$", re.S | re.M)
+_QUOTED = re.compile(r"\"[^\"\n]{1,1000}\"|“[^”\n]{1,1000}”|(?<![\w'])'[^'\n]{1,1000}'(?![\w'])")
 
 
 def _clean(text) -> str:
@@ -124,17 +127,26 @@ _HOLD = re.compile(
     r"just (diagnose|investigate|explain|plan|look|research|review|advise|report|tell|check)|"
     r"no (changes|edits|writes|actions?)|don'?t (do )?anything|do not do anything|nothing (should|is to|to) (move|change|happen)|"
     r"(do not|don'?t|never|must not|mustn'?t|not to) (touch|change|restart|merge|deploy|delete|push|close|edit|modify|run|commit|"
-    r"send|install|rename|write|stop|reboot|migrate|restore|upload|publish|release|ship|remove|apply|start|kill|update|create|"
+    r"send|install|rename|write|stop(?! (until|before|till))|reboot|migrate|restore|upload|publish|release|ship|remove|apply|start|kill|update|create|"
     r"act|move|proceed|continue|go ahead|fix|ship|tag|post|email|reset|drop|wipe)|"
-    r"wait(ing|s|ed)? (for|on|until)\b|(blocked|parked|paused|held|stalled|pending) (on|pending|until|by|as|per)\b|pending (approval|review|"
-    r"sign-?off|a decision|the)|awaiting|sign-?off|go-?ahead|green-?light|your (ok|okay|approval|word|call|say-?so)|"
+    r"wait(ing|s|ed)? until\b|"
+    r"wait(ing|s|ed)? (for|on) ([\w']+ ){0,3}(approval|sign-?off|go-?ahead|green-?light|decision|ok|okay|review|confirmation|reply|response|"
+    r"answer|word|permission|consent|say-?so)|wait(ing|s|ed)? (for|on) [\w']+ to (confirm|approve|reply|respond|sign|review|decide|say|ok|lift|"
+    r"land|merge|finish|clear)|"
+    r"(blocked|parked|paused|held|stalled|pending) (on|pending|until|by|as|per)\b|pending (approval|review|"
+    r"sign-?off|a decision|the)|awaiting|(need|needs|needed|require|requires|required|pending|without|until|after|for|from|"
+    r"before) ([\w']+ ){0,3}(sign-?off|go-?ahead|green-?light)|[\w]+'s (sign-?off|go-?ahead)|"
+    r"your (ok|okay|approval|word|say-?so)|"
     r"(requires?|needs?) (the )?(\w+'?s? )?(approval|sign-?off|consent|permission|ok|okay)|"
     r"(once|when|after|until) (you|he|she|they|\w+) (say|says|approve|approves|confirm|confirms|ok|signs?|lifts?|opens?|lands?)|"
     r"(once|when|after|until) (the )?[\w' -]{1,40} (lands?|merges?|approves?|signs? off|clears?|finishes|ships|lifts?)|"
     r"(no|any) (further|more) \w+ until|until the [\w.]+ (window|freeze|review|lifts|opens|ships|lands)|"
     r"what do you (recommend|suggest|think)|your (recommendation|advice|opinion)|any (suggestions|recommendations|thoughts)|"
-    r"(do you|would you) (recommend|suggest))\b", _I)
+    r"(do you|would you) (recommend|suggest)|how (would|should|could) (you|i|we)|(give|write|draft|propose) me (a |an )?(plan|proposal|approach|outline)|"
+    r"walk me through|what would you do)\b", _I)
 # Phrases that hold only when the user says them; an agent's "not committed yet" is a state, not a stop.
+_ADVICE_ASK = re.compile(r"what do you|your (recommendation|advice|opinion)|any (suggestions|recommendations|thoughts)|(do you|would you) (recommend|suggest)|"
+                         r"how (would|should|could)|(give|write|draft|propose) me|walk me through|what would you do", _I)
 _USER_HOLD = re.compile(r"\b((not|n'?t) \w+( \w+)? yet|for now|later (today|tonight|this \w+))\b", _I)
 # Publishing and release steps the sibling facet's wall list has no word for.
 _EXTRA_WALL = re.compile(r"\b(tag(ging)? (and|&) release|release (tag|v?\d)|registry|visib(le|ility)|go(ing)? public|"
@@ -168,22 +180,51 @@ def _strict(sentence: str) -> bool:
     return bool(_HOLD.search(sentence) or _EXTRA_WALL.search(sentence) or _gate(sentence))
 
 
+_MONEY = re.compile(r"[$€£]\s?\d|\b\d+k?\s?(usd|eur|dollars)\b", _I)
+
+
+_LIVE_NOUN = re.compile(r"\b(production|prod|credentials?|secrets?|tokens?|passwords?|api keys?|host-b)\b", _I)
+
+
+def _loose_wall(sentence: str) -> bool:
+    """The sibling facet's noun net matches "auth.py", "the users page" and any 3-digit number, so on its own it
+    swallows ordinary work. Here it counts only with a destructive or publishing verb on a live target, or money."""
+    return bool(_MONEY.search(sentence) or (wall_family(sentence) and (_WALL_FAMILY_ACTION.search(sentence) or _LIVE_NOUN.search(sentence))))
+
+
 def _walled(sents: Sequence[str], i: int, loose: bool = True) -> bool:
     """Is sentence i a stop, or next to one? A wall or a hold in the sentence before or after counts.
     Action modes also use the loose wall-family net on the sentence itself; the rest use the strict check."""
     here = sents[i]
-    if _strict(here) or (loose and wall_family(here)):
+    if _strict(here) or (loose and _loose_wall(here)):
         return True
     return any(_strict(sents[j]) for j in (i - 1, i + 1) if 0 <= j < len(sents))
 
 
+_APPROVED = re.compile(r"\b(approved|signed off|(has|have|had|gave|given|got) (my |the |his |her |their )?(sign-?off|approval|go-?ahead|ok|okay)|"
+                       r"you have (my|the) |no (sign-?off|approval|permission)s? (is |are )?(needed|required|necessary)|not (needed|required))\b", _I)
+_NUDGE_BLOCK = re.compile(r"\[selenite\] anticowardice:[^\n]*\n(?:- [^\n]*\n)*If you now have grounds[^\n]*")
+
+
+def _hard_hold(text: str, advice: bool = True) -> bool:
+    """A _HOLD phrase that is not itself negated ("no need to wait for approval" is not a hold). A request for
+    advice only holds the message that asked; with advice=False (earlier messages) it is ignored."""
+    return any(not _negated(text, m.start()) and (advice or not _ADVICE_ASK.search(m.group(0)))
+               for m in _HOLD.finditer(text or ""))
+
+
 def _user_hold(t: "Turn") -> bool:
     """A hold, a request for advice only, or a named person's sign-off in the user's message or their
-    recent earlier messages. The user naming a wall word (deploy, credentials) is a request, not a hold."""
-    for text in (t.user or "", (t.context or "")[-1500:]):
-        if _HOLD.search(text) or _USER_HOLD.search(text):
-            return True
-    return any(_verdict(x)[1] for x in _sentences(t.user or ""))  # a person is named as the one who must say yes
+    recent earlier messages. The user naming a wall word (deploy, credentials) is a request, not a hold.
+    A grant in the same message beats a hold phrase in it, and beats anything said earlier."""
+    user = t.user or ""
+    if any(_verdict(x)[1] and not (_APPROVED.search(x) or _granted(x)) for x in _sentences(user)):  # a person must still say yes
+        return True
+    if _granted(user):
+        return False
+    if _hard_hold(user) or _USER_HOLD.search(user):
+        return True
+    return _hard_hold(_NUDGE_BLOCK.sub(" ", (t.context or "")[-1500:]), advice=False)  # only hard holds outlive their message
 
 
 # ---------------------------------------------------------------- C1 hedging when the evidence is clear
@@ -206,6 +247,10 @@ _OPEN = re.compile(r"\b(have not|haven'?t|did not|didn'?t|not yet|cannot|can'?t|
                    r"will tell|would tell|to be (seen|confirmed|determined)|\bor\b", _I)
 
 
+# A cause is not in a log that only shows the symptom: a hedged "because"/"causing" is an inference, not a stalled fact.
+_CAUSAL = re.compile(r"\b(caus(e|es|ed|ing)|because|due to|root cause|result of|responsible for|explains?|behind (this|that|it|the))\b", _I)
+
+
 def _hedge(t: Turn, sents: list[str]) -> list[Finding]:
     fact_words = [_words(ln) - _GENERIC for c in t.tools for ln in str(c.output or "").splitlines()
                   if _FACT.search(ln) and not _ZERO_FACT.search(ln)]
@@ -213,7 +258,7 @@ def _hedge(t: Turn, sents: list[str]) -> list[Finding]:
         return []
     out = []
     for i, s in enumerate(sents):
-        if s.endswith("?") or not _HEDGE_WORDS.search(s) or _OPEN.search(s) or _walled(sents, i, loose=False):
+        if s.endswith("?") or not _HEDGE_WORDS.search(s) or _OPEN.search(s) or _CAUSAL.search(s) or _walled(sents, i, loose=False):
             continue
         subject = _words(_HEDGE_WORDS.sub(" ", s)) - _GENERIC
         if subject and any(subject & fw for fw in fact_words):
@@ -254,36 +299,51 @@ def _command(c: ToolCall) -> str:
 
 def _heads(cmd: str) -> list[list[str]]:
     """Each simple command of a shell line as its words."""
-    return [seg.split() for seg in re.split(r"&&|\|\||[;|\n]", cmd) if seg.strip()]
+    masked = re.sub(r"\"[^\"]*\"|'[^']*'", lambda m: "Q" * len(m.group(0)), cmd)  # a quoted ; or && is text, not a separator
+    segs, pos = [], 0
+    for m in re.finditer(r"&&|\|\||[;|\n]", masked):
+        segs.append(cmd[pos:m.start()])
+        pos = m.end()
+    segs.append(cmd[pos:])
+    return [seg.split() for seg in segs if seg.strip()]
+
+
+_PASSIVE_SUBS = frozenset(("view", "list", "checks", "status", "diff", "show", "log", "blame", "ls", "search", "get", "inspect"))
 
 
 def _passive(words: list[str]) -> bool:
     if not words:
         return True
     head = words[0].rsplit("/", 1)[-1].lower()
-    if head == "git" and len(words) > 1:
-        return words[1].lower() in ("diff", "log", "show", "status", "blame")
+    if head in ("git", "gh", "glab", "fj", "tea") and len(words) > 1:
+        return any(w.lower() in _PASSIVE_SUBS for w in words[1:3])
     return head in _PASSIVE_HEADS
 
 
 def _action_tokens(t: Turn) -> set[str]:
-    """Lower-case word tokens of what the turn's tool calls actually did, not what they mention."""
+    """Lower-case word tokens of what the turn's tool calls actually did, not what they mention. For a
+    shell line that is each command's name and its next two words (so `gh pr merge`, `python3 -m pytest`),
+    never its free text or comments; for any other tool it is the tool's name, never its arguments."""
     toks: set[str] = set()
     for c in t.tools:
         name = str(c.name or "")
         if _SHELL.search(name) or name.lower() in ("bash", "terminal"):
-            for words in _heads(_command(c)):
+            for words in _heads(re.sub(r"\s#.*", "", _command(c))):
                 if not _passive(words):
-                    toks.update(re.findall(r"[a-z]+", " ".join(words).lower()))
+                    toks.update(re.findall(r"[a-z]+", " ".join(words[:3]).lower()))
         elif not _PASSIVE_NAMES.search(name):
-            toks.update(re.findall(r"[a-z]+", f"{name} {c.args}".lower()))
+            toks.update(re.findall(r"[a-z]+", name.lower()))
     return toks
+
+
+def _forms(stem: str) -> set[str]:
+    return {stem, stem + "s", stem + "es", stem + "d", stem + "ed", stem + "ing", stem.rstrip("e") + "ing", stem.rstrip("e") + "ed"}
 
 
 def _acted(verb: str, t: Turn) -> bool:
     stems = _DONE_STEMS.get(verb[:4]) or _DONE_STEMS.get(verb[:3]) or (verb[:4],)
     toks = _action_tokens(t)
-    return any(tok.startswith(st) for tok in toks for st in stems)
+    return any(tok in _forms(st) for tok in toks for st in stems)
 
 
 _COND = re.compile(r"^\W*(if|unless|when|once|in case)\b", _I)
@@ -312,22 +372,39 @@ _SIGNOFF = re.compile(r"^(?:[-\u2014\u2013]+\s*\w[\w .]*$|(?:let me know|thanks|
 _COMMIT = re.compile(r"\bgit\b[^|;&\n]*\bcommit\b", _I)
 
 
+def _did_commit(t: Turn) -> bool:
+    """A shell line that runs `git commit` (any global options before it), not one that mentions the word."""
+    for c in t.tools:
+        if _SHELL.search(str(c.name or "")) or str(c.name or "").lower() in ("bash", "terminal"):
+            for w in _heads(_command(c)):
+                if w and w[0].rsplit("/", 1)[-1].lower() == "git" and "commit" in [x.lower() for x in w[1:5] if not x.startswith("-") or x == "-m"][:2]:
+                    return True
+    return False
+
+
 def _caveat(t: Turn, sents: list[str]) -> list[Finding]:
     paras = [p for p in re.split(r"\n\s*\n", _clean(t.assistant).strip()) if p.strip()]
     if not paras:
         return []
-    committed = any(_COMMIT.search(_command(c)) for c in t.tools)
+    committed = _did_commit(t)
     out = []
-    tail = [paras[-1]]
+    # Walls are judged against the whole reply, so a wall in the paragraph above or below still counts.
+    flat: list[str] = []
+    spans: list[tuple[int, int]] = []
+    for para in paras:
+        ps = _sentences(para)
+        spans.append((len(flat), len(flat) + len(ps)))
+        flat.extend(ps)
+    tail = [len(paras) - 1]
     i = len(paras) - 1
     while i > 0 and len(tail) < 3 and _SIGNOFF.match(paras[i].strip()):  # a sign-off can follow the caveat
         i -= 1
-        tail.append(paras[i])
-    for para in tail:
-        ps = _sentences(para)
-        for i, s in enumerate(ps):
+        tail.append(i)
+    for pi in tail:
+        for j in range(*spans[pi]):
+            s = flat[j]
             m = _RISK.search(s)
-            if not m or s.endswith("?") or _walled(ps, i) or _negated(s, m.start()):
+            if not m or s.endswith("?") or _walled(flat, j) or _negated(s, m.start()):
                 continue
             if committed:
                 continue  # the turn did commit something; the caveat is not an exit
@@ -338,7 +415,8 @@ def _caveat(t: Turn, sents: list[str]) -> list[Finding]:
 # ---------------------------------------------------------------- C4 narrow reading of a broad instruction
 
 _BROAD = re.compile(r"\b(all|everything|every|each|whole|entire|any and all|noise)\b", _I)
-_USER_NARROW = re.compile(r"\b(only|just|first|instead|except|leave (the )?(rest|others?|remaining)|not all|rather than|"
+_USER_NARROW = re.compile(r"\b(only|just(?! (\w+ )?(all|everything|every|each)\b)|first (one|file|item|few|two|three|\d|warning|error|issue|failure|test|bug)|instead|except|"
+                          r"leave (the )?(rest|others?|remaining|everything else)|skip everything else|ignore (every|all) other|not all|rather than|"
                           r"don'?t (fix|touch|change) (all|everything))\b", _I)
 _NARROWED = re.compile(
     r"\b((only|just|merely) (fixed|addressed|handled|touched|changed|removed|silenced|cleared)|"
@@ -369,16 +447,32 @@ def _narrow(t: Turn, sents: list[str]) -> list[Finding]:
 _ASK = re.compile(r"\b(should (i|we)|shall (i|we)|do you want me to|would you like me to|want me to|can i|may i|is it ok(ay)? (if|to))\b"
                   r"(?P<rest>[^?.\n]*)", _I)
 _GRANT = re.compile(
-    r"\b(fix (it )?all|do (it|everything|all)|go ahead|just do|you decide|your call|don'?t ask|no questions|"
+    r"\b(fix (it )?(all|everything)|do (it|everything|all)|go[- ]?ahead|you have (my|the) (sign-?off|approval|ok|okay)|"
+    r"(now|meanwhile|in the meantime),? (fix|update|add|run|write|change|finish|merge|ship|commit|do|go)|just do|you decide|your call|hold (is )?lifted|lifted the hold|"
+    r"carry on|resume|you may proceed|don'?t ask|no questions|"
     r"all approved|use your judg(e)?ment|without asking|make the call|do whatever you (think|want|like)|"
     r"whatever you think (is )?best|up to you)\b", _I)
-_NOT_YET = re.compile(r"^\W*(yet|first|until)\b", _I)
+_NOT_YET = re.compile(r"^\W*(yet|first|until|only|but|after|once|when|unless)\b", _I)
 
 
 def _granted(text: str) -> bool:
     for m in _GRANT.finditer(text or ""):
         if not _negated(text, m.start()) and not _NOT_YET.match(text[m.end():m.end() + 8]):
             return True
+    return False
+
+
+def _grant_covers(asked: str, verbs: set[str]) -> bool:
+    """A blanket grant ("go ahead", "fix everything") answers any question; a scoped one ("go ahead and read the
+    logs") only answers questions about its own words."""
+    for sent in _sentences(asked):
+        for m in _GRANT.finditer(sent):
+            if _negated(sent, m.start()) or _NOT_YET.match(sent[m.end():m.end() + 8]):
+                continue
+            tail = re.split(r"[;,:]", sent[m.end():])[0]  # what the grant is about runs to the end of its clause
+            left = _words(tail, min_len=3) - {"best", "good", "fine", "please", "just", "then", "whatever", "anything", "judgment", "judgement"}
+            if not left or left & verbs:
+                return True
     return False
 
 
@@ -391,13 +485,19 @@ def _defer(t: Turn, sents: list[str]) -> list[Finding]:
         if not m or _walled(sents, i):
             continue
         rest = m.group("rest")
-        if re.search(r"\bor\b", rest, _I):
-            continue  # a real choice: the context does not pick for the agent
         verbs = {w for w in _words(rest, min_len=3) if w not in ("this", "that", "them", "with")}
+        if re.search(r"\bor\b", rest, _I):
+            # A real choice unless the user already picked one side ("use blue" before "blue or green?").
+            now = _words(t.user, min_len=3)
+            picked = any(len({_words(a, 3).pop() if _words(a, 3) else a, _words(b, 3).pop() if _words(b, 3) else b} & now) == 1
+                         for a, b in re.findall(r"(\w+) or (\w+)", rest, _I))
+            if not picked:
+                continue
         shared = verbs & user_words
-        # Answered means the user granted it outright, or asked for this very thing: the question's verb and its
-        # object both appear in the user's own words. One shared noun is topic overlap, not an answer.
-        if _granted(asked) or len(shared) >= 2:
+        first = next(iter(_words(rest.split()[0] if rest.split() else "", min_len=3)), "")
+        # Answered means a grant that covers this question, or the user asked for this very thing: the question's
+        # verb and its object both appear in the user's own words. One shared noun is topic overlap, not an answer.
+        if _grant_covers(asked, verbs) or (len(shared) >= 2 and first in user_words):
             out.append(Finding(DEFER, _snip(s), ADVICE[DEFER]))
     return out[:1]
 
@@ -418,8 +518,10 @@ _EVIDENCE = re.compile(r"\b(re-?read(ing)?|re-?ran|re-?check(ed|ing)?|looking (b
 
 
 def _user_supplies(user: str) -> bool:
-    u = user or ""
-    return len(re.findall(r"\w+", u)) >= 6 or bool(re.search(r"\d|[:=]", u))
+    """The criticism brings its own correction: several content words beyond the complaint itself.
+    Length, digits and punctuation are not evidence."""
+    rest = _words(_CRITICISM.sub(" ", user or "")) - {"again", "think", "really", "sure", "know", "better", "should", "completely", "totally"}
+    return bool(re.search(r"\d|=|`", user or "")) or len(rest) >= 3
 
 
 def _overcorrect(t: Turn, sents: list[str]) -> list[Finding]:
@@ -441,9 +543,20 @@ _FLATTER = re.compile(
     r"^\W*absolutely[,!. ]|^\W*that'?s (a )?(great|excellent|fantastic) (point|catch|idea|observation|call)", _I)
 # Tools that only read: a read-back is a check.
 _READ_TOOLS = re.compile(r"^(read|read_file|view|open|cat|grep|glob|search_files|search|find|list_dir|ls_files|web_fetch|fetch)$", _I)
-_VERIFY_HEADS = frozenset(("pytest python3 python node npm npx pnpm yarn make cargo go nix mvn gradle ruby uv tox unittest curl wget "
-                           "diff cmp stat wc ping dig nc ss journalctl systemctl docker kubectl lint ruff mypy eslint tsc cat head tail "
-                           "sha256sum md5sum jq").split())
+# Commands that only look, whatever their arguments.
+_VERIFY_HEADS = frozenset(("pytest unittest tox lint ruff mypy eslint tsc diff cmp stat wc ping dig nc ss journalctl curl wget "
+                           "cat head tail sha256sum md5sum jq grep egrep rg ag").split())
+# Commands that look or change depending on the subcommand: only these subcommands check anything.
+_VERIFY_SUBS = {
+    "npm": ("test", "run test", "run lint", "run check", "run build", "t", "build"), "pnpm": ("test", "lint", "check", "build", "run test", "run lint"),
+    "yarn": ("test", "lint", "check", "build", "run test", "run lint"), "make": ("", "test", "check", "lint", "verify", "ci", "build", "all"),
+    "cargo": ("test", "check", "clippy", "build", "doc"), "go": ("test", "vet", "build"),
+    "systemctl": ("status", "is-active", "is-enabled", "is-failed", "show", "list-units"), "docker": ("ps", "logs", "inspect", "compose ps", "compose logs"),
+    "kubectl": ("get", "describe", "logs", "rollout status"), "mvn": ("test", "verify"), "gradle": ("test", "check", "build"),
+    "nix": ("flake check", "build"), "python3": ("-m pytest", "-m unittest", "-m compileall", "-m doctest"),
+    "python": ("-m pytest", "-m unittest", "-m compileall", "-m doctest"), "uv": ("run pytest", "run python -m pytest"),
+    "node": ("--check", "--test", "-c"), "npx": ("tsc", "eslint", "jest", "vitest"), "ruby": ("-c",),
+}
 _VERIFY_TOKENS = re.compile(r"\b(pytest|--version|doctor|verify|probe|lint|unittest)\b", _I)
 
 
@@ -459,7 +572,11 @@ def _verified(t: Turn) -> bool:
                 head = words[0].rsplit("/", 1)[-1].lower()
                 if head == "git" and len(words) > 1 and words[1].lower() in ("status", "diff", "log", "show"):
                     return True
-                if head in _VERIFY_HEADS or _VERIFY_TOKENS.search(" ".join(words)):
+                if head in _VERIFY_SUBS:
+                    rest = " ".join(w.lower() for w in words[1:] if not w.startswith("-") or head in ("python", "python3", "node", "ruby"))
+                    if any(rest == sub or rest.startswith(sub + " ") for sub in _VERIFY_SUBS[head]):
+                        return True
+                elif head in _VERIFY_HEADS or _VERIFY_TOKENS.search(" ".join(words)):
                     return True
     return False
 
@@ -500,12 +617,21 @@ _DETECTORS = ((HEDGE, _hedge), (READY, _ready), (CAVEAT, _caveat), (NARROW, _nar
 HELD_HEDGE_ADVICE = "State the conclusion plainly; the hold stands, so do not act on it yet."
 
 
+def _ascii_quotes(text) -> str:
+    """Typographic apostrophes are ordinary English: "I\u2019ll" must read as "I'll"."""
+    return str(text or "").replace("\u2019", "'").replace("\u2018", "'")
+
+
 def analyze(turn: Turn) -> list[Finding]:
     """Every finding for one turn, at most a few per mode. A hold in the user's message silences the
     action modes (ready-to, caveat, narrow, deference): waiting is the right answer there. A hedge stays a
     hedge under a hold, but its advice stops short of acting."""
     if not str(turn.assistant or "").strip():
         return []
+    turn = dataclasses.replace(turn, assistant=_ascii_quotes(turn.assistant), user=_ascii_quotes(turn.user),
+                               context=_ascii_quotes(turn.context), previous_assistant=_ascii_quotes(turn.previous_assistant))
+    if turn.context and "[selenite]" in turn.context:
+        turn = dataclasses.replace(turn, context=_NUDGE_BLOCK.sub(" ", turn.context))
     held = _user_hold(turn)
     sents = _sentences(_clean(turn.assistant))
     out: list[Finding] = []

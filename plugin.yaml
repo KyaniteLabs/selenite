@@ -19,7 +19,8 @@ description: >
   the agent's prompt in Calm mode, and in fake_gate_mode "nudge" or "ask" they
   add a note to, or hand back with a question, a kanban block that reads as
   agent bureaucracy. In cowardice_mode "nudge" a hook adds one note to the next turn when the last reply hedged, announced
-  instead of acting, or ended on a fixable caveat; nothing is ever blocked. They never approve, delete or edit a card.
+  instead of acting, ended on a fixable caveat, or matched any other of its eight modes (narrow read, false deference,
+  over-correction, sycophancy, vague status); nothing is ever blocked. They never approve, delete or edit a card.
 author: KyaniteLabs
 license: MIT
 requires_hermes: ">=0.23.0"

@@ -85,7 +85,7 @@ HOLD_CASES = [
     ("Ready to close the ticket.", "Nothing should move until sign-off."),
     ("Ready to commit when you say the word.", "don't commit yet, show me the diff first"),
     ("Ready to close.", "Closing the task requires approval from the CEO."),
-    ("Merging needs Simon's sign-off. Ready to proceed once he says so.", ""),
+    ("Merging needs Dana's sign-off. Ready to proceed once he says so.", ""),
     ("The next step pushes the release tag to the registry. Should I go ahead?", ""),
     ("Ready to merge once you approve.", ""),
     ("Ready to push the tag; waiting on your OK.", ""),

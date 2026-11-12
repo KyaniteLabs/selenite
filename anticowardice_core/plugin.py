@@ -102,7 +102,8 @@ def turn_from_history(user_message, assistant_response, history) -> Turn:
     msgs = [m for m in (history if isinstance(history, (list, tuple)) else []) if isinstance(m, dict)]
     user = _text(user_message).strip()
     user_idx = [i for i, m in enumerate(msgs) if m.get("role") == "user"]
-    start = next((i for i in reversed(user_idx) if user and _text(msgs[i].get("content")).strip() == user),
+    # The live row may carry a platform note or a prefix, so match by containment, latest row first.
+    start = next((i for i in reversed(user_idx) if user and user in _text(msgs[i].get("content"))),
                  user_idx[-1] if user_idx else -1)
     this_turn = msgs[start + 1:] if start >= 0 else []
     before = msgs[:max(start, 0)]
@@ -138,7 +139,7 @@ def turn_from_history(user_message, assistant_response, history) -> Turn:
 # ---------------------------------------------------------------- hooks
 
 def _key(session_id) -> str:
-    return str(session_id or "-")[:64]
+    return str(session_id or "-")  # the full id routes the note; only the ledger display is shortened
 
 
 def take_nudge(session_id) -> str | None:
@@ -150,16 +151,16 @@ def take_nudge(session_id) -> str | None:
 
 
 def on_post_llm_call(session_id=None, user_message=None, assistant_response=None, conversation_history=None,
-                     side_question_token=None, **_kw):
+                     **_kw):
     try:
-        if side_question_token:  # a forked side question is not the session's turn
-            return None
         if not HOOKS_ON() or not isinstance(assistant_response, str) or not assistant_response.strip():
+            return None
+        if str(_kw.get("platform") or "").lower() == "cron":  # nobody reads a nudge held for a cron session
             return None
         findings = analyze(turn_from_history(user_message, assistant_response, conversation_history))
         if not findings:
             return None
-        sid = _key(session_id) if session_id else ""
+        sid = _key(session_id)[:64] if session_id else ""
         for f in findings:
             _ledger("finding", mode_id=f.mode, setting=mode(), session=sid)
         if mode() == NUDGE:
@@ -186,6 +187,7 @@ CHECK_SCHEMA = {
         "properties": {
             "text": {"type": "string", "description": "The reply to check."},
             "user_message": {"type": "string", "description": "The instruction it answered, if known."},
+            "previous_assistant": {"type": "string", "description": "The agent's message before the user's criticism, if any (needed for over-correction)."},
         },
         "required": ["text"],
     },
@@ -202,7 +204,9 @@ def tool_check(args: dict | None = None, **_kw) -> str:
     if not isinstance(text, str) or not text.strip():
         return json.dumps({"success": False, "error": "text is required"})
     user = args.get("user_message")
-    found = analyze(Turn(assistant=text, user=user if isinstance(user, str) else ""))
+    prev = args.get("previous_assistant")
+    found = analyze(Turn(assistant=text, user=user if isinstance(user, str) else "",
+                         previous_assistant=prev if isinstance(prev, str) else ""))
     return json.dumps({"success": True, "findings": _fmt(found), "modes": list(MODES)})
 
 

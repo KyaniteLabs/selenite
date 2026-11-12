@@ -37,7 +37,7 @@ c("sol-b8a","Ready to close.","",[T("kanban_comment",'{"text":"ready to close"}'
 c("sol-b8b","Ready to close.","",[T("Bash",'rg close README.md')],clean=False)
 c("sol-b8c","That should be fine now.","",[T("Bash",'echo "test pending"')],clean=False)
 # opus
-c("op1","Merging needs Simon's sign-off. Ready to proceed once he says so.")
+c("op1","Merging needs Dana's sign-off. Ready to proceed once he says so.")
 c("op1b","The next step pushes the release tag to the registry. Should I go ahead?")
 for s in ["Ready to merge once you approve.","Ready to push the tag; waiting on your OK.","Ready to open the upstream PR on GitHub.","Ready to tag and release v0.7.0.","I recommend we make the repo visible to everyone.","Ready to merge after the platform team lands their change."]:
     c("op-wall:"+s,s)
@@ -202,14 +202,6 @@ def test_switching_to_observe_drops_a_held_nudge():
     assert "s1" in cow._pending
     ctx.config["cowardice_mode"] = "observe"
     assert cow.take_nudge("s1") is None
-
-
-def test_forked_side_question_leaves_the_pending_nudge_alone():
-    """glm53 E1."""
-    _setup(Ctx({"cowardice_mode": "nudge"}))
-    cow.on_post_llm_call("s1", "run it", "Ready to close.", _history("run it", reply="Ready to close."))
-    cow.on_post_llm_call("s1", "side", "Ready to merge.", _history("side", reply="Ready to merge."), side_question_token="tok")
-    assert len(_rows()) == 1
 
 
 def test_malformed_tool_call_entry_does_not_hide_the_rest():
