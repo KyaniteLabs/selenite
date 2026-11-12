@@ -289,3 +289,38 @@ def test_glm_b7_failures_next_to_zero_errors():
 
 def test_glm_b8_path_words_are_not_the_step():
     assert "C2-ready-to" in modes("Ready to close the ticket.", "go ahead", ("Edit", '{"file_path": "src/closed_tickets.md"}', "ok"))
+
+
+# glm53flash round 2
+_EDIT = lambda p: ("Edit", '{"file_path": "%s"}' % p, "ok")
+
+
+@pytest.mark.parametrize("reply", [
+    "The socket is going to close after 30 seconds idle.", "The timer is going to restart the service every hour.",
+    "If we merge, CI is going to run the whole suite.", "The docs say we should update the flag to enable TLS.",
+    "According to the changelog, we should bump the version to 2.", "He said it's going to close."])
+def test_flash_new1_statements_about_systems_and_reported_speech_are_clean(reply):
+    assert modes(reply) == [], reply
+
+
+@pytest.mark.parametrize("reply,path", [("Ready to fix the docs too.", "src/main.py"), ("Ready to update the changelog.", "src/a.py")])
+def test_flash_new2_unrelated_edit_does_not_answer_the_announcement(reply, path):
+    assert "C2-ready-to" in modes(reply, "fix the docs and run tests", _EDIT(path))
+
+
+def test_flash_new2_edit_of_the_announced_object_does_answer_it():
+    assert modes("Ready to fix the parser.", "fix it", _EDIT("src/parser.py")) == []
+    assert modes("I'll fix it now.", "fix it", _EDIT("a.py")) == []
+
+
+def test_flash_new3_question_is_not_a_hold():
+    assert "C2-ready-to" in modes("I'll merge them now.", "Can the branch stay open for now?")
+
+
+def test_flash_new3_grant_in_current_message_beats_older_hold():
+    assert "C2-ready-to" in modes("I'll deploy it now.", "the freeze is lifted, deploy everything now",
+                                  context="please hold off on the deploy for now")
+
+
+def test_flash_new4_a_read_is_the_check():
+    assert modes("Let me check the logs.", "look", ("read_file", '{"path": "/var/log/x.log"}', "ok")) == []

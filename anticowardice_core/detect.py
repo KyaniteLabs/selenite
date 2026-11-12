@@ -231,7 +231,7 @@ def _user_hold(t: "Turn") -> bool:
         return True
     if _granted(user):
         return False
-    if _hard_hold(user) or _USER_HOLD.search(user):
+    if _hard_hold(user) or any(_USER_HOLD.search(x) for x in _sentences(user) if not x.rstrip().endswith("?")):  # a question about "for now" is not a stop
         return True
     return _hard_hold(_NUDGE_BLOCK.sub(" ", (t.context or "")[-1500:]), advice=False)  # only hard holds outlive their message
 
@@ -291,7 +291,8 @@ _DONE_STEMS = {"clos": ("close", "complete", "done", "finish"), "merg": ("merge"
                "ship": ("ship", "release"), "fix": ("fix", "edit", "write", "patch"),
                "arch": ("archive", "complete", "close"), "move": ("move", "mv", "update"),
                "run": ("run", "pytest", "test", "make", "unittest"), "test": ("test", "pytest"),
-               "chec": ("check", "test", "pytest", "diff", "status"), "veri": ("verify", "test", "pytest", "diff"),
+               "chec": ("check", "test", "pytest", "diff", "status", "read", "view", "grep", "glob", "tail"),
+               "look": ("look", "read", "view", "grep", "glob"), "inve": ("investigate", "read", "view", "grep", "test"), "veri": ("verify", "test", "pytest", "diff"),
                "upda": ("update", "edit", "write", "patch"), "add": ("add", "edit", "write"),
                "writ": ("write", "edit"), "comp": ("complete", "close", "done")}
 _SHELL = re.compile(r"(bash|shell|terminal|exec|command|run_command|sh)$", _I)
@@ -349,12 +350,28 @@ def _forms(stem: str) -> set[str]:
     return {stem, stem + "s", stem + "es", stem + "d", stem + "ed", stem + "ing", stem.rstrip("e") + "ing", stem.rstrip("e") + "ed"}
 
 
-def _acted(verb: str, t: Turn) -> bool:
+_EDIT_STEMS = frozenset(("edit", "write", "patch", "update", "add", "fix", "move", "mv"))
+_OBJ_SKIP = frozenset(("also", "again", "well", "next", "first", "later", "then", "just", "that", "this", "these", "those", "them", "there"))
+
+
+def _acted(verb: str, t: Turn, sent: str = "") -> bool:
+    """Did a tool call do this verb? A generic Edit/Write only counts for an announcement whose object it touched:
+    "Ready to fix the docs too." is not answered by an edit of src/main.py."""
     stems = _DONE_STEMS.get(verb[:4]) or _DONE_STEMS.get(verb[:3]) or (verb[:4],)
     toks = _action_tokens(t)
-    return any(tok in _forms(st) for tok in toks for st in stems)
+    hit = {tok for tok in toks for st in stems if tok in _forms(st)}
+    if not hit:
+        return False
+    if sent and hit <= _EDIT_STEMS:
+        after = sent.lower().split(verb, 1)[-1]
+        obj = _words(after) - _OBJ_SKIP
+        if obj:
+            touched = _words(" ".join(str(c.args or "") for c in t.tools if not _SHELL.search(str(c.name or ""))))
+            return bool(obj & touched)
+    return True
 
 
+_REPORTED = re.compile(r"\b(says?|said|according to|states?|stated|notes?|noted|claims?|claimed|reports?|reported|docs?|documentation|changelog|readme|spec|guide)\b", _I)
 _COND = re.compile(r"^\W*(if|unless|when|once|in case)\b", _I)
 
 
@@ -366,7 +383,9 @@ def _ready(t: Turn, sents: list[str]) -> list[Finding]:
             continue
         if m.group(0).lower().startswith("going to") and s[:m.start()].strip(" \"'-\u2014*_"):
             continue  # "The release is going to ship Thursday" describes the future; only a sentence that opens with it promises
-        if _acted(m.group("verb").lower(), t):
+        if _REPORTED.search(s[:m.start()]):
+            continue  # "The docs say we should update the flag" reports what someone else said
+        if _acted(m.group("verb").lower(), t, s):
             continue
         out.append(Finding(READY, _snip(s), ADVICE[READY]))
     return out
@@ -460,7 +479,7 @@ _ASK = re.compile(r"\b(should (i|we)|shall (i|we)|do you want me to|would you li
 _GRANT = re.compile(
     r"(?:^|[;:.,]\s*)(?:so )?(?:fix|update|add|implement|run|write|finish)\b|\bstop waiting|\bact on your|\b(?:has |have )?come through|\bcame through|"
     r"\bjust (?:close|fix|ship|merge|update|run|finish)\b|\b(fix (it )?(all|everything)|do (it|everything|all)|go[- ]?ahead|you have (my|the) (sign-?off|approval|ok|okay)|"
-    r"(now|meanwhile|in the meantime),? (close|fix|update|add|run|write|change|finish|merge|ship|commit|do|go)|just do|you decide|your call|hold (is )?lifted|lifted the hold|"
+    r"(now|meanwhile|in the meantime),? (close|fix|update|add|run|write|change|finish|merge|ship|commit|do|go)|just do|you decide|your call|(hold|freeze|block|lock|embargo|wall) (is |has been |was )?(lifted|over|ended|removed|cleared)|lifted the (hold|freeze)|"
     r"carry on|resume|you may proceed|don'?t ask|no questions|"
     r"all approved|use your judg(e)?ment|without asking|make the call|do whatever you (think|want|like)|"
     r"whatever you think (is )?best|up to you)\b", _I)
