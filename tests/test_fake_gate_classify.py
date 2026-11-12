@@ -146,6 +146,30 @@ def test_context_length_checks_do_not_hide_a_required_vault_token():
 
 
 @pytest.mark.parametrize("text", [
+    "Need the vault token for context length validation from secops agent",
+    "Need the vault token for context length monitoring from secops agent",
+    "Need the vault token for context length inspection from secops agent",
+    "Need the vault token for context window proxy service from secops agent",
+    "Need the vault token for context length quota service from secops agent",
+    "Need the vault token for context-length gateway from secops agent",
+    "Need the vault token for context window validation from secops agent",
+])
+def test_capacity_task_nouns_do_not_hide_explicit_vault_credential_requests(text):
+    verdict = classify(text)
+    assert (verdict.cls, verdict.subtype, verdict.confidence) == (WALL, "credentials", 0.9), verdict
+
+
+@pytest.mark.parametrize("text", [
+    "Need the token for context window proxy from platform agent",
+    "Need the token for context window validation from ops agent",
+    "Need a token for context window monitoring from ops agent",
+    "Need the token for context window quota service from ops agent",
+])
+def test_context_capacity_filters_keep_noncapacity_task_requests(text):
+    assert classify(text).cls == WALL
+
+
+@pytest.mark.parametrize("text", [
     "Need a GitHub token for the context API; waiting on reviewer agent to send it",
     "Need tokens for the context API; waiting on reviewer agent to send them",
     "Need an access token for context API; waiting on reviewer agent to send it",

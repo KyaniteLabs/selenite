@@ -250,7 +250,15 @@ def test_redaction_catches_round_seven_secret_shapes(text, secret):
     "bypass: true",
     "pass_rate: 98%",
     "compass: north",
+    "encompass=all",
+    "pass: ok",
+    "pass=true",
+    "smoke pass: yes",
+    "first-pass: done",
+    "2nd_pass=started",
     "signature: Ada",
+    "signature: Ada Lovelace",
+    "signature: please sign the contract",
 ])
 def test_redaction_leaves_noncredential_pass_and_signature_words(text):
     assert ledger.redact(text) == text
@@ -346,3 +354,115 @@ def test_deleted_cards_read_as_missing_only_when_every_board_read(tmp_path):
     bad = tmp_path / "bad.db"
     bad.write_bytes(b"not a database at all, just bytes" * 10)
     assert audit.card_statuses(["t_1", "t_x"], [db, bad], mark_missing=True) == {"t_1": "blocked"}
+
+
+@pytest.mark.parametrize("raw,secret", [
+    ("dbpass=R9_SECRET", "R9_SECRET"),
+    ("DBPASS=R9_SECRET", "R9_SECRET"),
+    ("smtppass: R9_SECRET", "R9_SECRET"),
+    ("adminpw=R9_SECRET", "R9_SECRET"),
+    ("rootpw: R9_SECRET", "R9_SECRET"),
+    ("rootpw --plaintext R9_SECRET", "R9_SECRET"),
+    ("--pw R9_SECRET", "R9_SECRET"),
+    ("-pw R9_SECRET", "R9_SECRET"),
+    ("mypass=R9_SECRET", "R9_SECRET"),
+    ("userpass=R9_SECRET", "R9_SECRET"),
+    ("wifipass=R9_SECRET", "R9_SECRET"),
+    ('{"token": {"access_token": "R9_SECRET"}}', "R9_SECRET"),
+    ("db_secrets = {'password': 'R9_SECRET'}", "R9_SECRET"),
+    ('export AWS_CREDENTIALS={"secret_access_key": "R9_SECRET"}', "R9_SECRET"),
+    ('vault_token: {"client_token": "R9_SECRET"}', "R9_SECRET"),
+    ('secrets: {"db": "R9_SECRET"}', "R9_SECRET"),
+    ('tokens = {"gh": "R9_SECRET"}', "R9_SECRET"),
+    ('auth=("bob", "R9_SECRET")', "R9_SECRET"),
+    ('password: [ "R9_SECRET" ]', "R9_SECRET"),
+    ('env:\n  - name: DB_PASSWORD\n    value: R9_SECRET', "R9_SECRET"),
+])
+def test_round_nine_secret_assignments_never_reach_ledger_rows(raw, secret):
+    assert secret not in ledger.redact(raw)
+    ledger.add("miss", "round-nine-secret", note=raw)
+    row = [r for r in ledger.rows() if r["key"] == "round-nine-secret"][-1]
+    assert secret not in row["note"]
+
+
+@pytest.mark.parametrize("raw", [
+    'client_secret: | # from the vault\n  R9_BLOCK_SECRET',
+    'db_password: |2\n  R9_BLOCK_SECRET',
+    'access_token: |\n  first line\n\n  R9_BLOCK_SECRET',
+    'password: "first\n  R9_QUOTED_SECRET"',
+    "password: 'first\n  R9_SINGLE_QUOTED_SECRET'",
+])
+def test_round_nine_multiline_yaml_values_are_removed_before_persistence(raw):
+    for secret in ("R9_BLOCK_SECRET", "R9_QUOTED_SECRET", "R9_SINGLE_QUOTED_SECRET"):
+        assert secret not in ledger.redact(raw)
+    ledger.add("miss", "round-nine-multiline", note=raw)
+    row = [r for r in ledger.rows() if r["key"] == "round-nine-multiline"][-1]
+    assert not any(secret in row["note"] for secret in (
+        "R9_BLOCK_SECRET", "R9_QUOTED_SECRET", "R9_SINGLE_QUOTED_SECRET"
+    ))
+
+
+@pytest.mark.parametrize("raw,secret", [
+    ("X-Hub-Signature: sha256=R9_SIG", "R9_SIG"),
+    ("x-signature: R9_SIG", "R9_SIG"),
+    ("signature: v1,R9_SIG", "R9_SIG"),
+    ("Authorization: Digest username=bob; realm=r;\nnonce=n;\nresponse=R9_DIGEST", "R9_DIGEST"),
+    ('Authorization: Digest username="bob",\n  response="R9_DIGEST"', "R9_DIGEST"),
+    ("Authorization: Digest username=bob\nrealm=r\nresponse=R9_DIGEST", "R9_DIGEST"),
+    ("curl -sb sid=R9_COOKIE", "R9_COOKIE"),
+    ("https -a bob:R9_HTTP_AUTH", "R9_HTTP_AUTH"),
+    ("http --auth bob:R9_HTTP_AUTH", "R9_HTTP_AUTH"),
+])
+def test_round_nine_signature_digest_and_command_credentials_are_redacted(raw, secret):
+    assert secret not in ledger.redact(raw)
+
+
+@pytest.mark.parametrize("raw", [
+    "signature=required",
+    "signature: Ada",
+    "password is required",
+    "Password is required for SSO",
+    "password is wrong",
+    "the password is not set",
+    "password is expired",
+    "secret is required",
+    "redis-cli --passive",
+    "http check -a failed",
+    "the http check -a failed",
+    "Use auth: [the docs](url)",
+])
+def test_round_nine_benign_auth_words_and_prose_are_preserved(raw):
+    assert ledger.redact(raw) == raw
+
+
+@pytest.mark.parametrize("raw,expected_prefix", [
+    ("the password is: R9_SECRET", "the password is: <secret>"),
+    ("password is now R9_SECRET", "password is now <secret>"),
+    ("password was R9_SECRET", "password was <secret>"),
+    ("password is set to R9_SECRET", "password is set to <secret>"),
+    ("secret is R9_SECRET", "secret is <secret>"),
+    ("token is R9_SECRET", "token is <secret>"),
+    ("pwd is R9_SECRET", "pwd is <secret>"),
+    ("pw is R9_SECRET", "pw is <secret>"),
+    ("api key is R9_SECRET", "api key is <secret>"),
+    ("auth: [WIP} fix the login flow", 'auth: "<secret>" fix the login flow'),
+    ("auth: { follow-up note", 'auth: "<secret>" follow-up note'),
+])
+def test_round_nine_auth_redaction_preserves_neighboring_prose(raw, expected_prefix):
+    redacted = ledger.redact(raw)
+    assert expected_prefix in redacted
+    assert "R9_SECRET" not in redacted
+
+
+@pytest.mark.parametrize("raw", [
+    "bypass: true",
+    "bypass=R9_SECRET",
+    "compass: north",
+    "surpass=the limit",
+])
+def test_run_together_pass_rule_does_not_redact_ordinary_words(raw):
+    assert ledger.redact(raw) == raw
+
+
+def test_rootpw_plaintext_redacts_only_the_password_value():
+    assert ledger.redact("rootpw --plaintext R9_SECRET") == "rootpw --plaintext <secret>"

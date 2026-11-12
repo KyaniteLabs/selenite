@@ -198,13 +198,14 @@ _SHELL_VALUE = r"(?:\"[^\"\r\n]*\"|'[^'\r\n]*'|\S+)"
 _CURL_COOKIE = re.compile(r"(?i)(\bcurl\b" + _CMD_ARGS + r"(?:-H|--header)" + _CMD_SEP + r")"
                          r"(['\"])(cookie\s*:\s*)[^'\"]*\2")
 _CURL_COOKIE_ARG = re.compile(
-    r"(?i)(\bcurl\b" + _CMD_ARGS + r"(?:--cookie|-b)(?:" + _CMD_SEP + r"|=)?)(?:"
+    r"(?i)(\bcurl\b" + _CMD_ARGS + r"(?:--cookie|-[A-Za-z]*b)(?:" + _CMD_SEP + r"|=)?)(?:"
     r'(?P<double_quote>")(?=[^"\r\n]*=)[^"\r\n]*(?P=double_quote)|'
     r"(?P<single_quote>')(?=[^'\r\n]*=)[^'\r\n]*(?P=single_quote)|"
     r"(?=[^\s;|&]*=)[^\s;|&]+)"
 )
 _CURL_USER = re.compile(r"(?i)(\bcurl\b" + _CMD_ARGS + r"(?:--proxy-user|--user|-[A-Za-z]*u)(?:" + _CMD_SEP + r"|=)?)"
                         + _SHELL_VALUE)
+_ROOTPW_PLAINTEXT = re.compile(r"(?i)(\brootpw\s+--plaintext\s+)" + _SHELL_VALUE)
 
 
 def _quoted_secret(match: re.Match[str]) -> str:
@@ -225,15 +226,18 @@ def _redact_key_value(match: re.Match[str]) -> str:
             + match.group("sep") + _quoted_secret(match))
 
 
+_SECRET_KEY = (r"[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|"
+               r"access[_-]?key|private[_-]?key|credentials?|cookies?|sessionid|"
+               r"oauth|auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth)[\w-]*")
 _CREDENTIAL_CONTAINER = re.compile(
-    r"(?i)(?<![\w-])(?P<prefix>[\"']?(?:credentials?|auth(?:entication)?|cookies?)[\"']?\s*[=:]\s*)"
-    r"(?P<open>[\[{])"
+    r"(?i)(?<![\w-])(?P<prefix>[\"']?" + _SECRET_KEY + r"[\"']?\s*[=:]\s*)"
+    r"(?P<open>[\[{(])"
 )
 
 
 def _container_end(text: str, start: int) -> int:
     """End of a bounded JSON/Python-style object or list, including nested values."""
-    pairs = {"{": "}", "[": "]"}
+    pairs = {"{": "}", "[": "]", "(": ")"}
     stack = [pairs[text[start]]]
     quote = ""
     escaped = False
@@ -251,13 +255,15 @@ def _container_end(text: str, start: int) -> int:
             quote = char
         elif char in pairs:
             stack.append(pairs[char])
-        elif char in ("}", "]"):
+        elif char in ("}", "]", ")"):
             if char != stack[-1]:
-                return len(text)
+                end = re.search(r"[\s,;|&]", text[start:])
+                return start + end.start() if end else len(text)
             stack.pop()
             if not stack:
                 return pos + 1
-    return len(text)
+    end = re.search(r"[\s,;|&]", text[start:])
+    return start + end.start() if end else len(text)
 
 
 def _redact_containers(text: str) -> str:
@@ -268,11 +274,61 @@ def _redact_containers(text: str) -> str:
         if match.start() < cursor:
             continue
         end = _container_end(text, match.start("open"))
+        if text[match.start("open")] == "[" and text[end:end + 1] == "(":
+            continue
         out.append(text[cursor:match.start()])
         out.append(match.group("prefix") + '"<secret>"')
         cursor = end
     out.append(text[cursor:])
     return "".join(out)
+
+
+_YAML_SECRET_BLOCK = re.compile(
+    r"(?i)^(?P<prefix>[ \t]*" + _SECRET_KEY + r"\s*:\s*)"
+    r"(?P<header>[|>])(?P<mods>[1-9+-]*)(?:[ \t]+#.*)?[ \t]*(?:\r?\n)?$"
+)
+
+
+def _redact_yaml_blocks(text: str) -> str:
+    """Replace secret YAML block scalars, including blank continuation lines."""
+    lines = text.splitlines(keepends=True)
+    out = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        match = _YAML_SECRET_BLOCK.match(line.rstrip("\r\n"))
+        if not match:
+            out.append(line)
+            i += 1
+            continue
+        parent_indent = len(match.group("prefix")) - len(match.group("prefix").lstrip(" \t"))
+        indent_match = re.search(r"[1-9]", match.group("mods"))
+        content_indent = parent_indent + int(indent_match.group()) if indent_match else None
+        j = i + 1
+        while j < len(lines):
+            body = lines[j].rstrip("\r\n")
+            if not body.strip():
+                j += 1
+                continue
+            indent = len(body) - len(body.lstrip(" \t"))
+            if content_indent is None:
+                if indent <= parent_indent:
+                    break
+                content_indent = indent
+            if indent < content_indent:
+                break
+            j += 1
+        newline = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
+        out.append(match.group("prefix") + "<secret>" + newline)
+        i = j
+    return "".join(out)
+
+
+_K8S_SECRET_VALUE = re.compile(
+    r"(?im)(?P<prefix>\bname\s*:\s*[\"']?" + _SECRET_KEY + r"[\"']?\s*\r?\n"
+    r"[ \t]+value\s*:\s*)(?P<value>\"(?:\\.|[^\"\\\r\n])*\"|"
+    r"'(?:\\.|[^'\\\r\n])*'|[^\s#]+)"
+)
 
 
 # Redaction runs on every key and note the ledger writes, and on miner samples. Order matters:
@@ -299,26 +355,30 @@ _REDACT = [
                 r"(?:(?P<double_quote>\")(?:\\.|[^\"\\\r\n])*(?P=double_quote)|"
                 r"(?P<single_quote>')(?:\\.|[^'\\\r\n])*(?P=single_quote)|"
                 r"Digest[ \t]+[\w-]+=(?:\"(?:\\.|[^\"\\\r\n])*\"|[^,\s\"']+)"
-                r"(?:(?:,[ \t]*|[ \t]+)[\w-]+=(?:\"(?:\\.|[^\"\\\r\n])*\"|[^,\s\"']+))*|"
+                r"(?:(?:[ \t]*[,;][ \t]*(?:\r?\n[ \t]*)?|[ \t]+|\r?\n[ \t]*)[\w-]+="
+                r"(?:\"(?:\\.|[^\"\\\r\n])*\"|[^,\s\"']+))*|"
                 r"[^\s\"']+(?:[ \t]+[^\s\"']+)?)"),
      _redact_authorization),
     # Keep the quoted shell argument intact before the Cookie rule sees it.
     (_CURL_COOKIE, r"\1\2\3<secret>\2"),
     (_CURL_COOKIE_ARG, _redact_curl_cookie_arg),
-    # YAML block scalars put the secret after the key's first line.
-    (re.compile(r"(?im)(?P<key>(?<!\w)[\w-]{0,64}(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key)[\w-]{0,64}\s*:\s*)"
-                r"[|>][-+]?\s*\r?\n(?P<indent>[ \t]+)[^\r\n]*(?:\r?\n(?P=indent)[^\r\n]*)*"),
-     r"\g<key><secret>"),
-    (re.compile(r"(?i)(?<![\w-])(?:(?P<flag>-{1,2})|(?<!-))(?P<key>(?:[\w-]{1,64}[-_])?(?:pass|pw))"
-                r"(?P<key_quote>[\"']?)(?P<sep>\s*[=:]\s*)"
+    (_ROOTPW_PLAINTEXT, r"\1<secret>"),
+    (re.compile(r"(?i)(?<![\w-])(?:(?P<flag>-{1,2})|(?<!-))(?P<key>(?!(?:bypass|compass|encompass|surpass|overpass|underpass|trespass|sshpass|rootpw(?=\s+--plaintext))\b)"
+                r"(?:[A-Za-z0-9]{0,32}(?:pass|pw)|[\w-]{1,64}[-_](?:pass|pw)))"
+                r"(?P<key_quote>[\"']?)(?P<sep>\s*(?:[=:]\s*|\s+))"
+                r"(?!(?:[\"']?(?:is|was|now)\b|[\"']?(?:true|false|yes|no|ok|done|started|pending|n/a|passed|success|successful|required|missing|not applicable)[\"']?(?=\s*(?:$|[\s,;}\]]|#))|\d+\s+of\s+\d+\s+checks?\b))"
                 r"(?!(?:[\"']?(?:bearer|basic|token)\s+<token>|[\"']?<secret>))"
-                r"(?:(?P<double_quote>\")(?:\\.|[^\"\\\r\n])*(?P=double_quote)|"
-                r"(?P<single_quote>')(?:\\.|[^'\\\r\n])*(?P=single_quote)|\S+)"),
+                r"(?:(?P<double_quote>\")(?:\\.|[^\"\\])*?(?P=double_quote)|"
+                r"(?P<single_quote>')(?:\\.|[^'\\])*?(?P=single_quote)|\S+)"),
      _redact_key_value),
-    (re.compile(r"(?i)(?<![\w-])(?:(?P<flag>-{1,2})|(?<!-))(?P<key>signature)"
+    (re.compile(r"(?i)(?<![\w-])(?:(?P<flag>-{1,2})|(?<!-))(?P<key>[\w-]*signature)"
                 r"(?P<key_quote>[\"']?)(?P<sep>\s*[=:]\s*)"
-                r"(?:(?P<double_quote>\")[A-Za-z0-9_+/=-]{8,}(?P=double_quote)|"
-                r"(?P<single_quote>')[A-Za-z0-9_+/=-]{8,}(?P=single_quote)|[A-Za-z0-9_+/=-]{8,})"),
+                r"(?!(?:[\"']?required\b))"
+                r"(?:(?P<double_quote>\")(?:\\.|[^\"\\])*?(?P=double_quote)|"
+                r"(?P<single_quote>')(?:\\.|[^'\\])*?(?P=single_quote)|"
+                r"(?:(?:sha(?:1|256|384|512)|v\d+)[=:,]\s*[A-Za-z0-9_+/=-]+|"
+                r"[A-Za-z0-9_+/=-]{8,}|(?=[A-Za-z0-9_+/=-]*[0-9_+/=-])[A-Za-z0-9_+/=-]+|"
+                r"[A-Za-z0-9_+/=-])(?![A-Za-z0-9_+/=-]))"),
      _redact_key_value),
     # key=value / key: value. A value the bearer rule already replaced keeps its scheme word, so
     # "Authorization: Bearer <token>" stays readable.
@@ -328,14 +388,19 @@ _REDACT = [
                 r"sshpass|"
                 r"[\w-]*(?:oauth|auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth)(?:[-_][\w-]+)?|authorization|authentication))"
                 r"(?P<key_quote>[\"']?)(?P<sep>\s*[=:]\s*)"
+                r"(?![\[{(])"
                 r"(?![\"']?required[\"']?(?=\s*(?:$|[\r\n,}\]]|#)))"
                 r"(?!(?:[\"']?(?:bearer|basic|token)\s+<token>|[\"']?<secret>))"
-                r"(?:(?P<double_quote>\")(?:\\.|[^\"\\\r\n])*(?P=double_quote)|"
-                r"(?P<single_quote>')(?:\\.|[^'\\\r\n])*(?P=single_quote)|\S+)"),
+                r"(?:(?P<double_quote>\")(?:\\.|[^\"\\])*(?P=double_quote)|"
+                r"(?P<single_quote>')(?:\\.|[^'\\])*(?P=single_quote)|\S+)"),
      _redact_key_value),
-    (re.compile(r"(?i)\b(password|passphrase|passwd)(\s+)is(\s+)\S+"), r"\1\2is\3<secret>"),
+    (re.compile(r"(?i)(?P<key>\b(?:password|passphrase|passwd|pwd|pw|secret|token|(?:api|access|private)\s+key))"
+                r"(?P<prefix>\s+(?:(?:is|was)\s+(?:(?:now|set\s+to)\s+)?|now\s+|(?:is|was|now)\s*:\s*))"
+                r"(?!(?:required|wrong|missing|expired|not\s+set|unset|unknown|unavailable)\b)\S+"),
+     r"\g<key>\g<prefix><secret>"),
     # "password hunter2" with no separator; a plain word ("password reset") is left alone.
-    (re.compile(r"(?i)\b(password|passphrase|passwd)(\s+)(?!<secret>)(?=\S*[^\sA-Za-z])\S+"), r"\1\2<secret>"),
+    (re.compile(r"(?i)\b(password|passphrase|passwd)(\s+)(?!<secret>)(?!(?:is|was|now|required|wrong|missing|not)\b)(?=\S*[^\sA-Za-z])\S+"),
+     r"\1\2<secret>"),
     # curl and mysql credentials. _CMD_ARGS bounds each scan to one command, so text with
     # many "curl" words stays linear-time.
     (_CURL_USER, r"\1<secret>"),
@@ -347,10 +412,10 @@ _REDACT = [
     (re.compile(r"(?i)(\b(?:docker|podman)\b" + _CMD_ARGS + r"login\b" + _CMD_ARGS + r"(?:-p|--password)(?:" + _CMD_SEP + r"|=)?)"
                 + _SHELL_VALUE),
      r"\1<secret>"),
-    (re.compile(r"(?i)(\bredis-cli\b" + _CMD_ARGS + r"(?:-a|--pass(?:word)?)(?:" + _CMD_SEP + r"|=)?)"
+    (re.compile(r"(?i)(\bredis-cli\b" + _CMD_ARGS + r"(?:-a|--pass(?:word)?)(?=" + _CMD_SEP + r"|=)(?:" + _CMD_SEP + r"|=))"
                 + _SHELL_VALUE),
      r"\1<secret>"),
-    (re.compile(r"(?i)(\bhttp\b" + _CMD_ARGS + r"-a(?:" + _CMD_SEP + r"|=)?)" + _SHELL_VALUE),
+    (re.compile(r"(?i)(\bhttps?\b" + _CMD_ARGS + r"(?:-a|--auth)(?=" + _CMD_SEP + r"|=)(?:" + _CMD_SEP + r"|=))(?=[^\s;|&]*:)" + _SHELL_VALUE),
      r"\1<secret>"),
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "<token>"),
     (re.compile(r"\b(?:sk-proj-|sk-|ghp_|gho_|ghs_|ghu_|github_pat_|xox[abprs]-|glpat-)[A-Za-z0-9_\-]{8,}"), "<token>"),
@@ -395,6 +460,8 @@ def _bounded_prefix(text: str) -> str:
 
 def redact(text: str) -> str:
     text = _bounded_prefix(str(text)).replace(str(Path.home()), "~")
+    text = _redact_yaml_blocks(text)
+    text = _K8S_SECRET_VALUE.sub(lambda m: m.group("prefix") + "<secret>", text)
     text = _redact_containers(text)
     has_command_option = "-" in text
     for pat, sub in _REDACT:
