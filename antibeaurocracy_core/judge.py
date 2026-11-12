@@ -21,7 +21,8 @@ from .classify import FAKE
 
 CLASSES = ("WALL", "HUMAN", "MACHINERY", "DEPENDENCY", "FAKE")
 _CLASS = "|".join(CLASSES)
-_ANSWER_LINE = re.compile(r"^\s*ANSWER\s*:\s*\**(" + _CLASS + r")\b", re.I | re.M)
+_ANSWER_LINE = re.compile(r"^[\s>*_-]*\**ANSWER\s*:\s*\**\s*(" + _CLASS + r")\b",
+                          re.IGNORECASE | re.MULTILINE)
 _BARE = re.compile(r"\W*(" + _CLASS + r")\W*", re.I)
 _THINK = re.compile(r"<think(?:ing)?>.*?(?:</think(?:ing)?>|\Z)", re.I | re.S)
 

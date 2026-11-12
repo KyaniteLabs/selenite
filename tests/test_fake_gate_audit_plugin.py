@@ -640,6 +640,17 @@ def test_judge_parse_phrasings():
     assert judge.parse("ANSWER: MAYBE") == ""
 
 
+@pytest.mark.parametrize("out", [
+    "**ANSWER:** FAKE",
+    "**ANSWER: FAKE**",
+    "- ANSWER: FAKE",
+    "> ANSWER: FAKE",
+])
+def test_judge_parse_accepts_markdown_answer_lines(out):
+    from antibeaurocracy_core import judge
+    assert judge.parse(out) == "FAKE"
+
+
 def test_judge_lists_disagreements_only(tmp_path):
     from antibeaurocracy_core import judge
     _board(tmp_path)

@@ -75,6 +75,11 @@ def test_bare_words_are_not_walls():
     assert classify("Waiting for sign-off from product on the budget line wording").cls == FAKE
 
 
+def test_api_token_for_hyphenated_context_service_remains_a_credential_wall():
+    text = "Need the API token for context-service from the ops agent"
+    assert classify(text).cls == WALL
+
+
 def test_wall_beats_fake():
     assert classify("Awaiting approval from Product; push=false for the bot").cls == WALL
 
