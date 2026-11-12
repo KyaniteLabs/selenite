@@ -1,7 +1,7 @@
 """Round-2 review findings (opus audit of eefe94e) as regression tests."""
 import pytest
 
-from tests.test_anticowardice import Ctx, _history, _rows, _setup, cow
+from test_anticowardice import Ctx, _history, _rows, _setup, cow
 from anticowardice_core.detect import ToolCall, Turn, analyze
 
 
