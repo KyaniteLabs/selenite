@@ -7,7 +7,7 @@ import {
   ROUTES_AREA, SIDEBAR_NAV_AREA, STATUSBAR_AREAS, SegmentedControl, Skeleton, Tip,
   ToggleRow, atom, host, relativeTime, useMutation, usePluginI18n, useQuery, useQueryClient, useValue
 } from '@hermes/plugin-sdk'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 
 const ID = 'selenite'
@@ -35,6 +35,8 @@ ${Object.entries(FONTS).map(([w, b]) => `@font-face{font-family:'${FACE}';font-s
   --sel-display:'${FACE}',var(--font-sans,system-ui,sans-serif);font-family:var(--font-sans,system-ui,sans-serif);font-size:13px;line-height:1.45;color:var(--ui-text-primary);
   box-sizing:border-box;width:100%;max-width:1120px;margin:0 auto;padding:24px 28px 48px;display:flex;flex-direction:column;gap:20px}
 .sel *,.sel *::before,.sel *::after{box-sizing:border-box}
+.sel [data-selenite-view]:focus,.sel [data-selenite-item]:focus{outline:2px solid var(--ui-accent);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.sel *,.sel *::before,.sel *::after,.sel-host *,.sel-chip{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 .sel-head{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px}
 .sel-mark{display:flex;align-items:center;gap:10px;margin-right:auto}
 .sel-word{margin:0;font-family:var(--sel-display);font-weight:600;font-size:20px;letter-spacing:.06em;line-height:1;text-transform:uppercase}
@@ -305,20 +307,54 @@ function keyed(list, f) {
 const fail = what => err => host.notifyError(err, what)
 const Retry = ({ onClick, t }) => jsx(Button, { size: 'sm', variant: 'secondary', onClick, children: t('err.retry') })
 
+const VIEWS = ['overview', 'load', 'totals', 'cleanse', 'gates', 'fake-gates', 'evolve', 'signals', 'ledger']
+const KINDS = ['gate', 'calm', 'audit', 'cleanse', 'approval', 'blocked', 'miss', 'fp', 'fix', 'reopen']
+const ITEM_ID = /^[A-Za-z0-9_:-]{1,80}$/
+function validPaneEvent(name, p) {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false
+  const keys = Object.keys(p)
+  if (name === 'view.set') return VIEWS.includes(p.view)
+    && keys.every(k => ['view', 'item_id'].includes(k))
+    && (!Object.hasOwn(p, 'item_id') || (typeof p.item_id === 'string' && ITEM_ID.test(p.item_id)))
+  if (name === 'ledger.updated') return keys.length === 1 && KINDS.includes(p.kind)
+  if (name === 'cleanse.updated') return keys.length === 1 && Number.isInteger(p.count) && p.count >= 0 && p.count <= 1_000_000
+  return name === 'proposal.updated' && keys.length === 0
+}
+
 // --- page ------------------------------------------------------------------
 
-function SelenitePage({ ctx, prefs, update, refreshStatus }) {
+function SelenitePage({ ctx, prefs, pane, update, refreshStatus }) {
   const t = useT()
   const ago = ts => (ts ? relativeTime(ts * 1000) : t('never'))
   // Ledger kinds in words; an unknown kind shows as logged.
   const kindLabel = k => { const v = t(`kinds.${k}`); return !v || v === `kinds.${k}` ? k : v }
   const { days } = useValue(prefs)
+  const target = useValue(pane)
+  const root = useRef(null)
+  const focused = useRef(null)
   const qc = useQueryClient()
-  const overview = useQuery({ queryKey: [ID, 'overview', days], queryFn: () => ctx.rest(`/overview?days=${days}`), refetchInterval: 30_000 })
-  const events = useQuery({ queryKey: [ID, 'events', days], queryFn: () => ctx.rest(`/events?days=${days}&limit=40`), refetchInterval: 30_000 })
-  const proposal = useQuery({ queryKey: [ID, 'proposal'], queryFn: () => ctx.rest('/proposal') })
-  const cleanse = useQuery({ queryKey: [ID, 'cleanse'], queryFn: () => ctx.rest('/cleanse') })
-  const fake = useQuery({ queryKey: [ID, 'fake', days], queryFn: () => ctx.rest(`/fake-gates/overview?days=${Math.min(days, 90)}&top=6`), refetchInterval: 60_000 })
+  // Each live event gets a new cache generation: an older in-flight REST reply
+  // can only populate its old key, never overwrite the event's refreshed data.
+  const overview = useQuery({ queryKey: [ID, 'overview', days, target.revision], queryFn: () => ctx.rest(`/overview?days=${days}`), refetchInterval: 30_000, placeholderData: prev => prev })
+  const events = useQuery({ queryKey: [ID, 'events', days, target.revision], queryFn: () => ctx.rest(`/events?days=${days}&limit=40`), refetchInterval: 30_000, placeholderData: prev => prev })
+  const proposal = useQuery({ queryKey: [ID, 'proposal', target.revision], queryFn: () => ctx.rest('/proposal'), placeholderData: prev => prev })
+  const cleanse = useQuery({ queryKey: [ID, 'cleanse', target.revision], queryFn: () => ctx.rest('/cleanse'), placeholderData: prev => prev })
+  const fake = useQuery({ queryKey: [ID, 'fake', days, target.revision], queryFn: () => ctx.rest(`/fake-gates/overview?days=${Math.min(days, 90)}&top=6`), refetchInterval: 60_000, placeholderData: prev => prev })
+  useEffect(() => {
+    if (!target.view || !overview.data) return
+    const section = target.view === 'overview' ? root.current
+      : root.current?.querySelector(`[data-selenite-view="${target.view}"]`)
+    if (!section) return
+    // Compare data attributes as strings; item ids are never CSS selectors.
+    const item = target.item_id && [...section.querySelectorAll('[data-selenite-item]')]
+      .find(el => el.dataset.seleniteItem === target.item_id)
+    const el = item || section
+    if (focused.current?.request === target.focusRevision && focused.current?.el === el) return
+    el.scrollIntoView({ block: 'center' })
+    el.focus({ preventScroll: true })
+    focused.current = { request: target.focusRevision, el }
+    pane.set({ ...pane.get(), view: null, item_id: null })
+  }, [target, overview.data, events.data, proposal.data, cleanse.data, fake.data])
   const refresh = () => { qc.invalidateQueries({ queryKey: [ID] }); refreshStatus() }
   const log = (kind, key, note) => ctx.rest('/events', { method: 'POST', body: { kind, key, note } })
   const markFix = useMutation({
@@ -331,7 +367,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
   })
   const sweep = useMutation({ mutationFn: () => ctx.rest(`/cleanse?days=${days}`, { method: 'POST' }), onSuccess: refresh, onError: fail(t('err.cleanse')) })
   const draft = useMutation({ mutationFn: () => ctx.rest(`/proposal?days=${days}`, { method: 'POST' }).then(r => { if (r?.error) throw new Error(r.error); return r }), onSuccess: refresh, onError: fail(t('err.draft')) })
-  const shell = children => jsx('div', { className: 'sel-host', children: jsx('div', { className: 'sel', children }) })
+  const shell = children => jsx('div', { className: 'sel-host', children: jsx('div', { className: 'sel', ref: root, tabIndex: -1, children }) })
 
   const head = jsxs('header', { className: 'sel-head', children: [
     jsxs('div', { className: 'sel-mark', children: [
@@ -373,7 +409,8 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
     jsxs('div', { className: 'sel-num', children: [n ?? 0, sub && jsx('small', { children: sub })] }),
     k ? jsx(Spark, { series, k }) : jsx('div', { className: 'sel-sub', style: { marginTop: 0, minHeight: 24 }, children: gates.length ? t('stats.fixedOf', gates.filter(g => g.fixed).length, gates.length) : t('stats.noneToFix') })
   ] })
-  const sec = (id, title, sub, body) => jsxs('section', { className: 'sel-card sel-sec', 'aria-labelledby': id, children: [
+  const sectionView = { 'sel-cleanse-h': 'cleanse', 'sel-gates-h': 'gates', 'sel-fake-h': 'fake-gates', 'sel-evolve-h': 'evolve', 'sel-sig-h': 'signals', 'sel-ledger-h': 'ledger' }
+  const sec = (id, title, sub, body) => jsxs('section', { className: 'sel-card sel-sec', 'aria-labelledby': id, 'data-selenite-view': sectionView[id], tabIndex: -1, children: [
     jsxs('div', { className: 'sel-sec-head', children: [jsx('h2', { id, className: 'sel-label', children: title }), sub && jsx('span', { className: 'sel-sub', style: { marginTop: 0 }, children: sub })] }),
     ...body
   ] })
@@ -390,7 +427,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
         ? jsx('p', { className: 'sel-load-why', style: { margin: 0 }, children: t('cleanse.about') }, 'a')
         : !top
           ? jsxs('p', { className: 'sel-inline', children: [jsx('span', { className: 'sel-fixed', children: t('cleanse.clean') })] }, 'c')
-          : jsxs('div', { className: 'sel-next', children: [
+          : jsxs('div', { className: 'sel-next', 'data-selenite-item': top.check, tabIndex: -1, children: [
               jsxs('div', { className: 'sel-next-top', children: [jsx('h3', { className: 'sel-label', style: { color: 'var(--ui-text-primary)' }, children: t('cleanse.clearNext') }), jsx('span', { className: 'sel-tag', children: top.stone })] }),
               jsxs('div', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }, children: [
                 jsx('p', { className: 'sel-next-problem', children: top.problem }),
@@ -401,7 +438,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
             ] }, 'n'),
     finds.length > 1 && jsxs('div', { className: 'sel-sec', style: { gap: 6 }, children: [
       jsx('h3', { className: 'sel-label', children: t('cleanse.more') }),
-      jsx('ol', { className: 'sel-rows', children: keyed(finds.slice(1, 6), f => `${f.stone}-${f.where}-${f.check}`).map(([k, f]) => jsxs('li', { className: 'sel-find', children: [
+      jsx('ol', { className: 'sel-rows', children: keyed(finds.slice(1, 6), f => `${f.stone}-${f.where}-${f.check}`).map(([k, f]) => jsxs('li', { className: 'sel-find', 'data-selenite-item': f.check, tabIndex: -1, children: [
         jsx('span', { className: 'sel-tag', children: f.stone }),
         jsxs('div', { style: { minWidth: 0 }, children: [jsx('div', { style: { fontSize: 12.5 }, children: f.problem }), jsx('div', { className: 'sel-key sel-note', style: { fontSize: 11.5 }, children: f.where })] }),
         jsx('span', { className: 'sel-count', children: Number(f.interruptions) > 0 ? `×${f.interruptions}` : '' })
@@ -425,7 +462,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
             fg.summary?.headline ? jsx('p', { className: 'sel-load-why', style: { margin: 0 }, children: fg.summary.headline }, 'h') : null,
             fgCards.length === 0
               ? jsx('p', { className: 'sel-inline', children: t('fake.none') }, 'e')
-              : jsx('ol', { className: 'sel-rows', children: fgCards.map(c => jsxs('li', { className: 'sel-fg', children: [
+              : jsx('ol', { className: 'sel-rows', children: fgCards.map(c => jsxs('li', { className: 'sel-fg', 'data-selenite-item': c.id, tabIndex: -1, children: [
                   jsx('span', { className: 'sel-fg-title', title: c.title || c.id, children: c.title || c.id }),
                   jsx('span', { className: 'sel-tag', children: c.label }),
                   jsxs('span', { className: 'sel-when', style: { textAlign: 'right' }, children: [jsx('span', { 'aria-hidden': true, children: t('fake.age', c.age_h) }), jsx('span', { className: 'sel-sr', children: t('fake.ageLong', c.age_h) })] })
@@ -434,15 +471,11 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
   ])
   const prop = proposal.data?.proposal
 
-  // A fresh install has no ledger yet; Cleanse and the board audit still work.
-  if (!o.has_ledger) {
-    return shell([head, warn, jsx('div', { className: 'sel-card', children: jsx(EmptyState, { title: t('empty.title'), description: t('empty.body') }) }, 'e'), cleanseSec, fakeSec])
-  }
-
   return shell([
     head,
     warn,
-    jsxs('section', { className: 'sel-card sel-load', 'data-load': lk, 'aria-labelledby': 'sel-load-h', children: [
+    !o.has_ledger && jsx('div', { className: 'sel-card', children: jsx(EmptyState, { title: t('empty.title'), description: t('empty.body') }) }, 'e'),
+    jsxs('section', { className: 'sel-card sel-load', 'data-load': lk, 'aria-labelledby': 'sel-load-h', 'data-selenite-view': 'load', tabIndex: -1, children: [
       jsx(Meter, { load: lk }),
       jsxs('div', { style: { minWidth: 0 }, children: [
         jsxs('h2', { id: 'sel-load-h', className: 'sel-load-state', style: { margin: 0 }, children: [t('load.prefix'), jsx('span', { children: t(`load.${lk}`) })] }),
@@ -452,7 +485,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
     ] }),
     // Announced only when the load word changes, never on each 30 s refetch.
     jsx(LoadAnnouncer, { text: `${t('load.prefix')}${t(`load.${lk}`)}` }),
-    jsxs('section', { className: 'sel-stats', 'aria-label': t('stats.label'), children: [
+    jsxs('section', { className: 'sel-stats', 'aria-label': t('stats.label'), 'data-selenite-view': 'totals', tabIndex: -1, children: [
       stat(t('stats.gates'), tot.gates, 'gate', t('stats.kinds', gates.length)),
       stat(t('stats.approvals'), tot.approvals, 'approval'),
       stat(t('stats.calm'), tot.calm, 'calm'),
@@ -462,7 +495,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
     jsxs('div', { className: 'sel-cols', children: [
       sec('sel-gates-h', t('gates.title'), t('gates.sub'), [gates.length === 0
         ? jsx(EmptyState, { title: t('empty.gatesTitle'), description: t('empty.gatesBody') }, 'e')
-        : jsx('ol', { className: 'sel-rows', children: gates.slice(0, 10).map((g, i) => jsxs('li', { className: 'sel-row', children: [
+        : jsx('ol', { className: 'sel-rows', children: gates.slice(0, 10).map((g, i) => jsxs('li', { className: 'sel-row', 'data-selenite-item': g.key, tabIndex: -1, children: [
             jsx('span', { className: 'sel-rank', 'aria-hidden': true, children: i + 1 }),
             jsxs('div', { style: { minWidth: 0 }, children: [
               jsx('div', { className: 'sel-key', children: g.key }),
@@ -490,7 +523,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
         ]),
         sec('sel-sig-h', t('signals.title'), t('signals.sub'), [
           jsx('ul', { className: 'sel-sigs', children: Object.entries(o.signals ?? {}).map(([k, n]) => jsxs('li', {
-            className: 'sel-sig', 'data-silent': n ? undefined : '', children: [k.replace(/_/g, ' '), jsx('b', { children: n }), n ? null : jsx('span', { children: `(${t('signals.silent')})` })]
+            className: 'sel-sig', 'data-silent': n ? undefined : '', 'data-selenite-item': k, tabIndex: -1, children: [k.replace(/_/g, ' '), jsx('b', { children: n }), n ? null : jsx('span', { children: `(${t('signals.silent')})` })]
           }, k)) }, 's')
         ])
       ] })
@@ -500,7 +533,7 @@ function SelenitePage({ ctx, prefs, update, refreshStatus }) {
         ? jsxs('p', { className: 'sel-inline', role: 'alert', children: [t('err.ledger'), jsx(Retry, { t, onClick: () => events.refetch() })] }, 'x')
         : evs.length === 0 && events.data
           ? jsx('p', { className: 'sel-inline', children: t('empty.ledger') }, 'e')
-          : jsx('ul', { className: 'sel-rows', children: keyed(evs, e => `${e.ts}-${e.kind}-${e.key}`).map(([k, e]) => jsxs('li', { className: 'sel-ev', children: [
+          : jsx('ul', { className: 'sel-rows', children: keyed(evs, e => `${e.ts}-${e.kind}-${e.key}`).map(([k, e]) => jsxs('li', { className: 'sel-ev', 'data-selenite-item': e.key, tabIndex: -1, children: [
               jsx('span', { className: 'sel-dot', 'data-k': e.kind, 'aria-hidden': true }),
               jsx('span', { className: 'sel-kind', children: kindLabel(e.kind) }),
               jsx('span', { className: 'sel-key', children: e.key }),
@@ -529,7 +562,7 @@ function Chip({ prefs, status }) {
   const tip = t('chip.status', t(`load.${loadKey(s.load)}`).toLowerCase(), open)
   // Name says what it does; the tooltip (announced as the description) says the state.
   return jsx(Tip, { label: tip, children: jsxs('button', {
-    type: 'button', className: STATUSBAR_BTN, 'aria-label': t('chip.open'), onClick: () => host.navigate(PATH),
+    type: 'button', className: STATUSBAR_BTN + ' sel-chip', 'aria-label': t('chip.open'), onClick: () => host.navigate(PATH),
     children: [jsx(Blade, { size: 12 }), chipStyle === 'count' && open ? jsx('span', { className: 'sel-chip-n', children: open }) : null]
   }) })
 }
@@ -584,10 +617,14 @@ export default {
     // One small poll feeds the chip and the Kanban badges (decorate() must be
     // synchronous). The page keeps its own window-sized queries.
     const status = atom(null)
+    const pane = atom({ view: null, item_id: null, revision: 0, focusRevision: 0 })
+    let statusRequest = 0
+    ctx.onDispose(() => { statusRequest++ })
     const pull = () => {
+      const request = ++statusRequest
       const { showChip, kanbanBadges } = prefs.get()
       if (!showChip && !kanbanBadges) return Promise.resolve()
-      return ctx.rest('/status').then(s => { if (s && typeof s === 'object') status.set(s) }, () => {})
+      return ctx.rest('/status').then(s => { if (request === statusRequest && s && typeof s === 'object') status.set(s) }, () => {})
     }
     pull()
     ctx.setInterval(pull, 60_000)
@@ -600,8 +637,24 @@ export default {
     if (typeof unlisten === 'function') ctx.onDispose(unlisten)
     const blocked = () => new Set(status.get()?.blocked_tasks ?? [])
 
+    // Listen while the plugin is enabled, even away from its route, so show can
+    // open the page. The host removes listeners when this plugin unmounts.
+    if (typeof host.onEvent === 'function') {
+      for (const name of ['ledger.updated', 'cleanse.updated', 'proposal.updated', 'view.set']) {
+        const dispose = host.onEvent(`plugin.${ID}.${name}`, ({ payload } = {}) => {
+          if (!validPaneEvent(name, payload)) return
+          const prev = pane.get()
+          pane.set({ ...prev, revision: prev.revision + 1,
+            ...(name === 'view.set' ? { view: payload.view, item_id: payload.item_id || null, focusRevision: prev.focusRevision + 1 } : {}) })
+          pull()
+          if (name === 'view.set') host.navigate(PATH)
+        })
+        if (typeof dispose === 'function') ctx.onDispose(dispose)
+      }
+    }
+
     ctx.registerMany([
-      { id: 'page', area: ROUTES_AREA, data: { path: PATH }, render: () => jsx(SelenitePage, { ctx, prefs, update, refreshStatus: pull }) },
+      { id: 'page', area: ROUTES_AREA, data: { path: PATH }, render: () => jsx(SelenitePage, { ctx, prefs, pane, update, refreshStatus: pull }) },
       { id: 'nav', area: SIDEBAR_NAV_AREA, data: { path: PATH, label: tNow('name'), codicon: 'wand' } },
       { id: 'chip', area: STATUSBAR_AREAS.right, order: 105, render: () => jsx(Chip, { prefs, status }) },
       { id: 'open', area: PALETTE_AREA, data: { id: 'selenite.open', label: tNow('palette.open'), keywords: ['friction', 'gate', 'calm', 'ledger'], run: () => host.navigate(PATH) } },

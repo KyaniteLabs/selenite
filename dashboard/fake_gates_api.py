@@ -90,11 +90,16 @@ router = APIRouter()
 
 def _boards(settings: dict) -> list:
     home = _home()
-    key = (str(home), repr(sorted(settings.items())))  # a settings change re-audits, like a home change
     with _audit_lock:
+        core = _core()
+        plugin = importlib.import_module(f"{core.__name__}.plugin")
+        candidates = [Path(db) for db in plugin._kanban_dbs(None)]
+        locations = tuple((str(db.resolve()), db.is_file()) for db in candidates)
+        dbs = [db for db in candidates if db.is_file()]
+        key = (str(home), locations, repr(sorted(settings.items())))
         if _audit_cache["home"] != key or _audit_cache["boards"] is None or time.time() - _audit_cache["ts"] > AUDIT_TTL:
-            audit = _core().audit
-            _audit_cache.update(ts=time.time(), home=key, boards=[audit.audit_board(db) for db in audit.find_boards([home])])
+            audit = core.audit
+            _audit_cache.update(ts=time.time(), home=key, boards=[audit.audit_board(db) for db in dbs])
         return _audit_cache["boards"]
 
 

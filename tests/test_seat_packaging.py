@@ -15,13 +15,14 @@ D4 install.sh --hermes: the Hermes CLI step (which may first complete a code
 """
 import errno
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from conftest import REPO, cleanse, ledger
+from conftest import NON_ROOT_ONLY, REPO, cleanse, ledger
 
 INSTALL = REPO / "install.sh"
 
@@ -116,7 +117,7 @@ def test_ledger_add_gives_up_quietly_when_every_state_folder_is_read_only(tmp_pa
 
 # --- D2: install.sh, read-only and broken targets ---------------------------
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores permission bits; a read-only home needs a non-root runner")
+@NON_ROOT_ONLY
 def test_install_skips_a_read_only_target_and_keeps_going(tmp_path):
     home = tmp_path / "home"
     (home / ".claude").mkdir(parents=True)
@@ -171,6 +172,19 @@ def test_install_reuses_the_installed_copy_instead_of_a_second_source(tmp_path):
     assert str(other) not in (home / ".hermes/plugins/selenite").readlink().parent.as_posix()
 
 
+def test_install_warns_when_the_reused_copy_differs(tmp_path):
+    """The reused copy is what Hermes loads: a stale one must not win silently (dogfood 2026-11-11)."""
+    home = tmp_path / "home"
+    installed = home / ".local/share/selenite"
+    installed.mkdir(parents=True)
+    (installed / "plugin.yaml").write_text("name: selenite\n")  # an old copy: nothing else matches
+
+    done = _install(home, "--hermes", "--no-enable")
+
+    assert done.returncode == 0, done.stderr  # a warning, never a failed install
+    assert f"warn  {installed} differs from this checkout" in done.stderr
+
+
 def test_install_links_a_first_copy_without_naming_a_reuse(tmp_path):
     home = tmp_path / "home"
     (home / ".claude").mkdir(parents=True)
@@ -223,8 +237,15 @@ def test_no_enable_never_calls_the_hermes_cli(tmp_path):
 def test_pyproject_does_not_make_hermes_ask_for_dependency_consent():
     """A [build-system] table reads to Hermes as 'installs Python packages', so a
     headless `hermes plugins install` stops at a consent question and stays disabled."""
-    tomllib = pytest.importorskip("tomllib")  # 3.11+; the 3.10 CI leg skips
-    doc = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
+    text = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
+    try:
+        import tomllib  # 3.11+
+    except ImportError:  # 3.10 has no TOML parser: check the same three facts as text, never skip
+        assert not re.search(r"(?m)^\[build-system\]", text)
+        assert not re.search(r"(?m)^(optional-dependencies|\[project\.optional-dependencies\]|\[dependency-groups\])", text)
+        assert re.search(r"(?m)^dependencies\s*=\s*\[\s*\]", text)
+        return
+    doc = tomllib.loads(text)
     assert "build-system" not in doc
     assert doc["project"]["dependencies"] == []
     assert not doc["project"].get("optional-dependencies") and "dependency-groups" not in doc

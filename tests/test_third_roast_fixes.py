@@ -10,11 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from conftest import REPO, cleanse, evolve, ledger, mine
+from conftest import NON_ROOT_ONLY, REPO, cleanse, evolve, ledger, mine
 from test_fake_gate_audit_plugin import RELAY, _load_plugin, _selenite
-
-ROOT_ONLY = pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores read-only folders")
-
 
 def _status_db(home: Path, cards: dict[str, str], kinds: dict[str, str] | None = None) -> Path:
     db = home / "kanban" / "boards" / "demo" / "kanban.db"
@@ -97,7 +94,7 @@ def test_the_stored_kind_wins_over_the_echoed_kind(tmp_path, monkeypatch):
 
 # 6. Bookkeeping never breaks a turn, even on a read-only home.
 
-@ROOT_ONLY
+@NON_ROOT_ONLY
 def test_a_read_only_home_never_raises_from_the_facet(tmp_path, monkeypatch):
     mod, _ = _load_plugin(tmp_path, monkeypatch, name="sel_ro")
     ro = tmp_path / "ro"
@@ -166,7 +163,7 @@ def test_miner_reports_land_in_the_state_chain(monkeypatch, capsys):
     assert evolve.latest_report() is not None
 
 
-@ROOT_ONLY
+@NON_ROOT_ONLY
 def test_miner_on_a_read_only_home_exits_cleanly(monkeypatch, tmp_path, capsys):
     ro = tmp_path / "ro"
     ro.mkdir()
@@ -182,7 +179,7 @@ def test_miner_on_a_read_only_home_exits_cleanly(monkeypatch, tmp_path, capsys):
 
 # 5. Evolve and the dashboard follow the same fallback.
 
-@ROOT_ONLY
+@NON_ROOT_ONLY
 def test_evolve_falls_back_and_is_found(monkeypatch, tmp_path):
     ro = tmp_path / "ro"
     ro.mkdir()
@@ -191,14 +188,16 @@ def test_evolve_falls_back_and_is_found(monkeypatch, tmp_path):
         monkeypatch.setattr(ledger, "STATE", ro / "selenite")
         monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
         out = evolve.build(30)
-        assert out is not None and out.parent == tmp_path / "xdg" / "selenite"
-        assert (tmp_path / "xdg" / "selenite" / "evolve-state.json").exists()
+        # a user-wide fallback keeps this home's files in its own by-home subfolder
+        mine = tmp_path / "xdg" / "selenite" / "by-home" / ledger._home_tag()
+        assert out is not None and out.parent == mine
+        assert (mine / "evolve-state.json").exists()
         assert ledger.newest("proposal-*.md")[0] == out
     finally:
         ro.chmod(0o700)
 
 
-@ROOT_ONLY
+@NON_ROOT_ONLY
 def test_evolve_with_no_writable_folder_returns_none(monkeypatch, tmp_path):
     ro = tmp_path / "ro"
     ro.mkdir()
@@ -222,3 +221,37 @@ def test_cleanse_generated_is_utc_with_offset():
 def test_no_stale_backfill_copy():
     for f in ("desktop/plugin.js", "dashboard/dist/index.js"):
         assert "backfill" not in (REPO / f).read_text()
+
+
+def test_kanban_root_matches_real_hermes_profile_resolution(tmp_path, monkeypatch):
+    source = os.environ.get("SELENITE_TEST_HERMES_SOURCE")
+    if not source or not (Path(source) / "hermes_constants.py").is_file():
+        pytest.skip("real Hermes source is not configured")
+    sys.path.insert(0, source)
+    try:
+        from hermes_constants import get_default_hermes_root
+    finally:
+        sys.path.remove(source)
+
+    hermes_root = tmp_path / "hermes-root"
+    monkeypatch.setenv("HERMES_HOME", str(hermes_root / "profiles" / "worker"))
+    monkeypatch.delenv("HERMES_KANBAN_HOME", raising=False)
+    monkeypatch.delenv("HERMES_KANBAN_DB", raising=False)
+    from antibeaurocracy_core.plugin import _kanban_dbs
+    assert _kanban_dbs(None)[0] == get_default_hermes_root() / "kanban.db"
+
+    shared_root = tmp_path / "shared-kanban"
+    monkeypatch.setenv("HERMES_KANBAN_HOME", str(shared_root))
+    assert _kanban_dbs(None)[0] == shared_root / "kanban.db"
+
+
+def test_classifiers_use_role_words_for_authority_and_capability():
+    import importlib
+    classifier = importlib.import_module("antibeaurocracy_core.classify")
+    assert classifier._SEAT == r"(platform|security|design|engineering|governance|income|chief.?scientist)"
+    assert classifier._ROLE == (
+        r"(ceo|cto|cfo|coo|founders?|owner|operator|user|human|boss|board|executives?|manager|legal|customers?|"
+        r"clients?|person)"
+    )
+    assert classifier._PRINCIPAL == r"(ceo|cto|cfo|coo|founders?|owner|operator|boss)"
+    assert classifier.classify("Appeal is owner-held; no agent can clear it").cls == "WALL"

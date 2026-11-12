@@ -49,7 +49,7 @@ ACTIONS = {
     RELAY: "Collapse the hop: do the carry step yourself if your lane can. If it can't, ask whoever owns the capability for it once, rather than asking another agent for a favour each time.",
     LIMBO: "Make the call with a stated default and a revert path, comment it on the card, and move on. If ownership really is disputed, ask the named decider once.",
     CEREMONY: "Drop the ceremony. Keep only evidence a reader would actually check (a test run, a diff, a URL). Comment, don't open a new card.",
-    PARKING: "Unpark: dispatch it, put it in triage, or close it. A hold needs a named owner and an expiry, or it lapses.",
+    PARKING: "Unpark: ask whoever set the hold for a named owner and an expiry, then dispatch it, put it in triage, or close it. A hold with neither lapses.",
     STALE: "Name the next actor and action in one line, or close the card. A wait with no next step is not a wait.",
 }
 
@@ -71,8 +71,23 @@ _ABSENCE = re.compile(r"(approv|sign-?off|subscription|seat|plan|tier|key|token|
 _WALL = [
     ("credentials", re.compile(
         r"(ENEEDAUTH|E401|HTTP 40[13]|\b401 unauthori[sz]ed|push=false|READ permission|permission denied \(publickey|login required|"
-        r"\b(missing|expired|invalid|revoked|no(?! (output|input|context|more) )|no working|needs? (a |new )?|rotat\w*|share|paste) (\w+ ){0,2}(credentials?|tokens?|api[ -]?keys?|passwords?|secrets?|2fa|otp)\b|"
-        r"\bre-?auth(enticate)?\b|oauth (flow|login|consent)|sudo password)", _I)),
+        # "needs credentials", "needs Ana's credentials", "requires the npm token", "missing npm token":
+        # up to three words (possessives included) between the verb and the secret.
+        r"\b(missing|expired|invalid|revoked|no(?! (output|input|context|more) )|no working|needs?(?! no\b| zero\b)|"
+        r"requir(e|es|ed|ing)(?! no\b| zero\b)|rotat\w*|share|paste|blocked on|waiting (on|for)|only \w+ (has|holds|knows)) ([\w'’.-]+ ){0,3}"
+        r"(credentials?|tokens?(?![ \t]+(?:budget|of[ \t]+context)\b)|api[ -]?keys?|passwords?|secrets?|2fa|otp)(?![\w-])|"  # not "credential-free" or LLM token budgets
+        # a person has to sign in: "waiting on Ana to log in to npm", "needs to authenticate with PyPI"
+        r"\b(needs?|waiting (for|on)|awaiting) (\w+ ){0,6}(credentials?|tokens?(?![ \t]+(?:budget|of[ \t]+context)\b)|(api|deploy|ssh|access)[ -]?keys?|passwords?|secrets?|2fa|otp)\b(?!-free\b)|"
+        r"\b(to|must|has to|needs? to|have to) (log ?in|sign ?in|authenticate|re-?auth\w*)\b|"
+        # "waiting for the GitHub token", "blocked on credentials for…", "need the SSH key", "provide the
+        # passphrase", "need someone to log in to the AWS console", "waiting for access to the private repo"
+        r"\b(need(s|ed|ing)?|waiting (for|on)|await\w*|blocked on|provide|send)(?! no\b| zero\b) (an? |the |new |our |my |your |their )?(\w+ ){0,3}"
+        r"(credentials?|tokens?(?![ \t]+(?:budget|of[ \t]+context)\b)|api[ -]?keys?|ssh[ -]?keys?|private keys?|passwords?|passphrases?|secrets?|2fa|otp|mfa)\b(?!-)|"
+        r"\b(need(s|ed|ing)?|waiting for|await\w*|requires?|ha(s|ve) to|must) (\w+ ){0,2}to (log|sign) ?in\b|"
+        r"\b(need(s|ed|ing)?|waiting (for|on)|await\w*|blocked on|requires?|requesting) (\w+ ){0,2}access (to|for)\b|"
+        r"\bre-?auth(enticate)?\b|oauth (flow|login|consent)|sudo password|"
+        # only the person's own account will do: "fill the Typeform with his own login"
+        r"\b(his|her|their|my|\w+['’]s) own (login|account|sign-?in|credentials?)\b)", _I)),
     ("spend", re.compile(
         r"(\$\s?\d|\b\d+ ?(usd|eur|dollars?)\b|\b(spend(ing)?|billing|payment|pay (for|the)|invoice|purchas\w*|buy(ing)?|top[- ]?up|refund\w*|"
         r"balance exhausted|402 payment|paid (plan|tier)|subscription|budget (approval|cap|exceeded|sign-?off)|billing approv\w*|cost(s|ing)? (us )?(about |around |roughly |over |up to |~ ?)?\$?\d[\d,.]*k?\b|(\$\s?\d[\d,.]*k?|\b\d[\d,.]*k|\b\d{3,}[\d,.]*|\b\d[\d,.]* ?(usd|eur|dollars?)) ?(per|a|/) ?(month|year|mo|yr)\b|"
@@ -82,24 +97,30 @@ _WALL = [
         r"post(ing)? (to|on) (x|twitter|linkedin|reddit|bluesky|mastodon|hacker ?news|social)|tweet\w*|press release|"
         r"send\w* (an? |the )?(\w+ ){0,3}(email|newsletter|message|dm|sms|invite)s?|email (the )?(customers?|users?|list|clients?)|"
         r"in (the ceo|the user|the operator|the owner)'?s voice|external(ly)? (communicat|send|post)|"
-        r"deploy\w* (to )?(prod\w*|live)|terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall)|roll\w* out to (prod\w*|users|customers)|ship(ping)? to (prod\w*|customers|users)|merg\w* (\w+ ){0,3}(to|into) (main|master|prod\w*|release)|"
-        r"submi\w* (\w+ ){0,3}(catalog|marketplace|store|registry)s?\b|(catalog|marketplace|store|registry) (entry|submission|listing)s?\b)", _I)),
+        r"deploy\w* (to )?(prod\w*|live)|\b(prod|production) (deploy\w*|release|rollout)\b|terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall)|roll\w* out to (prod\w*|users|customers)|ship(ping)? to (prod\w*|customers|users)|merg\w* (\w+ ){0,3}(to|into) (main|master|prod\w*|release)|"
+        r"submi\w* (\w+ ){0,3}(catalog|marketplace|store|registry)s?\b|(catalog|marketplace|store|registry) (entry|submission|listing)s?\b|"
+        # "before posting publicly", "the upstream catalog PR": outside readers see it
+        r"(post|open|fil|submit|comment)\w* (\w+ ){0,2}publicly|upstream (\w+ ){0,2}(pr|pull request|issue)s?\b|public(ly)?[- ]expos\w*|public exposure)", _I)),
     ("destructive", re.compile(
         r"\b(irreversibl\w*|destructive|drop (the |a |an |all |our |\w+ ){0,3}(tables?|databases?|schemas?|collections?|indexes|indices)\b|(prod\w*|production|live) (\w+ ){0,2}migrations?\b|truncate|rm -rf|force[- ]push|push (-f|--force)|git push --force|delete everything|"
         r"delet\w* (the |all |a |production |prod |user |customer )*(\w+ ){0,2}(repo|repository|database|db|rows?|tables?|buckets?|account|data|history|backups?|branch|records?|files?|users?|namespaces?|clusters?|volumes?|disks?|tenants?)|"
         r"rewrit\w* (git )?history|reset --hard|wipe|purge|erase|data[- ]loss|shut ?down (prod|production)|revoke (access|keys?))", _I)),
     ("legal", re.compile(
-        r"\b(legal (review|team|sign-?off|approval|counsel)|(approval|sign-?off|ok) from legal|lawyer|licen[cs]e (\w+ )?(review|compat\w*)|contract signature|sign (the |a )?contract|"
+        r"\b(legal (review|to review|team|sign-?off|approval|counsel)|(approval|sign-?off|ok) from legal|lawyer|licen[cs]e (\w+ )?(review|compat\w*)|contract signature|sign (the |a )?contract|"
         r"terms of service|gdpr|hipaa|privacy review|trademark|copyright)\b", _I)),
     ("named-freeze", re.compile(
-        r"\b(security hold|(ceo|board|exec\w*) (freeze|hold)|code freeze|change freeze|FROZEN by|incident hold|e-?stop|kill switch|embargo)\b", _I)),
+        r"\b(?:(security hold|(ceo|board|exec\w*) (freeze|hold)|code freeze|change freeze|FROZEN by|incident hold|e-?stop|kill switch|embargo)\b"
+        r"|frozen\s*[:;\u2014-]|frozen until\b|freeze (?:is )?(?:on|in (?:effect|place)|until)\b|(?:repin|merge|release|deploy|publish|plugin)s? freeze\b)", _I)),
 ]
 
 # A question addressed to a person. Hermes treats needs_input as the worker's human channel,
 # so it is the person's queue, not an agent-to-agent gate.
 _INFRA = re.compile(r"(terraform (apply|destroy)|kubectl (apply|delete)|helm (install|upgrade|uninstall))", _I)
 _INFRA_FAULT = re.compile(r"\b(failed|fails|errored|error|timed out|time ?out|connection refused|dry-run)\b", _I)
-
+_WALL_FAMILY_ACTION = re.compile(
+    r"\b(remov\w*|overwrit\w*|disabl\w*|reset\w*|rotat\w*|turn off|rewrit\w*|announc\w*|publish\w*|delet\w*|drop\w*|wipe\w*|purge\w*|erase\w*|"
+    r"destroy\w*|revoke\w*|force[- ]push)\b.{0,60}\b(production|prod|live|customer|user|passwords?|mfa|2fa|certificates?|certs?|"
+    r"volumes?|history|announcements?|launch)\b", _I)
 # The loose net enforce mode checks before it refuses anything. It is meant to over-match: any word
 # from a wall family (money, infra, deletion, credentials, publishing, legal, freezes) or a person's
 # role anywhere in the full text means the agent is nudged, never refused. A miss here costs one
@@ -110,11 +131,23 @@ WALL_FAMILY = re.compile(
     r"prod\w*|live|deploy\w*|terraform|kubectl|helm|namespace|cluster|database|db|table|schema|migrat\w*|"
     r"delet\w*|drop\w*|wipe\w*|purg\w*|eras\w*|destroy\w*|destructive|truncat\w*|force|irreversibl\w*|"
     r"rewrit\w*|history|reset|rm|revok\w*|"
-    r"credential\w*|token\w*|keys?|secrets?|passwords?|auth\w*|login|oauth|sudo|40[123]|permission\w*|"
+    r"credential\w*|token(?![ \t]+(?:budget|of[ \t]+context)\b)\w*|keys?|secrets?|passwords?|auth\w*|login|oauth|mfa|2fa|certificates?|sudo|40[123]|permission\w*|"
     r"publish\w*|public|npm|pypi|email\w*|tweet\w*|post|announce\w*|customers?|users?|clients?|"
     r"legal|lawyer|licen[cs]\w*|gdpr|hipaa|privacy|trademark|copyright|terms|"
     r"freeze|frozen|e-?stop|incident|embargo|kill switch|security|"
     r"ceo|cto|cfo|coo|founders?|owner|operator|human|boss|board|executives?|manager|person))\b", _I)
+
+# LLM token capacity is a compute limit, not an authentication credential. Match the
+# resource and its context structurally, then remove it before either wall detector runs.
+_LLM_TOKEN_CONTEXT = re.compile(
+    r"\b(?:(?:\d+\s+)?(?:more\s+)?tokens?\s+(?:of|for)\s+(?:the\s+)?(?:llm\s+)?context(?:\s+window)?|"
+    r"(?:out of|ran out of)\s+(?:the\s+)?(?:llm\s+)?tokens?|"
+    r"(?:llm\s+)?tokens?\s+(?:budget|limit)|"
+    r"(?:llm\s+)?context(?:\s+window)?\s+(?:is\s+)?(?:full|exhausted))\b", _I)
+
+
+def _without_llm_token_context(text: str) -> str:
+    return _LLM_TOKEN_CONTEXT.sub(" ", text)
 
 
 _HUMAN = re.compile(
@@ -127,12 +160,15 @@ _HUMAN = re.compile(
 # Seat names this org actually uses; product/growth/content are deliberately absent (common nouns).
 # Seats are agents, not people: a wait ON a seat's approval is fake-gate territory per the shipped
 # contract ("waiting on platform approval" is FAKE). Seats appear only in the capability-infinitive
-# form ("need Liam/Platform to expose a GUI wrapper"), where the seat is who must BUILD, not gate.
-_SEAT = r"(liam|platform|security|design|engineering|governance|income|chief.?scientist)"
+# form ("need the platform seat/Platform to expose a GUI wrapper"), where the seat is who must BUILD, not gate.
+_SEAT = r"(platform|security|design|engineering|governance|income|chief.?scientist)"
 _ROLE = (r"(ceo|cto|cfo|coo|founders?|owner|operator|user|human|boss|board|executives?|manager|legal|customers?|"
-         r"clients?|person|simon)")
+         r"clients?|person)")
 _NOT_A_PERSON = r"(?!-|('s)?\s+(agent|bot|seat|module|lane|worker|service|process)s?\b)"
-_NOUN = r"(approval|approvals|ok|okay|sign-?off|go|word|green-?light|blessing|decision|call|ack|ruling|verdict)"
+_NOUN = r"(approvals?|ok|okay|yes(/yes)?|consent|sign-?offs?|go|words?|green-?light|blessing|decisions?|calls?|ack|rulings?|verdicts?|adjudicat\w*|hands)"
+# The people who hold authority here (not "user" or "customer"): their word may carry one or two
+# describing words before the noun ("the CEO's explicit word", "CEO drain word", "Owner adjudication").
+_PRINCIPAL = r"(ceo|cto|cfo|coo|founders?|owner|operator|boss)"
 # weak: the role is only referenced ("ACK from the CEO"); needs a wait word or gate phrase to count
 _HUMAN_AUTHORITY = re.compile(
     # the source of the wait: "ACK from the CEO", "HOLD per the owner", "approved by the founder"
@@ -141,14 +177,24 @@ _HUMAN_AUTHORITY = re.compile(
 _HUMAN_AUTHORITY_STRONG = re.compile(
     # the person's own word as a noun: "the founder's OK", "needs CEO approval", "CEO word on the copy"
     rf"(\b(the |my |our |needs? |pending |awaiting |without )?{_ROLE}(?:'s)? {_NOUN}\b|"
+    rf"\b{_PRINCIPAL}(?:'s|’s)?{_NOT_A_PERSON} ([\w-]+ ){{0,2}}{_NOUN}\b|"
     # the person as the subject: "the CEO must countersign", "CEO has not signed", "until the CEO approves",
     # and the infinitive form after the role: "needs the CEO to approve", "waiting on the owner to sign off"
     rf"\b{_ROLE} (must|has to|needs to|has not|hasn't|has yet to|approves?|approved|signs?|signed|"
     rf"decides?|countersigns?|ratif\w*|sign(s|ed)? off)\b|"
     rf"\b{_ROLE} to (approv\w*|sign(s|ed)? off|decide|ratif\w*|countersign\w*|green-?light|"
     rf"expose|provide|grant|create|open|enable)\b|"
-    # a seat named as the builder of a missing capability: "need Liam/Platform to expose a GUI wrapper"
+    # the person's spoken stop: "because the operator said no upstream bump", "the owner told us to wait"
+    rf"\b{_ROLE} (said|says|asked|told (us|me|you|them))( to)? (no|not|don'?t|do not|wait|hold|stop|pause)\b|"
+    # the wait names the person directly: "decision waiting on the operator", "blocked on the owner"
+    rf"\b(waiting (for|on)|awaiting|blocked on) (the |my |our )?(ceo|cto|cfo|coo|founders?|owner|operator|boss|board|executives?|manager|legal)\b{_NOT_A_PERSON}|"
+    # a seat named as the builder of a missing capability: "need the platform seat/Platform to expose a GUI wrapper"
     rf"\b(need|needs|needing) {_SEAT}(?:/\w+){{0,3}} to (expose|provide|grant|create|open|enable|build)\b)", _I)
+
+# A person with authority named anywhere in a needs_input ask: the worker is asking that person.
+_PRINCIPAL_NAMED = re.compile(rf"\b{_PRINCIPAL}\b{_NOT_A_PERSON}", _I)
+# HOLD offered as one of the answers ("GO-DATA vs HOLD", "CONSOLE / HOLD") is a choice, not a parked card.
+_HOLD_OPTION = re.compile(r"((\bvs\.?|/|\bor)\s*(?-i:HOLD)\b|(?-i:\bHOLD)\s*(\bvs\.?|/|\bor\b))", _I)
 
 _WAIT_WORD = re.compile(r"\b(await\w*|waiting|approv\w*|ack|ok|okay|sign-?off|go(-?ahead)?|word|hold|decision|decide|ruling|call|need(s|ed)?)\b", _I)
 
@@ -166,9 +212,9 @@ _DEPENDENCY = re.compile(r"\b(waiting on (task|card|parent|pr|issue) [#\w-]+|dep
 # principal can take. Surfaced by the Income seat dogfood: without this, such cards read as
 # "close the card" (stale-wait) when the only honest move is to escalate.
 _CAPABILITY_WALL = re.compile(
-    r"\b(simon|ceo|owner|principal)s?[- ]held\b|"
+    r"\b(ceo|owner|operator|principal)s?[- ]held\b|"
     r"\bno (agent|seat|bot|worker|tool) can (clear|lift|grant|approve|resolve|undo)\b|"
-    r"\bonly (simon|the ceo|the owner|a human|the principal) can\b|"
+    r"\bonly (the ceo|the owner|the operator|a human|the principal) can\b|"
     r"\bappeal\w* (is|are|rests?|sits) with\b", _I)
 
 # Generic agent roles. Teams add their own seat names with configure(seats=[...]); none ship here.
@@ -193,6 +239,7 @@ def _seats_rx() -> str:
 
 def _build_fake() -> list[tuple[str, re.Pattern]]:
     seats = _seats_rx()
+    approvers = rf"(?:{seats}|[\w-]+[ -](agent|seat|bot|worker)s?)"
     extra = "|".join(re.escape(p) for p in _extra_ceremony)
     return [
         (RELAY, re.compile(
@@ -205,7 +252,9 @@ def _build_fake() -> list[tuple[str, re.Pattern]]:
             r"which (seat|agent|team) owns|ownership (unclear|unresolved|dispute))", _I)),
         (ACK, re.compile(
             rf"(\bACK (from|by)\b|\bawait(ing)? ACK\b|acknowledg(e|ment) (from|by) {seats}|sign-?off (from|by) {seats}|(approval|go-?ahead|ok) (from|by) {seats}|"
-            rf"(awaiting|await|wait(ing)? (for|on)) {seats}('s)? (approval|go-?ahead|green light|ok\b|okay|confirmation|sign-?off|ack))", _I)),
+            rf"(awaiting|await|wait(ing)? (for|on)) (the |my |our )?{approvers}('s)? (approval|go-?ahead|green light|ok\b|okay|confirmation|sign-?off|ack|verdict|(delta )?(re-?)?(check|review)|to (sign[ -]?off|approv\w*|confirm|review|re-?check))\b|"
+            rf"\b{approvers} (needs? to|must|has to|to) (sign[ -]?off|approv\w*|confirm|review)\b|"
+            rf"\buntil (the )?{approvers} (reviews?|approves?|signs? off|acks?|confirms?|okays?|clears? it)\b)", _I)),
         (CEREMONY, re.compile(
             r"\b(attest(ation)?|receipt (card|chain|required)|re-?verify the (verification|receipt)|"
             r"review of (the )?review|countersign|ratif(y|ied|ication)|"
@@ -225,10 +274,35 @@ def wall_family(text: str) -> bool:
     stop the question that a wait on another agent is meant to get."""
     t = re.sub(r"\b[\w-]+[ -](agent|seat|bot|lane|worker)s?\b", " ", str(text or ""), flags=_I)
     t = re.sub(rf"\b{_seats_rx()}\b", " ", t, flags=_I)
-    return bool(WALL_FAMILY.search(t))
+    return bool(WALL_FAMILY.search(_without_llm_token_context(t)))
 
+
+# An approval or review from a named party this plugin does not know ("approval from CoS", "until
+# Compliance reviews"). The next actor is named, so "name the next actor or close the card" is wrong.
+# It may be a person or an agent; safety bias reads it as a person's queue until the team adds the
+# name to ``seats``.
+_NAMED_APPROVER = re.compile(
+    r"\b(approval|sign-?off|go-?ahead|ok|okay|ack|review|decision|ruling|confirmation)s? (from|by) (the )?[\w-]+|"
+    r"\buntil (the )?[\w-]+ (reviews?|approves?|signs? off|acks?|confirms?|decides?|okays?)\b", _I)
+NAMED_APPROVER_ACTION = ("A named approver this plugin does not know. If it is a person, it is their queue. "
+                         "If it is an agent, add the name to seats so the plugin can judge the wait.")
 
 _HOLD_WITH_EXPIRY = re.compile(r"\b(until|expires?|through|till)\s+\d{4}-\d{2}-\d{2}|\buntil \d{1,2}[/-]\d{1,2}\b", _I)
+
+# A deliberate hold with a stated reason is not a parking lot: the work runs in another lane ("executed
+# by zcode outside the gateway; do not dispatch"), or the card waits for room in a capped queue.
+_RUNNING_ELSEWHERE = re.compile(
+    r"\b((being )?(executed|executing|run|running|implemented|handled|worked on) (by|in|via) "
+    r"(?!(the |an? )?(\w+ )?(approval|ack|sign-?off|ok|go-?ahead|review)\b)[\w.-]+|outside the (gateway|board|dispatcher)|"
+    r"(supervisor|session|harness|owner) (now )?owns (this|the|it))\b", _I)
+_THROTTLE = re.compile(
+    r"\b((queue|backlog) (that |which )?(already )?ha(s|ve) \d+|max_in_progress\w*|throttl\w*|"
+    r"queue (cap|limit)|(when|until|once) the queue has (capacity|room)|(max|maximum|at most) \d+ (in[ -]progress|running|at a time)|"
+    r"so (it|they) (do(es)? not|don'?t|won'?t) auto-?dispatch)", _I)
+# A wait on a running check (CI, a build, a test run) clears on its own; it is neither a gate nor a fault yet.
+_RUNNING_CHECK = re.compile(
+    r"\b(waiting|wait|await\w*) (for|on) (the )?(ci|build|tests?|test run|checks?|pipeline|workflow( run)?|job)\b"
+    r"(?! (fail\w*|broke\w*|is red|errored))", _I)
 
 
 @dataclass
@@ -292,10 +366,15 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
     age = _as_float(age_hours)
 
     # 1. Authority walls win over everything (negated mentions don't count).
-    walls = [(name, _hits(p, t, skip_negated=True)) for name, p in _WALL]
+    wall_text = _without_llm_token_context(t)
+    walls = [(name, _hits(p, wall_text, skip_negated=True)) for name, p in _WALL]
     walls = [(n, h) for n, h in walls if h]
     fakes = [(sub, _hits(p, t)) for sub, p in _FAKE]
     fakes = [(s, h) for s, h in fakes if h]
+    if kind == "needs_input" and _HOLD_OPTION.search(t):
+        holds = len(re.findall(r"(?-i:\bHOLD\b)", t))
+        if holds and holds <= len(_HOLD_OPTION.findall(t)):  # every HOLD is offered as an answer
+            fakes = [(s, h) for s, h in fakes if s != PARKING]
     # An infra command reported as failing, with nothing waiting on anyone, is a fault, not a wall.
     if (walls and not fakes and all(_INFRA.fullmatch(h) for _, hs in walls for h in hs)
             and _INFRA_FAULT.search(t)):
@@ -303,6 +382,11 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
     if walls:
         names = ", ".join(n for n, _ in walls)
         return Verdict(WALL, names, 0.9, f"authority wall: {names}", ACTIONS[WALL], [h for _, hs in walls for h in hs])
+
+    # Give direct classifier callers the gate's safety override for an explicit destructive or
+    # security-control action. The loose family guard alone also matches incidental mentions.
+    if wall_family(t) and _WALL_FAMILY_ACTION.search(t):
+        return Verdict(WALL, "", 0.6, "possible authority wall", ACTIONS[WALL], [t])
 
     # 2. A question addressed to a person is the person's queue, never an agent gate.
     human = _hits(_HUMAN, t)
@@ -343,14 +427,32 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
         return Verdict(DEPENDENCY, "", 0.7, "time-boxed hold with an expiry; it lapses on its own",
                        "Leave it. When the expiry passes, dispatch or close it.", _hits(_HOLD_WITH_EXPIRY, t))
 
+    # 6b. A deliberate hold that says why: the work runs in another lane, or it waits for queue room.
+    if fakes and {s for s, _ in fakes} <= {PARKING, CEREMONY}:
+        held = _hits(_RUNNING_ELSEWHERE, t) or _hits(_THROTTLE, t)
+        if held:
+            return Verdict(DEPENDENCY, "", 0.7, "a declared hold: the work runs elsewhere or waits for queue room",
+                           "Leave it. Unblock it when the other lane lands or the queue has room.", held)
+
     # 7. needs_input is the worker's channel to a person. It stays HUMAN unless the text itself shows
     # an agent gate or a fault, in which case that wins with a little less certainty.
+    # 7a. A needs_input ask that names a person with authority is that person's question, whatever
+    # ceremony words ("ratify", "attest") or decision options it carries.
+    if kind == "needs_input" and _PRINCIPAL_NAMED.search(t):
+        return Verdict(HUMAN, "", 0.7, "needs_input naming a person with authority", ACTIONS[HUMAN],
+                       _hits(_PRINCIPAL_NAMED, t))
     if kind == "needs_input" and not (fakes or mach):
         return Verdict(HUMAN, "", 0.7, "filed as needs_input", ACTIONS[HUMAN], ["kind=needs_input"])
 
     # 8. A fault with no gate layered on it.
     if mach and not fakes:
         return Verdict(MACHINERY, "", 0.75, "environment/tooling fault", ACTIONS[MACHINERY], mach)
+
+    # 8b. A wait on a running check clears on its own.
+    check = _hits(_RUNNING_CHECK, t)
+    if check and not fakes:
+        return Verdict(MACHINERY, "", 0.6, "waits on a running check; it clears on its own",
+                       "Not a gate. Let the check finish; if it fails, fix it.", check)
 
     # 9. Bureaucracy, evidenced by a phrase.
     if fakes:
@@ -363,7 +465,20 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
         return Verdict(FAKE, sub, round(conf, 2), f"bureaucratic wait ({sub})", ACTIONS[sub],
                        hits + [h for _, hs in fakes[1:] for h in hs] + mach)
 
-    # 10. Defaults: no phrase matched. These are low-confidence and never "evidenced".
+    # 9b. A declared hold with no gate phrase at all ("throttled at 3 running", "the supervisor owns
+    # this") is the same declared hold as 6b; don't let it fall through to a stale-wait default.
+    held = _hits(_RUNNING_ELSEWHERE, t) or _hits(_THROTTLE, t)
+    if held:
+        return Verdict(DEPENDENCY, "", 0.7, "a declared hold: the work runs elsewhere or waits for queue room",
+                       "Leave it. Unblock it when the other lane lands or the queue has room.", held)
+
+    # 10. An approval from a named party the plugin does not know: a person until configured otherwise.
+    named = _hits(_NAMED_APPROVER, t)
+    if named:
+        return Verdict(HUMAN, "", 0.5, "an approval from a named party this plugin does not know",
+                       NAMED_APPROVER_ACTION, named)
+
+    # 11. Defaults: no phrase matched. These are low-confidence and never "evidenced".
     if created_blocked:
         return Verdict(FAKE, PARKING, 0.5, "created blocked with no reason of its own", ACTIONS[PARKING], [])
     if not t:
@@ -380,9 +495,10 @@ RULES = (
     "4 WALL: kind=capability (Hermes: a hard wall that surfaces to a person); MACHINERY: kind=transient",
     "5 HUMAN: a wait or gate phrase whose source is a person with authority ('from the CEO', 'per the owner', "
     "'the founder's OK', 'the CEO must sign'); a bare role noun, or an agent named after a role, does not count",
-    "6 DEPENDENCY: a HOLD with an explicit expiry date",
-    "7 HUMAN: kind=needs_input with no gate or fault phrase in the text",
-    "8 MACHINERY: a fault phrase with no gate phrase",
+    "6 DEPENDENCY: a HOLD with an explicit expiry date, or a hold that names where the work runs or a queue cap (also when no gate phrase matched)",
+    "7 HUMAN: kind=needs_input naming a person with authority (CEO, owner, operator...), or with no gate or fault phrase",
+    "8 MACHINERY: a fault phrase, or a wait on a running check (CI, build, tests), with no gate phrase",
     "9 FAKE F1-F5: an agent-to-agent gate phrase (confidence 0.7-0.95, less when mixed with a fault or filed as needs_input)",
-    "10 FAKE default, not evidenced: created blocked or empty (0.5), older than 24h (0.5), anything else (0.3)",
+    "10 HUMAN (0.5): an approval or review from a named party that is not a configured seat ('approval from CoS')",
+    "11 FAKE default, not evidenced: created blocked or empty (0.5), older than 24h (0.5), anything else (0.3)",
 )

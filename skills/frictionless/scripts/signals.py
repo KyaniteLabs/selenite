@@ -30,6 +30,8 @@ CATEGORIES: dict[str, list[str]] = {
     "repeat_work": [
         r"\bi keep (having|doing|telling)\b", r"\bsame (thing|mistake|step) again\b",
         r"\bfor the (nth|\d+(st|nd|rd|th)) time\b", r"\bevery ?time now\b",
+        r"\bi (already |just )?told you( that)?( (already|before|twice|again|\w+ times))?\b(?! about)",
+        r"\bhow many times (do|have|must|did) i\b", r"\b(still|again) (broken|failing|not working)\b",
     ],
     "stopping_short": [
         r"\bwhy did(n'?t)? you (stop|finish)\b", r"\byou stopped\b", r"\bwhy (did|are) you (stop|wait)",
@@ -61,10 +63,12 @@ OVERLOAD = {"curse", "frustration", "over_asking", "stopping_short", "repeat_wor
 # "cannot", "robot" and "screenshot" must never count. It measures load, not
 # spelling, and one hit is never enough (see overload()).
 _TYPO = re.compile(
-    r"\b(?:teh|adn|hte|taht|wiht|yoiu|tge|ahve|waht|thsi|jsut|becuase|plese|pleae|thier)\b"
+    r"\b(?:teh|adn|hte|taht|wiht|yoiu|tge|ahve|waht|thsi|jsut|becuase|plese|pleae|thier|buidl|broekn|agian)\b"
     r"|([a-z])\1{3,}|\?{3,}",
     re.I,
 )
+# Paths, URLs and identifiers are technical tokens, not evidence of typing load.
+_TECHNICAL = re.compile(r"[/\\_:=@]|\w[.-]\w")
 
 
 def _load_extra() -> dict[str, list[str]]:
@@ -110,7 +114,7 @@ def classify(text: str) -> list[str]:
 
 
 def typo_hits(text: str) -> int:
-    return len(_TYPO.findall(text))
+    return sum(len(_TYPO.findall(word)) for word in text.split() if not _TECHNICAL.search(word))
 
 
 def typo_density(text: str) -> float:
@@ -119,15 +123,31 @@ def typo_density(text: str) -> float:
     return 100.0 * typo_hits(text) / words
 
 
+# Text the person is quoting rather than saying: fenced or inline code, "> " quote lines and
+# double-quoted spans. A pasted log that says "wtf" or a quoted complaint is not their mood.
+_QUOTED = re.compile(
+    r"```.*?(?:```|\Z)|~~~.*?(?:~~~|\Z)|`[^`\n]*`|^[ \t]*>[^\r\n]*|(?<![\w])\"[^\"\n]*\"|\u201c[^\u201d\n]*\u201d",
+    re.S | re.M,
+)
+
+
+def own_words(text: str) -> str:
+    """The message with quoted, fenced and pasted spans removed."""
+    return _QUOTED.sub(" ", text or "")
+
+
 def overload(text: str) -> list[str]:
     """Overload reasons for one message ([] when calm).
 
-    One reason is information, not overload. Callers switch to Calm only on
-    two distinct reasons in one message, or a reason in two messages in a row
-    (see calm_due()).
+    Only the person's own words count (see own_words()). One reason is
+    information, not overload. Callers switch to Calm only on two distinct
+    reasons in one message, or a reason in two messages in a row (see calm_due()).
     """
+    if not is_human_text(text):
+        return []
+    text = own_words(text)
     reasons = [c for c in classify(text) if c in OVERLOAD]
-    if is_human_text(text) and len(text.split()) >= 8 and typo_hits(text) >= 2 and typo_density(text) >= 6:
+    if len(text.split()) >= 4 and typo_hits(text) >= 2 and typo_density(text) >= 6:
         reasons.append("typo_burst")
     return reasons
 

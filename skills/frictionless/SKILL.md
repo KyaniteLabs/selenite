@@ -4,7 +4,7 @@ description: Take friction off the human, treated as accessibility. Clears every
 license: MIT
 metadata:
   product: Selenite
-  version: 0.5.0
+  version: 0.6.0
 ---
 
 # frictionless
@@ -19,7 +19,7 @@ Three outcomes, from the stone:
 - **Clarity:** one ranked view of what costs the human most, across the whole stack.
 - **Calm:** fewer and smaller human steps, and replies short enough to take in at a glance.
 
-**Selenite needs no cleansing.** This is a requirement. Never hand the human upkeep for Selenite itself: no setup steps after install, no state to prune, no findings about Selenite. Its state trims itself and CI keeps its own skill clean.
+**Selenite needs no cleansing.** This is a requirement. Never hand the human upkeep for Selenite itself: no state to prune, no findings about Selenite. Its state trims itself and CI keeps its own skill clean.
 
 Selenite has three facets of one test (does this step, wait or check earn its cost to the human?), so nothing is done twice. This skill owns what lands on the human: their steps, clicks, lookups and approvals, across every tool in the stack. Waits *between* agents (ACKs, relays, parking) are the `antibeaurocracy` facet. Rigor *inside* a decision that can't change it (one-sample vetoes, threshold cliffs, re-checks of unchanged work) is the `antipedantry` facet. A pedantic check that ends in "a human decides" is both: hand the check to `antipedantry` and the human step to Gate.
 
@@ -31,6 +31,12 @@ Pick the mode from what triggered it. If Calm applies, run it first.
 | A step only the human can do, or a blocker that names the human | **Gate** |
 | Two overload signals (see below) | **Calm** |
 | Scheduled run, or `/frictionless evolve` | **Evolve** (optional: sharpen Selenite) |
+
+## Drive the Desktop page
+
+Ledger changes, cleanse reports and evolve proposals refresh the open page through local Desktop events, including changes made by agent tools. Use `selenite_show` with `view` set to `overview`, `load`, `totals`, `cleanse`, `gates`, `fake-gates`, `evolve`, `signals` or `ledger`; the page scrolls to that section. Optional `item_id` focuses a visible gate/ledger key, fake-gate card id, cleanse check id or signal id (1–80 letters, digits, underscores, colons or hyphens); pass only an id, never private text or a path. The tool requests display without confirming a listening client, and works without Desktop or the Hermes event bridge.
+
+Run `/frictionless status` for pane guidance and check that Selenite is on in **Capabilities -> Plugins**; enabling the pane is the one step a person does, then open the Selenite page.
 
 ## Cleanse: clear the other stones
 
@@ -82,7 +88,7 @@ A curse is a **late** marker. By then the human's stated rules have usually been
 
 Evolve improves Selenite's signals. It is optional: Selenite needs no cleansing, so skipping Evolve degrades nothing and never creates a task for the human. It never rewrites itself silently.
 
-1. **Collect.** Gate, Calm and Cleanse append to the ledger in the state folder: `$SELENITE_STATE` if set, else `$XDG_STATE_HOME/selenite`, else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite` (outside the repo). A read-only home, which is normal in an agent seat, falls through to the next folder; when none takes the write the pass prints one line and keeps its findings. The Hermes plugin also logs approvals a person granted once or for a session on a safe command (allowlist candidates; denials, timeouts, the smart approver, payments, MCP prompts and Hermes's own dangerous-command keys are never logged), Kanban tasks blocked on a person, and overload. Calm stays off inside a Kanban worker, where no person is reading. Record mistakes with `ledger.py add miss <key>` and `ledger.py add fp <key>`.
+1. **Collect.** Gate, Calm and Cleanse append to the ledger in the state folder: `$SELENITE_STATE` if set, else `$XDG_STATE_HOME/selenite`, else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite` (outside the repo). A read-only home, which is normal in an agent seat, falls through to the next folder; when none takes the write the pass prints one line and keeps its findings. When a user-wide folder (XDG or `~/.local/state`) is only a fallback, each Hermes home keeps its own subfolder there (`by-home/<hash>`), so one home never sees or clears another's gates. The Hermes plugin also logs approvals a person granted once or for a session on a safe command (allowlist candidates; denials, timeouts, the smart approver, payments, MCP prompts and Hermes's own dangerous-command keys are never logged), Kanban tasks blocked on a person, and overload. Calm stays off inside a Kanban worker, where no person is reading. Record mistakes with `ledger.py add miss <key>` and `ledger.py add fp <key>`.
 2. **Sweep.** Run `scripts/mine.py` and `scripts/cleanse.py`. Selenite's own skills are held clean by CI (`needs_no_cleansing()`); the sweep scans them like any other stone, so drift on one machine still shows up. Each cleanse run writes a report and one ledger row with its finding count.
 3. **Propose.** Run `scripts/evolve.py`. It writes a proposal from the ledger, the newest miner report and the newest cleanse report. It also counts how many cycles in a row each signal category stayed silent. Silence only counts when it was measured: every category when a new miner report arrived, the Calm categories when Calm logged anything.
 4. **Review.** Draft the accepted changes on a local branch of this repo. Opening a PR is the human's decision, and a human merges it. There is no auto-merge, and the installed copy is never edited.

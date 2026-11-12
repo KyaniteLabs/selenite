@@ -3,7 +3,7 @@ name: antibeaurocracy
 description: Use when an agent is about to block, park, hold, relay, ask for an ACK or wait on another seat; when a board has more blocked than running work; when a human complains the agents are bureaucratic; or when auditing rules, SOULs and skills for gate language. Classifies each wait as WALL / HUMAN / MACHINERY / DEPENDENCY / FAKE and tells you what to do instead.
 license: MIT
 metadata:
-  version: 0.5.0
+  version: 0.6.0
   author: KyaniteLabs
   hermes:
     tags: [kanban, governance, agents]
@@ -62,7 +62,7 @@ If you have no shell, run the same check in your head:
 ## Auditing a whole system
 
 ```bash
-antibeaurocracy audit                 # read-only: boards under $HERMES_HOME and every ~/.hermes* home, plus rule files
+antibeaurocracy audit                 # read-only: boards in the active Hermes home (--all-homes: every ~/.hermes*), plus rule files
 antibeaurocracy audit --json --top 40
 antibeaurocracy audit --root /path/to/hermes-home --rules path/to/AGENTS.md
 ```

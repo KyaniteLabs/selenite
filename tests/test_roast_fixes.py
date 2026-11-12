@@ -102,6 +102,12 @@ def test_evolve_redacts_notes_and_leaves_the_pr_to_the_human():
     ("https://user:pass@host/x", "user:pass"),
     ("host 203.0.113.7", "203.0.113.7"),
     ("v6 2001:db8::1", "2001:db8::1"),
+    ("password hunter2secret", "hunter2secret"),
+    ("passphrase: s3cretphrase", "s3cretphrase"),
+    ("-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJB\n-----END RSA PRIVATE KEY-----", "MIIBOgIBAAJB"),
+    ("-----BEGIN OPENSSH PRIVATE KEY-----", "BEGIN OPENSSH PRIVATE KEY"),
+    ("jwt eyJhbGc.eyJzdWI.sig", "eyJhbGc.eyJzdWI.sig"),
+    ("card 4111 1111 1111 1111", "4111 1111 1111 1111"),
 ])
 def test_ledger_redacts_secrets_before_writing(raw, gone):
     ledger.add("miss", "k", note=raw)
@@ -112,3 +118,73 @@ def test_ledger_redacts_secrets_before_writing(raw, gone):
 def test_redaction_leaves_plain_words_alone():
     assert ledger.redact("pip install from a lockfile") == "pip install from a lockfile"
     assert ledger.redact("ratio 3:2 at 10:30") == "ratio 3:2 at 10:30"
+    assert ledger.redact("password reset flow") == "password reset flow"
+    assert ledger.redact("order 12345 at 2026-11-11") == "order 12345 at 2026-11-11"
+
+
+def test_redaction_keeps_the_auth_scheme_word():
+    assert ledger.redact("Authorization: Bearer abcdef0123456789abcdef") == "Authorization: Bearer <token>"
+
+
+@pytest.mark.parametrize("raw", [
+    "oauth=synthetic-secret-value",
+    "GITHUB_OAUTH=synthetic-secret-value",
+    "authkey=synthetic-secret-value",
+    "basicauth: user:synthetic-password",
+    "authcode=synthetic-secret-value",
+    "preauth_key: synthetic-secret-value",
+])
+def test_redaction_catches_auth_assignments(raw):
+    redacted = ledger.redact(raw)
+    assert "synthetic-secret-value" not in redacted
+    assert "synthetic-password" not in redacted
+    assert "<secret>" in redacted
+
+
+def test_redaction_keeps_noncard_numbers_and_authority_words():
+    text = "deploy at 1731326400000 failed; authority: ceo approved; t_1731326400123"
+    assert ledger.redact(text) == text
+    assert ledger.redact("card 4111 1111 1111 1111") == "card <card>"
+
+
+# Fable roast lows: S1 quoted text, S4 active home only, S5 deleted cards.
+
+def test_calm_ignores_quoted_fenced_and_pasted_text():
+    from conftest import signals
+    assert signals.overload('the log said "wtf is this" and "ugh, annoying"') == []
+    assert signals.overload("> wtf\n> this is annoying\nhere is the log") == []
+    assert signals.overload("```\nshit happens, frustrating\n```\nsee above") == []
+    assert set(signals.overload("wtf, this is annoying")) == {"curse", "frustration"}
+
+
+def test_an_inch_mark_does_not_quote_the_following_complaint():
+    from conftest import signals
+    text = 'my 27" monitor is broken wtf, stop asking me, this "fix" is so frustrating'
+    assert set(signals.overload(text)) == {"frustration", "curse", "over_asking"}
+
+
+def test_audit_defaults_to_the_active_hermes_home(tmp_path, monkeypatch):
+    from antibeaurocracy_core import audit
+    for name in (".hermes", ".hermes-org", ".hermes-old"):
+        (tmp_path / name).mkdir()
+    monkeypatch.setattr(audit.Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.delenv("HERMES_HOME", raising=False)
+    assert audit.default_roots() == [tmp_path / ".hermes"]
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / ".hermes-org"))
+    assert audit.default_roots() == [tmp_path / ".hermes-org"]
+    assert set(audit.default_roots(all_homes=True)) == {tmp_path / n for n in (".hermes", ".hermes-org", ".hermes-old")}
+
+
+def test_deleted_cards_read_as_missing_only_when_every_board_read(tmp_path):
+    import sqlite3
+    from antibeaurocracy_core import audit
+    db = tmp_path / "kanban.db"
+    con = sqlite3.connect(db)
+    con.execute("create table tasks (id text primary key, status text)")
+    con.execute("insert into tasks values ('t_1', 'blocked')")
+    con.commit(); con.close()
+    assert audit.card_statuses(["t_1", "t_x"], [db], mark_missing=True) == {"t_1": "blocked", "t_x": audit.MISSING}
+    assert audit.card_statuses(["t_1", "t_x"], [db]) == {"t_1": "blocked"}
+    bad = tmp_path / "bad.db"
+    bad.write_bytes(b"not a database at all, just bytes" * 10)
+    assert audit.card_statuses(["t_1", "t_x"], [db, bad], mark_missing=True) == {"t_1": "blocked"}

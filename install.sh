@@ -121,6 +121,15 @@ if [ "$HERMES" = 1 ]; then
     TARGET=$other
     echo "reuse $TARGET"
     echo "      one Selenite per machine: $ROOT and $TARGET are the same plugin, and a second source breaks Hermes admission."
+    # The reused copy is what every seat loads, so a stale one must not win silently (dogfood 2026-11-11:
+    # a copy 45 commits behind called "before I drop the users table" a fake gate). Local checks only.
+    if ! diff -rq -x .git -x __pycache__ -x '*.pyc' "$ROOT" "$TARGET" >/dev/null 2>&1; then
+      echo "warn  $TARGET differs from this checkout ($ROOT), and it is the copy Hermes loads." >&2
+      echo "      Update it (git -C $TARGET pull --ff-only), or move it aside and run install.sh again." >&2
+    fi
+    if behind=$(git -C "$TARGET" rev-list --count 'HEAD..@{u}' 2>/dev/null) && [ "${behind:-0}" -gt 0 ]; then
+      echo "warn  $TARGET is $behind commit(s) behind its upstream as of its last fetch: git -C $TARGET pull --ff-only" >&2
+    fi
   fi
   link "$TARGET" "$HH/plugins/selenite"
 
@@ -145,6 +154,8 @@ if [ "$HERMES" = 1 ]; then
     else
       echo "enable: hermes is not on PATH; run: HERMES_HOME=$HH hermes plugins enable selenite"
     fi
+    echo "desktop: Hermes Desktop ships the page, chip and badges switched off."
+    echo "         Open Capabilities > Plugins, search Selenite and switch it on."
   fi
 fi
 

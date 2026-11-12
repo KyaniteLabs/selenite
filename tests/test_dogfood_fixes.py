@@ -15,7 +15,7 @@ fixtures avoids two tests asserting opposite contracts.
 import json
 import sys
 
-from antibeaurocracy_core import DEPENDENCY, FAKE, HUMAN, WALL, classify
+from antibeaurocracy_core import DEPENDENCY, FAKE, HUMAN, MACHINERY, WALL, classify
 
 
 def test_catalog_entry_is_a_publishing_wall():
@@ -44,8 +44,8 @@ def test_waiting_on_owner_to_sign_off_is_a_person():
 
 def test_ordinary_wait_stays_stale_not_wall():
     v = classify("Waiting on the build to finish before we can test")
-    assert v.cls == FAKE  # still the low-confidence stale default, never a wall
-    assert v.confidence < 0.6  # below the action threshold
+    assert v.cls == MACHINERY  # a running check clears on its own (dogfood round 2); never a wall
+    assert not v.is_fake  # nothing to nudge
 
 
 def test_product_name_is_not_a_person():
@@ -60,7 +60,7 @@ def test_seat_roles_and_noun_approvals_are_people():
     for text in (
         "needs CEO approval to submit.",
         "CEO word on the catalog description copy.",
-        "technical capability gap, need Liam/Platform to expose a GUI wrapper",
+        "technical capability gap, need Platform to expose a GUI wrapper",
         "the CEO's approval",
     ):
         assert classify(text).cls == HUMAN, text
@@ -85,7 +85,7 @@ def test_publish_with_ceo_approval_is_still_a_wall():
 
 
 def test_capability_wall_escalates_instead_of_closing():
-    v = classify("appeal is Simon-held, no agent can clear it")
+    v = classify("appeal is operator-held, no agent can clear it")
     assert v.cls == WALL
     assert v.subtype == "declared-capability"
     assert v.confidence >= 0.6  # above the action threshold: escalate, never "close the card"

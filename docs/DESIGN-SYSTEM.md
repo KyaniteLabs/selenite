@@ -94,7 +94,7 @@ Below 760px the layout drops to one column and the bars and notes are hidden.
 
 ## Data and privacy
 
-- **Where the data lives:** the ledger, reports and proposals sit in the Selenite state directory: `$SELENITE_STATE`, else `$XDG_STATE_HOME/selenite`, else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite`. A read-only folder falls through to the next, and readers look in all of them. The directory is 0700 and the files are 0600, on the host that runs the agent.
+- **Where the data lives:** the ledger, reports and proposals sit in the Selenite state directory: `$SELENITE_STATE`, else `$XDG_STATE_HOME/selenite`, else `$HERMES_HOME/plugin-data/selenite`, else `~/.local/state/selenite`. A read-only folder falls through to the next, and readers look in all of them. When a user-wide folder (XDG or `~/.local/state`) is only a fallback, each Hermes home keeps its own subfolder there (`by-home/<hash>`), so one home never sees or clears another's gates. The directory is 0700 and the files are 0600, on the host that runs the agent.
 - **Who reads it:** both UIs read it only through the user's own Hermes gateway (`/api/plugins/selenite/`). Selenite makes no other network calls.
 - **What a row holds:** no host name, and no secrets. Notes are capped at 200 characters.
 

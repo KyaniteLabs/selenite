@@ -10,7 +10,14 @@ from pathlib import Path
 
 import pytest
 
+# Permission-bit tests need a real non-root user: root ignores read-only folders. CI runs them as one.
+NON_ROOT_ONLY = pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0,
+                                   reason="root ignores permission bits; needs a non-root runner")
+
 REPO = Path(__file__).resolve().parent.parent
+_HERMES_SOURCE = os.environ.get("SELENITE_TEST_HERMES_SOURCE")
+if _HERMES_SOURCE and (Path(_HERMES_SOURCE) / "hermes_constants.py").is_file():
+    sys.path.insert(0, _HERMES_SOURCE)
 _BASE = Path(tempfile.mkdtemp(prefix="selenite-tests-"))
 HOME = _BASE / "home"
 STATE = _BASE / "state"

@@ -45,7 +45,7 @@ def test_register_matches_manifest():
     assert [n for n, _ in ctx.skills] == ["frictionless", "antibeaurocracy", "antipedantry"]
     assert all(path.exists() for _, path in ctx.skills)
     assert ctx.commands == ["frictionless", "antibeaurocracy", "fake-gate"]
-    assert [t for t, _ in ctx.tools] == ["selenite_ledger", "bureaucracy_classify", "bureaucracy_audit"]
+    assert [t for t, _ in ctx.tools] == ["selenite_ledger", "selenite_show", "bureaucracy_classify", "bureaucracy_audit"]
     assert all(f"  - {hook}\n" in manifest for hook in ctx.hooks)
     assert manifest.count("\n  - ") - manifest.split("optional_env:")[1].count("\n  - ") == len(ctx.hooks)
     for tool, _ in ctx.tools:
@@ -204,6 +204,31 @@ def test_command_starts_an_agent_turn_and_tells_the_human(monkeypatch):
     assert "Load and follow" not in out and "Cleanse mode" in out   # the human gets a status line
 
 
+def test_command_uses_the_gateway_session_key_fallback(monkeypatch):
+    monkeypatch.setenv("HERMES_SESSION_KEY", "gateway-session")
+    ctx = _InjectCtx(True)
+    monkeypatch.setattr(plugin, "_ctx", ctx)
+    out = plugin.frictionless_command("calm")
+    assert ctx.sent[0][1] == "gateway-session"
+    assert out.startswith("Selenite: handed")
+
+
+def test_command_uses_real_hermes_session_accessor_when_available(monkeypatch):
+    try:
+        from gateway.session_context import get_session_env
+    except ImportError:
+        pytest.skip("Hermes gateway session context is not present in this source snapshot")
+    from gateway.session_context import scoped_session_key
+    assert plugin.get_session_env is get_session_env
+    monkeypatch.setenv("HERMES_SESSION_KEY", "stale-process-env")
+    ctx = _InjectCtx(True)
+    monkeypatch.setattr(plugin, "_ctx", ctx)
+    with scoped_session_key("task-local-session"):  # the gateway binds the key per task
+        out = plugin.frictionless_command("calm")
+    assert ctx.sent[0][1] == "task-local-session"
+    assert out.startswith("Selenite: handed")
+
+
 def test_command_falls_back_to_text_to_send_when_no_turn_can_start(monkeypatch):
     for ctx in (_InjectCtx(False), object(), None):
         monkeypatch.setattr(plugin, "_ctx", ctx)
@@ -225,6 +250,19 @@ def test_tool_actions():
     out = json.loads(plugin.selenite_ledger({"action": "cleanse"}))
     assert out["success"] and out["findings"][0]["where"] == "deploy"
     assert not json.loads(plugin.selenite_ledger({"action": "add", "kind": "bad", "key": "k"}))["success"]
+
+
+def test_ledger_tool_names_its_errors():
+    def call(**a):
+        return json.loads(plugin.selenite_ledger(a))
+    assert call(action="add", key="k") == {"success": False, "error": "kind is required"}
+    assert call(action="add", kind="gate") == {"success": False, "error": "key is required"}
+    assert call(action="add", kind="gate", key="  ") == {"success": False, "error": "key is required"}
+    assert call(action="add", kind="bad", key="k")["success"] is False
+    assert call(action="nope") == {"success": False, "error": "unknown action: nope"}
+    assert call() == {"success": False, "error": "action is required"}
+    assert call(action="summary")["success"] is True
+    assert plugin.LEDGER_SCHEMA["parameters"]["properties"]["action"]["enum"] == ["add", "summary", "cleanse"]
 
 
 def test_a_failing_hook_never_raises(monkeypatch):
