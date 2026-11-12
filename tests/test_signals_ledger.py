@@ -116,6 +116,12 @@ def test_authorization_headers_redact_the_complete_value(text):
     assert "secret-value" not in redacted
 
 
+def test_authorization_redaction_stops_at_the_end_of_the_header_line():
+    redacted = ledger.redact("authorization: scheme-with-arbitrary-format secret-value\nDeployment proceeds")
+    assert "secret-value" not in redacted
+    assert "Deployment proceeds" in redacted
+
+
 @pytest.mark.parametrize("text,secret", [
     ("private_key=short-secret", "short-secret"),
     ("credential: short-secret", "short-secret"),

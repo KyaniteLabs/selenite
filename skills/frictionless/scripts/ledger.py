@@ -166,7 +166,7 @@ _REDACT = [
     (re.compile(r"://[^/\s:@]+:[^@\s]+@"), "://<cred>@"),
     (re.compile(r"(?i)\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 <token>"),
     # Header credentials are opaque: remove the complete value after the field, regardless of scheme.
-    (re.compile(r"(?i)\b((?:proxy-)?authorization|oauth)(\s*[=:]\s*)(?!(?:bearer|basic|token)\s+<token>)(\"[^\"]*\"|'[^']*'|\S+(?:\s+\S+)*)"),
+    (re.compile(r"(?i)\b((?:proxy-)?authorization|oauth)(\s*[=:]\s*)(?!(?:bearer|basic|token)\s+<token>)(\"[^\"\r\n]*\"|'[^'\r\n]*'|\S+(?:[ \t]+\S+)*)"),
      r"\1\2<secret>"),
     # key=value / key: value. A value the bearer rule already replaced keeps its scheme word, so
     # "Authorization: Bearer <token>" stays readable.

@@ -112,6 +112,7 @@ def test_wall_family_action_overrides_fake_ack(text):
     "need more tokens for context",
     "out of tokens",
     "the model ran out of tokens",
+    "need 1000 tokens for context length",
     "token limit reached",
     "more tokens for the context window",
     "LLM context window is full",
@@ -119,6 +120,16 @@ def test_wall_family_action_overrides_fake_ack(text):
 def test_llm_token_budget_is_not_a_credentials_wall(text):
     assert classify(text).cls != WALL
     assert not wall_family(text)
+
+
+@pytest.mark.parametrize("text", [
+    "Need a GitHub token for the context API; waiting on reviewer agent to send it",
+    "Need tokens for the context API; waiting on reviewer agent to send them",
+    "Need an access token for context API; waiting on reviewer agent to send it",
+])
+def test_context_api_credentials_remain_walls(text):
+    verdict = classify(text)
+    assert verdict.cls == WALL and verdict.subtype == "credentials", verdict
 
 
 def test_human_questions_are_not_agent_gates():

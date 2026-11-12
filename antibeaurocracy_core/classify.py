@@ -140,13 +140,16 @@ WALL_FAMILY = re.compile(
 # LLM token capacity is a compute limit, not an authentication credential. Match the
 # resource and its context structurally, then remove it before either wall detector runs.
 _LLM_TOKEN_CONTEXT = re.compile(
-    r"\b(?:(?:\d+\s+)?(?:more\s+)?tokens?\s+(?:of|for)\s+(?:the\s+)?(?:llm\s+)?context(?:\s+window)?|"
+    r"\b(?:(?:\d+\s+)?(?:more\s+)?tokens?\s+(?:of|for)\s+(?:the\s+)?(?:llm\s+)?context(?:\s+(?:window|length))?(?!\s+\w)|"
     r"(?:out of|ran out of)\s+(?:the\s+)?(?:llm\s+)?tokens?|"
     r"(?:llm\s+)?tokens?\s+(?:budget|limit)|"
     r"(?:llm\s+)?context(?:\s+window)?\s+(?:is\s+)?(?:full|exhausted))\b", _I)
+_LLM_TOKEN_CREDENTIAL_CONTEXT = re.compile(r"\b(github|api|deploy\w*|access|pat)\b", _I)
 
 
 def _without_llm_token_context(text: str) -> str:
+    if _LLM_TOKEN_CREDENTIAL_CONTEXT.search(text):
+        return text
     return _LLM_TOKEN_CONTEXT.sub(" ", text)
 
 
