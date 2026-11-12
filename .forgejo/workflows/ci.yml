@@ -79,7 +79,7 @@ jobs:
         run: python3 -m pip install --no-cache-dir uv==0.11.22 && uv sync --frozen --python 3.14 --directory .hermes-runtime
       - name: Plugin tests under the Hermes runtime
         run: |
-          uv pip install --python .hermes-runtime/.venv/bin/python pytest==8.4.2
+          uv pip install --python .hermes-runtime/.venv/bin/python pytest==9.2.0
           cd plugin && SELENITE_TEST_HERMES_SOURCE="$(cd ../.hermes-runtime && pwd)" ../.hermes-runtime/.venv/bin/python -m pytest -q -rs
       - name: The real validator passes with no warnings (no credentials)
         run: |
