@@ -29,15 +29,15 @@ jobs:
           test -L "$H/.local/bin/antibeaurocracy"
           again=$(HOME="$H" sh install.sh) && printf '%s\n' "$again" | grep "^ok " >/dev/null   # idempotent; grep -q would SIGPIPE install.sh under pipefail
   unit-os:
-    # macOS and Windows unit-test legs. Catalog/selenite.yaml lists
-    # `platforms: [linux, macos]`; Windows stays out because install.sh is POSIX sh.
+    # macOS unit-test leg. Catalog/selenite.yaml lists `platforms: [linux, macos]`.
+    # No Windows leg: install.sh is POSIX sh and the state files rely on POSIX modes
+    # and locks, so Windows is unsupported (Forgejo issue #28).
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest]
         python: ["3.12", "3.14"]
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:

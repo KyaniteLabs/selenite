@@ -134,7 +134,7 @@ def test_gates_work_without_fcntl(tmp_path):
             "from antibeaurocracy_core.gates import RefusalStore\n"
             f"s = RefusalStore({str(tmp_path / 'r.json')!r}, ttl_s=60)\n"
             "print(s.transition('k', lambda p: ('ok', p + 1)))\n")
-    out = subprocess.run([sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True, timeout=60)
+    out = subprocess.run([sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert out.returncode == 0, out.stderr
     assert "('ok', 1)" in out.stdout
 
@@ -220,7 +220,7 @@ def test_cleanse_generated_is_utc_with_offset():
 
 def test_no_stale_backfill_copy():
     for f in ("desktop/plugin.js", "dashboard/dist/index.js"):
-        assert "backfill" not in (REPO / f).read_text()
+        assert "backfill" not in (REPO / f).read_text(encoding="utf-8")
 
 
 def test_kanban_root_matches_real_hermes_profile_resolution(tmp_path, monkeypatch):

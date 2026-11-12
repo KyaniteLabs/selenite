@@ -59,7 +59,7 @@ def _install(home: Path, *args, path="/usr/bin:/bin"):
     """Run the installer with a clean environment, so no seat variable leaks in."""
     env = {"HOME": str(home), "PATH": path, "SELENITE_STATE": str(home / "state")}
     return subprocess.run(["sh", str(INSTALL), *args], cwd=str(REPO), env=env,
-                          capture_output=True, text=True, timeout=120)
+                          capture_output=True, text=True, encoding="utf-8", timeout=120)
 
 
 def _last_line(text: str) -> str:
@@ -237,7 +237,7 @@ def test_no_enable_never_calls_the_hermes_cli(tmp_path):
 def test_pyproject_does_not_make_hermes_ask_for_dependency_consent():
     """A [build-system] table reads to Hermes as 'installs Python packages', so a
     headless `hermes plugins install` stops at a consent question and stays disabled."""
-    text = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
+    text = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
     try:
         import tomllib  # 3.11+
     except ImportError:  # 3.10 has no TOML parser: check the same three facts as text, never skip

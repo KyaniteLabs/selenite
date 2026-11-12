@@ -9,7 +9,7 @@ import pytest
 from conftest import REPO, ledger
 from antibeaurocracy_core.classify import FAKE, HUMAN, WALL, classify
 
-TAB = (REPO / "dashboard/dist/index.js").read_text()
+TAB = (REPO / "dashboard/dist/index.js").read_text(encoding="utf-8")
 
 
 # 1 (High). Real credential walls were read as stale waits with "or close the card".
