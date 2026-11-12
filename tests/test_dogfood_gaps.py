@@ -5,6 +5,7 @@ called fake gates (one with advice to dispatch a card marked "do not dispatch"),
 and the CLI judged empty input. The board fixtures paraphrase real block
 reasons; no card text is copied.
 """
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -85,13 +86,19 @@ def test_plain_parking_still_flags_and_never_says_dispatch_first():
 
 
 def _cli(*args, stdin=""):
-    return subprocess.run([sys.executable, "-m", "antibeaurocracy_core.cli", *args], cwd=ROOT,
-                          input=stdin, capture_output=True, text=True, timeout=60)
+    # PYTHONUTF8 keeps argv/stdio UTF-8 in the child even under a C or non-UTF-8 locale.
+    env = {**os.environ, "PYTHONUTF8": "1"}
+    return subprocess.run([sys.executable, "-m", "antibeaurocracy_core.cli", *args], cwd=ROOT, env=env,
+                          input=stdin, capture_output=True, text=True, encoding="utf-8", timeout=60)
 
 
 @pytest.mark.parametrize("args,stdin", [(("classify", ""), ""), (("classify", "   "), ""),
                                          (("classify", "👍"), ""), (("classify",), "")])
 def test_cli_refuses_to_judge_no_reason(args, stdin):
+    try:
+        [a.encode(sys.getfilesystemencoding()) for a in args]
+    except UnicodeEncodeError:
+        pytest.skip("this host's filesystem encoding cannot pass the argument as argv")
     r = _cli(*args, stdin=stdin)
     assert r.returncode == 2
     assert r.stderr.startswith("antibeaurocracy: nothing to classify")
@@ -117,14 +124,14 @@ def test_headline_with_nothing_blocked_skips_the_percentage():
 
 
 def test_web_tab_has_cleanse_evolve_and_readable_gate_names():
-    js = (ROOT / "dashboard" / "dist" / "index.js").read_text()
+    js = (ROOT / "dashboard" / "dist" / "index.js").read_text(encoding="utf-8")
     assert '"/cleanse"' in js and '"/proposal"' in js
     assert 'title: g.key' in js and 'overflowWrap: "anywhere"' in js
     assert '" Calm trigger"' in js
 
 
 def test_ci_and_readme_install_the_same_test_requirements():
-    reqs = (ROOT / "requirements-test.txt").read_text().split()
+    reqs = (ROOT / "requirements-test.txt").read_text(encoding="utf-8").split()
     assert reqs == ["pytest==8.4.2", "fastapi==0.115.12", "httpx==0.28.1"]
     for f in (".forgejo/workflows/ci.yml", ".github/workflows/validate.yml", "README.md"):
-        assert "-r requirements-test.txt" in (ROOT / f).read_text(), f
+        assert "-r requirements-test.txt" in (ROOT / f).read_text(encoding="utf-8"), f

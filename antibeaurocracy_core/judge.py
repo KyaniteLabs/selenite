@@ -71,7 +71,8 @@ def runner(cmd: str, timeout_s: float = 60.0) -> Callable[[str], str]:
 
     def ask(prompt: str) -> str:
         try:
-            p = subprocess.run(argv, input=prompt, capture_output=True, text=True, timeout=timeout_s)
+            p = subprocess.run(argv, input=prompt, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=timeout_s)
         except (OSError, subprocess.TimeoutExpired):
             return ""
         return parse(p.stdout) if p.returncode == 0 else ""

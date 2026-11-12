@@ -60,7 +60,7 @@ def iter_claude(root: Path, since: float):
     for f in root.rglob("*.jsonl"):
         if "/subagents/" in str(f) or f.stat().st_mtime < since:
             continue
-        with f.open(errors="ignore") as fh:
+        with f.open(encoding="utf-8", errors="ignore") as fh:
             for line in fh:
                 if '"type":"user"' not in line[:200] and '"type": "user"' not in line[:200]:
                     continue
@@ -79,7 +79,7 @@ def iter_codex(root: Path, since: float):
     for f in root.rglob("*.jsonl"):
         if f.stat().st_mtime < since:
             continue
-        with f.open(errors="ignore") as fh:
+        with f.open(encoding="utf-8", errors="ignore") as fh:
             for line in fh:
                 if '"role":"user"' not in line and '"user_message"' not in line:
                     continue
@@ -112,14 +112,14 @@ def iter_generic(path: Path, since: float):
     text file named directly is read as the human's own words."""
     if path.is_file() and path.suffix != ".jsonl":
         if path.stat().st_mtime >= since:
-            for line in path.open(errors="ignore"):
+            for line in path.open(encoding="utf-8", errors="ignore"):
                 yield "generic", path.parent.name, line
         return
     files = [path] if path.is_file() else sorted(path.rglob("*.jsonl"))
     for f in files:
         if f.stat().st_mtime < since:
             continue
-        for line in f.open(errors="ignore"):
+        for line in f.open(encoding="utf-8", errors="ignore"):
             try:
                 o = json.loads(line)
             except ValueError:
@@ -131,7 +131,7 @@ def iter_generic(path: Path, since: float):
 def _write_private(path: Path, text: str) -> None:
     """Create the file 0600 from the start; samples quote private transcripts."""
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as fh:
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
         fh.write(text)
 
 

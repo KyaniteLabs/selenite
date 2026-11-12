@@ -70,8 +70,8 @@ def test_slash_and_tool_label_low_confidence():
 def test_docs_say_the_desktop_half_starts_off():
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
-    assert "Capabilities ▸ Plugins" in (root / "README.md").read_text()
-    assert "Capabilities > Plugins" in (root / "install.sh").read_text()
+    assert "Capabilities ▸ Plugins" in (root / "README.md").read_text(encoding="utf-8")
+    assert "Capabilities > Plugins" in (root / "install.sh").read_text(encoding="utf-8")
 
 
 # --- Calm recall: common "I already said this" phrasings ------------------------------------

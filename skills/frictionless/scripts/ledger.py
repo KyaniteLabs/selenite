@@ -269,7 +269,7 @@ def add(kind: str, key: str, note: str = "", agent: str = "") -> dict | None:
             with _Lock(state):
                 _rotate(state)
                 fd = os.open(state / "ledger.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-                with os.fdopen(fd, "a") as fh:
+                with os.fdopen(fd, "a", encoding="utf-8") as fh:
                     fh.write(json.dumps(row) + "\n")
             pane.broadcast("ledger.updated", {"kind": kind})
             return row
@@ -303,7 +303,7 @@ def signature() -> tuple:
 def _read(path: Path, since: float):
     if not path.exists():
         return
-    with path.open(errors="ignore") as fh:
+    with path.open(encoding="utf-8", errors="ignore") as fh:
         for line in fh:
             try:
                 r = json.loads(line)

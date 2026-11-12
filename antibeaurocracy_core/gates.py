@@ -55,7 +55,7 @@ def atomic_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
-        with os.fdopen(fd, "w") as fh:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(text)
         os.replace(tmp, path)
     except BaseException:
@@ -100,7 +100,7 @@ class RefusalStore:
         """Live entries only, each coerced to ``{"n": int >= 0, "ts": float}``. A malformed or
         expired entry is dropped, so a hand-edited or half-written file can't raise."""
         try:
-            data = json.loads(self.path.read_text())
+            data = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return {}
         out = {}

@@ -139,7 +139,7 @@ def test_evolve_uses_newest_report_only():
     for i, n in enumerate((5, 7)):
         f = ledger.STATE / f"report-{i}.json"
         f.write_text(json.dumps({"counts": {"curse": n}})); os.utime(f, (time.time() - 10 + i,) * 2)
-    text = evolve.build(30).read_text()
+    text = evolve.build(30).read_text(encoding="utf-8")
     assert "- curse: 7" in text and "- curse: 12" not in text
 
 
@@ -154,13 +154,13 @@ def test_evolve_prune_needs_two_real_cycles(monkeypatch):
     monkeypatch.setattr(evolve.time, "time", lambda: clock[0])
     _fresh_report(1)
     evolve.build(30)
-    first = json.loads((ledger.STATE / "evolve-state.json").read_text())["silent"]
+    first = json.loads((ledger.STATE / "evolve-state.json").read_text(encoding="utf-8"))["silent"]
     assert first["curse"] == 1
     evolve.build(30)  # a re-draft the same day is not a new cycle
-    assert json.loads((ledger.STATE / "evolve-state.json").read_text())["silent"]["curse"] == 1
+    assert json.loads((ledger.STATE / "evolve-state.json").read_text(encoding="utf-8"))["silent"]["curse"] == 1
     clock[0] += 2 * 86400
     _fresh_report(2)
-    text = evolve.build(30).read_text()
+    text = evolve.build(30).read_text(encoding="utf-8")
     assert "Category `curse` silent for 2 cycles: move it to references/compost.md" in text
     assert stat.S_IMODE((ledger.STATE / "evolve-state.json").stat().st_mode) == 0o600
 
@@ -169,7 +169,7 @@ def test_evolve_lists_cleanse_findings():
     for _ in range(3):
         ledger.add("approval", "npm-publish")
     cleanse.write(cleanse.run())
-    assert "npm-publish" in evolve.build(30).read_text().split("## Recurring")[0]
+    assert "npm-publish" in evolve.build(30).read_text(encoding="utf-8").split("## Recurring")[0]
 
 
 def test_redact():
@@ -185,8 +185,8 @@ def test_mine_generic_reads_only_user_rows(tmp_path, monkeypatch):
     src.joinpath("notes.md").write_text("wtf just do it\n")  # inside a folder: ignored
     monkeypatch.setattr(sys, "argv", ["mine", "--days", "1", "--path", str(src), "--out", str(ledger.STATE)])
     assert mine.main() == 0
-    report = json.loads(next(ledger.STATE.glob("report-*.json")).read_text())
+    report = json.loads(next(ledger.STATE.glob("report-*.json")).read_text(encoding="utf-8"))
     assert report["user_messages_scanned"] == 1 and "host" not in report
-    samples = next(ledger.STATE.glob("samples-*.json")).read_text()
+    samples = next(ledger.STATE.glob("samples-*.json")).read_text(encoding="utf-8")
     assert "a@b.co" not in samples and "<email>" in samples
     assert stat.S_IMODE(next(ledger.STATE.glob("samples-*.json")).stat().st_mode) == 0o600

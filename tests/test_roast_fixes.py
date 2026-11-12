@@ -59,14 +59,14 @@ def test_a_damaged_evolve_state_resets_instead_of_crashing(bad):
     ledger.STATE.mkdir(mode=0o700)
     (ledger.STATE / "evolve-state.json").write_text(bad)
     assert evolve.build(30).exists()
-    st = json.loads((ledger.STATE / "evolve-state.json").read_text())
+    st = json.loads((ledger.STATE / "evolve-state.json").read_text(encoding="utf-8"))
     assert isinstance(st["silent"], dict)
 
 
 def test_silence_only_counts_what_was_measured(monkeypatch):
     clock = [1_000_000.0]
     monkeypatch.setattr(evolve.time, "time", lambda: clock[0])
-    silent = lambda: json.loads((ledger.STATE / "evolve-state.json").read_text())["silent"]  # noqa: E731
+    silent = lambda: json.loads((ledger.STATE / "evolve-state.json").read_text(encoding="utf-8"))["silent"]  # noqa: E731
     evolve.build(30)  # no report, no Calm rows: nothing measured
     assert not any(silent().values())
     ledger.add("calm", "curse")
@@ -87,7 +87,7 @@ def test_silence_only_counts_what_was_measured(monkeypatch):
 def test_evolve_redacts_notes_and_leaves_the_pr_to_the_human():
     ledger.add("miss", "x", note="mail a.b@example.com about it")
     ledger.add("fp", "y", note="token ghp_abcdefghijklmnopqrstuvwxyz0123456789")
-    text = evolve.build(30).read_text()
+    text = evolve.build(30).read_text(encoding="utf-8")
     assert "@example.com" not in text and "ghp_" not in text
     assert "Opening a PR is the human's decision" in text and "one PR" not in text
 
