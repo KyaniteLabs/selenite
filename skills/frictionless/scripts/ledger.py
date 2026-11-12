@@ -37,24 +37,49 @@ import time
 from collections import Counter
 from pathlib import Path
 
+try:
+    from hermes_constants import get_hermes_home, get_hermes_home_override
+except ImportError:  # Standalone skill scripts do not need Hermes installed.
+    get_hermes_home = get_hermes_home_override = None
+
 if __package__:
     from . import pane
 else:
     import pane
 
 
+def _active_hermes_home() -> Path | None:
+    """Return the task's Hermes home when the host exposes its profile context."""
+    active_override = get_hermes_home_override() if get_hermes_home_override else None
+    if get_hermes_home and (os.environ.get("HERMES_HOME") or active_override):
+        return Path(get_hermes_home()).expanduser()
+    hermes = os.environ.get("HERMES_HOME")
+    return Path(hermes).expanduser() if hermes else None
+
+
 def _state_from_env() -> Path:
-    """The folder Selenite prefers: explicit, then XDG, then the Hermes home, then ~/.local/state."""
+    """The folder Selenite prefers for this task, resolving the active Hermes profile."""
     explicit = os.environ.get("SELENITE_STATE")
     if explicit:
         return Path(explicit).expanduser()
     xdg = os.environ.get("XDG_STATE_HOME")
     if xdg:
         return Path(xdg).expanduser() / "selenite"
-    hermes = os.environ.get("HERMES_HOME")
+    hermes = _active_hermes_home()
     if hermes:
-        return Path(hermes).expanduser() / "plugin-data/selenite"
+        return hermes / "plugin-data/selenite"
     return Path.home() / ".local/state/selenite"
+
+
+_INITIAL_STATE = _state_from_env()
+STATE = _INITIAL_STATE  # compatibility handle; ledger operations resolve the path live
+
+
+def preferred_state() -> Path:
+    """The active task's preferred state folder, with support for callers overriding ``STATE``."""
+    if STATE != _INITIAL_STATE:
+        return STATE
+    return _state_from_env()
 
 
 def state_dirs() -> list[Path]:
@@ -64,46 +89,49 @@ def state_dirs() -> list[Path]:
     home folder is read-only: the preference falls through to a folder that
     takes the write instead of a traceback.
     """
-    if _explicit():
-        return [STATE]  # an explicit SELENITE_STATE is the whole world: no reads from, or writes to, other seats' folders
-    out = [STATE]
+    preferred = preferred_state()
+    if _explicit(preferred):
+        return [preferred]  # explicit state is the only search target
     xdg = os.environ.get("XDG_STATE_HOME")
-    hermes = os.environ.get("HERMES_HOME")
+    hermes = _active_hermes_home()
     shared = [Path(xdg).expanduser() / "selenite" if xdg else None, Path.home() / ".local/state/selenite"]
-    own = Path(hermes).expanduser() / "plugin-data/selenite" if hermes else None
+    own = hermes / "plugin-data/selenite" if hermes else None
+    out = [preferred]
     for extra in (shared[0], own, shared[1]):
-        if extra is None or extra == STATE:
+        if extra is None or extra == preferred:
             continue
         if extra in shared:  # user-wide: keep this home's fallback state apart from every other home's
-            extra = extra / "by-home" / _home_tag()
+            extra = extra / "by-home" / _home_tag(preferred)
         if extra not in out:
             out.append(extra)
     return out
 
 
-def _home_tag() -> str:
+def _home_tag(home: Path | None = None) -> str:
     """A short, stable name for this home's fallback subfolder: a hash of the preferred folder,
     so no path or user name is written into the folder name."""
-    return hashlib.sha256(os.path.abspath(os.fspath(STATE)).encode()).hexdigest()[:12]
+    home = preferred_state() if home is None else home
+    return hashlib.sha256(os.path.abspath(os.fspath(home)).encode()).hexdigest()[:12]
 
 
-def _explicit() -> bool:
+def _explicit(state: Path | None = None) -> bool:
     """True when SELENITE_STATE names the folder in use. Isolation follows the folder actually in use,
     so code that points STATE elsewhere gets the normal fallback list."""
     explicit = os.environ.get("SELENITE_STATE")
-    return bool(explicit) and Path(explicit).expanduser() == STATE
+    in_use = preferred_state() if state is None else state
+    return bool(explicit) and Path(explicit).expanduser() == in_use
 
 
 def write_target() -> Path:
     """The folder the next write goes to, without creating anything: the first that exists and is
-    writable, or whose nearest existing parent is. Falls back to STATE when none would take it."""
+    writable, or whose nearest existing parent is. Falls back to the preferred folder when none would take it."""
     for state in state_dirs():
         probe = state
         while not probe.exists() and probe.parent != probe:
             probe = probe.parent
         if probe.is_dir() and os.access(probe, os.W_OK):
             return state
-    return STATE
+    return preferred_state()
 
 
 def writable_state() -> Path | None:
@@ -134,7 +162,6 @@ def newest(pattern: str) -> list[Path]:
     return [f for _, f in sorted(found, key=lambda t: t[0], reverse=True)]
 
 
-STATE = _state_from_env()
 BLOCKED_DAYS = 90  # how long a blocked-card row keeps its badge: one window for hooks and dashboard
 LEDGER = STATE / "ledger.jsonl"
 ROTATED = STATE / "ledger.1.jsonl"
@@ -171,10 +198,15 @@ _REDACT = [
     (re.compile(r"://[^/\s:@]+:[^@\s]+@"), "://<cred>@"),
     (re.compile(r"(?i)\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 <token>"),
     # Limit unquoted auth values to a scheme and one token so prose stays readable.
-    (re.compile(r"(?i)\b(oauth)(\s*[=:]\s*)"
-                r"(?!(?:bearer|basic|token)\s+<token>|<secret>)"
-                r"(\"[^\"\r\n]*\"|'[^'\r\n]*'|\S+)"),
-     r"\1\2<secret>"),
+    (
+        re.compile(
+            r"(?i)\b(oauth)(\s*[=:]\s*)"
+            r"(?!(?:bearer|basic|token)\s+<token>|<secret>)"
+            r"(?:(?:api[ _-]?key)\s+)?"
+            r"(\"[^\"\r\n]*\"|'[^'\r\n]*'|\S+)"
+        ),
+        r"\1\2<secret>",
+    ),
     (re.compile(r"(?i)\b((?:proxy-)?authorization)(\s*[=:]\s*)"
                 r"(?!(?:bearer|basic|token)\s+<token>|<secret>)"
                 r"(\"[^\"\r\n]*\"|'[^'\r\n]*'|\S+(?:[ \t]+\S+)?)"),
@@ -228,7 +260,7 @@ class _Lock:
     """An advisory lock around rotate-and-append, so two writers never rotate the same file twice."""
 
     def __init__(self, state: Path | None = None):
-        self.state = STATE if state is None else state
+        self.state = preferred_state() if state is None else state
 
     def __enter__(self):
         self.fd = os.open(self.state / ".ledger.lock", os.O_WRONLY | os.O_CREAT, 0o600)
@@ -255,7 +287,7 @@ class _Lock:
 
 
 def _rotate(state: Path | None = None) -> None:
-    state = STATE if state is None else state
+    state = preferred_state() if state is None else state
     ledger, rotated = state / "ledger.jsonl", state / "ledger.1.jsonl"
     try:
         if ledger.stat().st_size >= ROTATE_BYTES:

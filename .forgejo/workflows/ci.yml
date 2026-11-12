@@ -41,8 +41,8 @@ jobs:
           set -o pipefail
           runuser -u ci -- env HOME=/home/ci python3 -m pytest -q -rs -p no:cacheprovider | tee pytest.out
           # Every test should run in CI (fastapi is installed, the checkout is a git repo): a skip is a failure.
-          # The two tests that need a real Hermes checkout run in hermes-validate instead.
-          if grep "^SKIPPED" pytest.out | grep -v -e "Hermes gateway session context is not present" -e "real Hermes source is not configured"; then echo "unexpected skips" >&2; exit 1; fi
+          # The tests that need a real Hermes checkout run in hermes-validate instead.
+          if grep "^SKIPPED" pytest.out | grep -v -e "Hermes gateway session context is not present" -e "Hermes profile context is not present" -e "real Hermes source is not configured"; then echo "unexpected skips" >&2; exit 1; fi
       - name: Desktop event contract
         run: node --experimental-vm-modules tests/test_pane_events.mjs
       - name: Desktop query contract

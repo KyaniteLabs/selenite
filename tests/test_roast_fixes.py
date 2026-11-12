@@ -126,6 +126,11 @@ def test_redaction_keeps_the_auth_scheme_word():
     assert ledger.redact("Authorization: Bearer abcdef0123456789abcdef") == "Authorization: Bearer <token>"
 
 
+def test_oauth_apikey_redaction_consumes_the_credential_and_keeps_following_prose():
+    redacted = ledger.redact("oauth: ApiKey synthetic-secret-value remains readable")
+    assert redacted == "oauth: <secret> remains readable"
+
+
 @pytest.mark.parametrize("raw", [
     "oauth=synthetic-secret-value",
     "GITHUB_OAUTH=synthetic-secret-value",

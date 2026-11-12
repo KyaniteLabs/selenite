@@ -75,9 +75,20 @@ def test_bare_words_are_not_walls():
     assert classify("Waiting for sign-off from product on the budget line wording").cls == FAKE
 
 
-def test_api_token_for_hyphenated_context_service_remains_a_credential_wall():
-    text = "Need the API token for context-service from the ops agent"
-    assert classify(text).cls == WALL
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Need the API token for context-service from the ops agent",
+        "Need a token for context-service from the ops agent",
+    ],
+)
+def test_token_for_hyphenated_context_service_remains_a_credential_wall(text):
+    verdict = classify(text)
+    assert (verdict.cls, verdict.subtype, verdict.confidence) == (
+        WALL,
+        "credentials",
+        0.9,
+    )
 
 
 def test_wall_beats_fake():
