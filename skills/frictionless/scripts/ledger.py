@@ -187,6 +187,20 @@ def _redact_card(match: re.Match[str]) -> str:
 _CMD_SEP = r"(?:[ \t]|\\\r?\n)+"
 _CMD_ARGS = r"(?:" + _CMD_SEP + r"[^\s;|&]+){0,64}?" + _CMD_SEP
 
+
+def _quoted_secret(match: re.Match[str]) -> str:
+    quote = match.group("double_quote") or match.group("single_quote") or ""
+    return f"{quote}<secret>{quote}"
+
+
+def _redact_authorization(match: re.Match[str]) -> str:
+    return match.group(1) + match.group(2) + match.group(3) + _quoted_secret(match)
+
+
+def _redact_key_value(match: re.Match[str]) -> str:
+    return match.group("key") + match.group("key_quote") + match.group("sep") + _quoted_secret(match)
+
+
 # Redaction runs on every key and note the ledger writes, and on miner samples. Order matters:
 # whole secrets first, then the generic long-run rule.
 _REDACT = [
@@ -207,21 +221,26 @@ _REDACT = [
         ),
         r"\1\2<secret>",
     ),
-    (re.compile(r"(?i)\b((?:proxy-)?authorization)(\s*[=:]\s*)"
-                r"(?!(?:bearer|basic|token)\s+<token>|<secret>)"
-                r"(\"[^\"\r\n]*\"|'[^'\r\n]*'|\S+(?:[ \t]+\S+)?)"),
-     r"\1\2<secret>"),
+    (re.compile(r"(?i)\b((?:proxy-)?authorization)([\"']?)(\s*[=:]\s*)"
+                r"(?!(?:[\"']?(?:bearer|basic|token)\s+<token>|[\"']?<secret>))"
+                r"(?:(?P<double_quote>\")[^\"\r\n]*(?P=double_quote)|"
+                r"(?P<single_quote>')[^'\r\n]*(?P=single_quote)|"
+                r"Digest(?:[ \t]+[\w-]+=[^,\s\"']+,?)+|"
+                r"[^\s\"']+(?:[ \t]+[^\s\"']+)?)"),
+     _redact_authorization),
     # Keep the quoted shell argument intact before the Cookie rule sees it.
     (re.compile(r"(?i)(\bcurl\b" + _CMD_ARGS + r"(?:-H|--header)" + _CMD_SEP + r")"
                 r"(['\"])(cookie\s*:\s*)[^'\"]*\2"),
      r"\1\2\3<secret>\2"),
     # key=value / key: value. A value the bearer rule already replaced keeps its scheme word, so
     # "Authorization: Bearer <token>" stays readable.
-    (re.compile(r"(?i)\b((?:[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credentials?|cookies?|sessionid)[\w-]*|"
-                r"[\w-]*(?:oauth|auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth)(?:[-_][\w-]+)*|authorization|authentication)"
-                r")(\s*[=:]\s*)(?!(?:bearer|basic|token)\s+<token>|<secret>)"
-                r"(\"[^\"]*\"|'[^']*'|\S+)"),
-     r"\1\2<secret>"),
+    (re.compile(r"(?i)\b(?<![\w-])(?=[\w-]+[\"']?\s*[=:])(?!max[-_]?tokens?\b)(?P<key>(?:[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credentials?|cookies?|sessionid)[\w-]*|"
+                r"[\w-]*(?:oauth|auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth)(?:[-_][\w-]+)?|authorization|authentication))"
+                r"(?P<key_quote>[\"']?)(?P<sep>\s*[=:]\s*)"
+                r"(?!(?:[\"']?(?:bearer|basic|token)\s+<token>|[\"']?<secret>))"
+                r"(?:(?P<double_quote>\")[^\"\r\n]*(?P=double_quote)|"
+                r"(?P<single_quote>')[^'\r\n]*(?P=single_quote)|\S+)"),
+     _redact_key_value),
     # "password hunter2" with no separator; a plain word ("password reset") is left alone.
     (re.compile(r"(?i)\b(password|passphrase|passwd)(\s+)(?!<secret>)(?=\S*[^\sA-Za-z])\S+"), r"\1\2<secret>"),
     # curl and mysql credentials. _CMD_ARGS bounds each scan to one command, so text with
@@ -232,7 +251,16 @@ _REDACT = [
     (re.compile(r"(?i)(\bcurl\b" + _CMD_ARGS + r"-u)(?=\S)"
                 r"(?:\"[^\"]*\"|'[^']*'|\S+)"),
      r"\1<secret>"),
-    (re.compile(r"(?i)(\bmysql\b" + _CMD_ARGS + r"-p(?:" + _CMD_SEP + r"|(?=\S)))"
+    (re.compile(r"(?i)(\bcurl\b" + _CMD_ARGS + r"-[A-Za-z]*u" + _CMD_SEP + r")"
+                r"(?:\"[^\"]*\"|'[^']*'|\S+)"),
+     r"\1<secret>"),
+    (re.compile(r"(\bmysql(?:dump)?\b" + _CMD_ARGS + r"-p(?=\S))"
+                r"(?:\"[^\"]*\"|'[^']*'|\S+)"),
+     r"\1<secret>"),
+    (re.compile(r"(?i)(\bsshpass\b" + _CMD_ARGS + r"-p" + _CMD_SEP + r")"
+                r"(?:\"[^\"]*\"|'[^']*'|\S+)"),
+     r"\1<secret>"),
+    (re.compile(r"(?i)(\bdocker\b" + _CMD_ARGS + r"login\b" + _CMD_ARGS + r"(?:-p|--password)(?:" + _CMD_SEP + r"|=))"
                 r"(?:\"[^\"]*\"|'[^']*'|\S+)"),
      r"\1<secret>"),
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "<token>"),

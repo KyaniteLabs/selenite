@@ -126,6 +126,8 @@ def test_wall_family_action_overrides_fake_ack(text):
     "blocked on token budget",
     "needs 2000 more tokens of context",
     "need more tokens for context",
+    "Need more tokens for the context window to finish",
+    "need more tokens for context to finish the summary",
     "out of tokens",
     "the model ran out of tokens",
     "need 1000 tokens for context length",
@@ -146,6 +148,15 @@ def test_llm_token_budget_is_not_a_credentials_wall(text):
 def test_context_api_credentials_remain_walls(text):
     verdict = classify(text)
     assert verdict.cls == WALL and verdict.subtype == "credentials", verdict
+
+
+def test_token_for_context_service_remains_a_credential_wall():
+    verdict = classify("Need the token for context-service from the ops agent")
+    assert (verdict.cls, verdict.subtype, verdict.confidence) == (
+        WALL,
+        "credentials",
+        0.9,
+    )
 
 
 def test_human_questions_are_not_agent_gates():

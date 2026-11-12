@@ -3,6 +3,8 @@
 LFM3 answered HUMAN for that case 3 times out of 3 (21/24 overall); with WALL stated as winning and
 HUMAN stated as excluding the wall items it got 24/24. The prompt must keep that precedence.
 """
+import pytest
+
 from antibeaurocracy_core import judge
 
 
@@ -26,3 +28,15 @@ def test_prompt_still_formats_and_names_every_class():
     out = judge.PROMPT.format(reason="x")
     for c in judge.CLASSES:
         assert c in out
+
+
+@pytest.mark.parametrize("text", [
+    "**ANSWER**: FAKE",
+    "### ANSWER: FAKE",
+    "ANSWER: `FAKE`",
+    "1. ANSWER: FAKE",
+    "ANSWER: [FAKE]",
+    "__ANSWER:__ FAKE",
+])
+def test_parse_accepts_common_markdown_answer_lines(text):
+    assert judge.parse(text) == "FAKE"

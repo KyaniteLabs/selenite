@@ -1,12 +1,12 @@
 """Regression tests for the second-roast findings: each one pins a failure
 the roast reproduced, so it cannot come back quietly."""
 import json
-import os
+import subprocess
+import sys
 import time
 
 import pytest
-
-from conftest import HOME, cleanse, evolve, ledger
+from conftest import HOME, REPO, cleanse, evolve, ledger
 
 
 def _fake_ledger(rows):
@@ -150,6 +150,55 @@ def test_redaction_keeps_noncard_numbers_and_authority_words():
     text = "deploy at 1731326400000 failed; authority: ceo approved; t_1731326400123"
     assert ledger.redact(text) == text
     assert ledger.redact("card 4111 1111 1111 1111") == "card <card>"
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ('{"password": "S"}', '{"password": "<secret>"}'),
+    ('{"password": "don\'t log this"}', '{"password": "<secret>"}'),
+    ('{"api_key": "S"}', '{"api_key": "<secret>"}'),
+    ("{'password': 'hunter2'}", "{'password': '<secret>'}"),
+    ('{"Authorization": "ApiKey S"}', '{"Authorization": "<secret>"}'),
+    ('curl -H "Authorization: Digest username=bob, response=S"',
+     'curl -H "Authorization: <secret>"'),
+    ('curl -H "Authorization: ApiKey S" https://x',
+     'curl -H "Authorization: <secret>" https://x'),
+    ('sshpass -p S', 'sshpass -p <secret>'),
+    ('sshpass -p hunter2', 'sshpass -p <secret>'),
+    ('docker login -u bob -p hunter2', 'docker login -u bob -p <secret>'),
+    ('mysqldump -u root -phunter2', 'mysqldump -u root -p<secret>'),
+    ('curl -sSLu bob:hunter2', 'curl -sSLu <secret>'),
+])
+def test_redaction_catches_quoted_and_command_credentials(raw, expected):
+    assert ledger.redact(raw) == expected
+
+
+def test_redaction_keeps_mysql_ports_prompt_form_and_token_limits():
+    port = "mysql -h db1 -P 3306 -u root mydb"
+    prompt = "mysql -u root -p mydb"
+    assert ledger.redact(port) == port
+    assert ledger.redact(prompt) == prompt
+    assert ledger.redact("set max_tokens=4000") == "set max_tokens=4000"
+
+
+@pytest.mark.parametrize("payload", [
+    pytest.param("auth" + "_x" * 200, id="auth-segments"),
+    pytest.param("token-" * 600, id="repeated-token"),
+])
+def test_redaction_handles_adversarial_key_names_promptly(payload):
+    code = (
+        "import sys; sys.path.insert(0, 'skills/frictionless/scripts'); "
+        "import ledger; ledger.redact(sys.argv[1])"
+    )
+    started = time.monotonic()
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", code, payload], cwd=REPO,
+            capture_output=True, text=True, timeout=1.5, check=False,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail("redaction exceeded 1.5 seconds on an adversarial key name")
+    assert result.returncode == 0, result.stderr
+    assert time.monotonic() - started < 1.5
 
 
 # Fable roast lows: S1 quoted text, S4 active home only, S5 deleted cards.
