@@ -22,9 +22,11 @@ from .classify import FAKE
 CLASSES = ("WALL", "HUMAN", "MACHINERY", "DEPENDENCY", "FAKE")
 _CLASS = "|".join(CLASSES)
 _ANSWER_LINE = re.compile(
-    r'^[\s>*#\-\d.)]*[*_`]*(?:FINAL[ \t]+)?ANSWER[*_`]*[ \t]*:[ \t]*[*_`\[<({"\']*[ \t]*('
+    r'^[\s>*#\-\d.)]*[*_`]*(?:FINAL[ \t]+)?ANSWER[*_`]*[ \t]*:[ \t]*(?:\r?\n[ \t]*)?[*_`\[<({"\']*[ \t]*('
     + _CLASS
-    + r')[\s*_`\]}>"\')},.!?:;]*$',
+    + r')(?![A-Za-z0-9])(?!_(?:' + _CLASS + r')\b)(?![^\r\n]*\|)'
+    + r'(?![ \t]*(?:[-—,:;.!?(\[{<][ \t]*)?(?:' + _CLASS + r')\b)'
+    + r'[^\r\n]*$',
     re.IGNORECASE | re.MULTILINE,
 )
 _BARE = re.compile(rf"(?:(?!\|)[\W_])*({_CLASS})(?:(?!\|)[\W_])*", re.IGNORECASE)

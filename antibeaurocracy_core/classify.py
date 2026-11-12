@@ -141,7 +141,8 @@ WALL_FAMILY = re.compile(
 # resource and its context structurally, then remove it before either wall detector runs.
 _LLM_TOKEN_CONTEXT = re.compile(
     r"\b(?:(?:(?:\d+\s+)?(?:more\s+)?tokens|\d+\s+(?:more\s+)?token)\s+(?:of|for)\s+(?:the\s+)?(?:llm\s+)?context(?:\s+(?:window|length))?(?![-\w])|"
-    r"token\s+(?:of|for)\s+(?:the\s+)?(?:llm\s+)?context\s+(?:window|length)(?![-\w])|"
+    r"token\s+(?:of|for)\s+(?:the\s+)?(?:llm\s+)?context\s+(?:window|length)(?![-\w])"
+    r"(?![ \t]+(?:checks?|services?|apis?|brokers?|endpoints?|limits?|requests?)\b)|"
     r"(?:out of|ran out of)\s+(?:the\s+)?(?:llm\s+)?(?:(?:\d+\s+)?tokens|\d+\s+token)|"
     r"(?:llm\s+)?tokens?\s+(?:budget|limit)|"
     r"(?:llm\s+)?context(?:\s+window)?\s+(?:is\s+)?(?:full|exhausted))\b",

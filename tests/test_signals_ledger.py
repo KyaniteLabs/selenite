@@ -162,6 +162,18 @@ def test_curl_cookie_header_redaction_preserves_shell_quotes():
     assert redacted.count("'") == 2
 
 
+def test_digest_fields_without_spaces_are_redacted_as_one_authorization_value():
+    raw = 'Authorization: Digest username="bob",realm="r",nonce="n",uri="/",response="R8_SYNTHETIC"'
+    redacted = ledger.redact(raw)
+    assert "R8_SYNTHETIC" not in redacted
+    assert "response=" not in redacted
+
+
+def test_curl_cookie_jar_path_is_not_redacted_as_cookie_data():
+    text = "curl -b cookiejar.txt https://example.test"
+    assert ledger.redact(text) == text
+
+
 @pytest.mark.parametrize("text", [
     "ran curl" + " " * 24 + "x",
     "ran curl" + " " * 26 + "x",

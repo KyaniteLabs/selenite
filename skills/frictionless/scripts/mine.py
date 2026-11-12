@@ -174,7 +174,7 @@ def main() -> int:
                     by_agent[agent][cat] += 1
                     if len(samples[cat]) < a.samples and \
                             sum(1 for s in samples[cat] if s["agent"] == agent) < per_agent:
-                        samples[cat].append({"agent": agent, "text": redact(text[:300])})
+                        samples[cat].append({"agent": agent, "text": redact(text)[:300]})
         except (OSError, sqlite3.Error) as e:
             print(f"selenite-mine: skipped a source: {e}", file=sys.stderr)
 

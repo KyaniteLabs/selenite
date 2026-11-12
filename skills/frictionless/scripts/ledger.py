@@ -197,6 +197,12 @@ _CMD_ARGS = r"(?:" + _CMD_SEP + r"[^\s;|&]+){0,64}?" + _CMD_SEP
 _SHELL_VALUE = r"(?:\"[^\"\r\n]*\"|'[^'\r\n]*'|\S+)"
 _CURL_COOKIE = re.compile(r"(?i)(\bcurl\b" + _CMD_ARGS + r"(?:-H|--header)" + _CMD_SEP + r")"
                          r"(['\"])(cookie\s*:\s*)[^'\"]*\2")
+_CURL_COOKIE_ARG = re.compile(
+    r"(?i)(\bcurl\b" + _CMD_ARGS + r"(?:--cookie|-b)(?:" + _CMD_SEP + r"|=)?)(?:"
+    r'(?P<double_quote>")(?=[^"\r\n]*=)[^"\r\n]*(?P=double_quote)|'
+    r"(?P<single_quote>')(?=[^'\r\n]*=)[^'\r\n]*(?P=single_quote)|"
+    r"(?=[^\s;|&]*=)[^\s;|&]+)"
+)
 _CURL_USER = re.compile(r"(?i)(\bcurl\b" + _CMD_ARGS + r"(?:--proxy-user|--user|-[A-Za-z]*u)(?:" + _CMD_SEP + r"|=)?)"
                         + _SHELL_VALUE)
 
@@ -210,9 +216,63 @@ def _redact_authorization(match: re.Match[str]) -> str:
     return match.group(1) + match.group(2) + match.group(3) + _quoted_secret(match)
 
 
+def _redact_curl_cookie_arg(match: re.Match[str]) -> str:
+    return match.group(1) + _quoted_secret(match)
+
+
 def _redact_key_value(match: re.Match[str]) -> str:
     return ((match.group("flag") or "") + match.group("key") + match.group("key_quote")
             + match.group("sep") + _quoted_secret(match))
+
+
+_CREDENTIAL_CONTAINER = re.compile(
+    r"(?i)(?<![\w-])(?P<prefix>[\"']?(?:credentials?|auth(?:entication)?|cookies?)[\"']?\s*[=:]\s*)"
+    r"(?P<open>[\[{])"
+)
+
+
+def _container_end(text: str, start: int) -> int:
+    """End of a bounded JSON/Python-style object or list, including nested values."""
+    pairs = {"{": "}", "[": "]"}
+    stack = [pairs[text[start]]]
+    quote = ""
+    escaped = False
+    for pos in range(start + 1, len(text)):
+        char = text[pos]
+        if quote:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = ""
+            continue
+        if char in ("'", '\"'):
+            quote = char
+        elif char in pairs:
+            stack.append(pairs[char])
+        elif char in ("}", "]"):
+            if char != stack[-1]:
+                return len(text)
+            stack.pop()
+            if not stack:
+                return pos + 1
+    return len(text)
+
+
+def _redact_containers(text: str) -> str:
+    """Replace complete recognized credential containers, including arbitrary nested leaves."""
+    out = []
+    cursor = 0
+    for match in _CREDENTIAL_CONTAINER.finditer(text):
+        if match.start() < cursor:
+            continue
+        end = _container_end(text, match.start("open"))
+        out.append(text[cursor:match.start()])
+        out.append(match.group("prefix") + '"<secret>"')
+        cursor = end
+    out.append(text[cursor:])
+    return "".join(out)
 
 
 # Redaction runs on every key and note the ledger writes, and on miner samples. Order matters:
@@ -238,36 +298,48 @@ _REDACT = [
                 r"(?!(?:[\"']?(?:bearer|basic|token)\s+<token>|[\"']?<secret>))"
                 r"(?:(?P<double_quote>\")(?:\\.|[^\"\\\r\n])*(?P=double_quote)|"
                 r"(?P<single_quote>')(?:\\.|[^'\\\r\n])*(?P=single_quote)|"
-                r"Digest(?:[ \t]+[\w-]+=(?:\"(?:\\.|[^\"\\\r\n])*\"|[^,\s\"']+),?)+|"
+                r"Digest[ \t]+[\w-]+=(?:\"(?:\\.|[^\"\\\r\n])*\"|[^,\s\"']+)"
+                r"(?:(?:,[ \t]*|[ \t]+)[\w-]+=(?:\"(?:\\.|[^\"\\\r\n])*\"|[^,\s\"']+))*|"
                 r"[^\s\"']+(?:[ \t]+[^\s\"']+)?)"),
      _redact_authorization),
     # Keep the quoted shell argument intact before the Cookie rule sees it.
     (_CURL_COOKIE, r"\1\2\3<secret>\2"),
-    # Cookie maps can hold secrets under arbitrary names such as "sid".
-    (re.compile(r"(?i)(\bcookies?[\"']?\s*[=:]\s*)\{[^{}\r\n]*\}"), r"\1<secret>"),
+    (_CURL_COOKIE_ARG, _redact_curl_cookie_arg),
     # YAML block scalars put the secret after the key's first line.
-    (re.compile(r"(?im)(?P<key>(?<!\w)(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key)\s*:\s*)"
+    (re.compile(r"(?im)(?P<key>(?<!\w)[\w-]{0,64}(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key)[\w-]{0,64}\s*:\s*)"
                 r"[|>][-+]?\s*\r?\n(?P<indent>[ \t]+)[^\r\n]*(?:\r?\n(?P=indent)[^\r\n]*)*"),
      r"\g<key><secret>"),
-    # key=value / key: value. A value the bearer rule already replaced keeps its scheme word, so
-    # "Authorization: Bearer <token>" stays readable.
-    (re.compile(r"(?i)(?<!\w)(?:(?P<flag>-{1,2})|(?<!-))(?=[\w][\w-]*[\"']?\s*[=:])"
-                r"(?!max[-_]?tokens?\b)(?!(?:tokenizer|(?:num|total|min|max)_tokens\w*)[\"']?\s*[=:])"
-                r"(?P<key>(?:[\w-]*(?:password|passphrase|passwd|pass|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credentials?|cookies?|sessionid|signature)[\w-]*|"
-                r"[\w-]*(?:oauth|auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth)(?:[-_][\w-]+)?|authorization|authentication))"
+    (re.compile(r"(?i)(?<![\w-])(?:(?P<flag>-{1,2})|(?<!-))(?P<key>(?:[\w-]{1,64}[-_])?(?:pass|pw))"
                 r"(?P<key_quote>[\"']?)(?P<sep>\s*[=:]\s*)"
-                r"(?!\{)"
-                r"(?![\"']?required\b)"
                 r"(?!(?:[\"']?(?:bearer|basic|token)\s+<token>|[\"']?<secret>))"
                 r"(?:(?P<double_quote>\")(?:\\.|[^\"\\\r\n])*(?P=double_quote)|"
                 r"(?P<single_quote>')(?:\\.|[^'\\\r\n])*(?P=single_quote)|\S+)"),
      _redact_key_value),
+    (re.compile(r"(?i)(?<![\w-])(?:(?P<flag>-{1,2})|(?<!-))(?P<key>signature)"
+                r"(?P<key_quote>[\"']?)(?P<sep>\s*[=:]\s*)"
+                r"(?:(?P<double_quote>\")[A-Za-z0-9_+/=-]{8,}(?P=double_quote)|"
+                r"(?P<single_quote>')[A-Za-z0-9_+/=-]{8,}(?P=single_quote)|[A-Za-z0-9_+/=-]{8,})"),
+     _redact_key_value),
+    # key=value / key: value. A value the bearer rule already replaced keeps its scheme word, so
+    # "Authorization: Bearer <token>" stays readable.
+    (re.compile(r"(?i)(?<!\w)(?:(?P<flag>-{1,2})|(?<!-))(?=[\w][\w-]*[\"']?\s*[=:])"
+                r"(?!max[-_]?tokens?\b)(?!(?:tokenizer|(?:num|total|min|max)_tokens\w*)[\"']?\s*[=:])"
+                r"(?P<key>(?:[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credentials?|cookies?|sessionid)[\w-]*|"
+                r"sshpass|"
+                r"[\w-]*(?:oauth|auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth)(?:[-_][\w-]+)?|authorization|authentication))"
+                r"(?P<key_quote>[\"']?)(?P<sep>\s*[=:]\s*)"
+                r"(?![\"']?required[\"']?(?=\s*(?:$|[\r\n,}\]]|#)))"
+                r"(?!(?:[\"']?(?:bearer|basic|token)\s+<token>|[\"']?<secret>))"
+                r"(?:(?P<double_quote>\")(?:\\.|[^\"\\\r\n])*(?P=double_quote)|"
+                r"(?P<single_quote>')(?:\\.|[^'\\\r\n])*(?P=single_quote)|\S+)"),
+     _redact_key_value),
+    (re.compile(r"(?i)\b(password|passphrase|passwd)(\s+)is(\s+)\S+"), r"\1\2is\3<secret>"),
     # "password hunter2" with no separator; a plain word ("password reset") is left alone.
     (re.compile(r"(?i)\b(password|passphrase|passwd)(\s+)(?!<secret>)(?=\S*[^\sA-Za-z])\S+"), r"\1\2<secret>"),
     # curl and mysql credentials. _CMD_ARGS bounds each scan to one command, so text with
     # many "curl" words stays linear-time.
     (_CURL_USER, r"\1<secret>"),
-    (re.compile(r"(?i)(\b(?:mysql|mysqldump|mariadb)\b" + _CMD_ARGS + r"(?-i:-p)(?=\S))"
+    (re.compile(r"(?i)(\b(?:mysqladmin|mysql|mysqldump|mariadb)\b" + _CMD_ARGS + r"(?-i:-p)(?=\S))"
                 + _SHELL_VALUE),
      r"\1<secret>"),
     (re.compile(r"(?i)(\bsshpass\b" + _CMD_ARGS + r"-p(?:" + _CMD_SEP + r"|=)?)" + _SHELL_VALUE),
@@ -275,7 +347,10 @@ _REDACT = [
     (re.compile(r"(?i)(\b(?:docker|podman)\b" + _CMD_ARGS + r"login\b" + _CMD_ARGS + r"(?:-p|--password)(?:" + _CMD_SEP + r"|=)?)"
                 + _SHELL_VALUE),
      r"\1<secret>"),
-    (re.compile(r"(?i)(\bredis-cli\b" + _CMD_ARGS + r"-a(?:" + _CMD_SEP + r"|=)?)" + _SHELL_VALUE),
+    (re.compile(r"(?i)(\bredis-cli\b" + _CMD_ARGS + r"(?:-a|--pass(?:word)?)(?:" + _CMD_SEP + r"|=)?)"
+                + _SHELL_VALUE),
+     r"\1<secret>"),
+    (re.compile(r"(?i)(\bhttp\b" + _CMD_ARGS + r"-a(?:" + _CMD_SEP + r"|=)?)" + _SHELL_VALUE),
      r"\1<secret>"),
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "<token>"),
     (re.compile(r"\b(?:sk-proj-|sk-|ghp_|gho_|ghs_|ghu_|github_pat_|xox[abprs]-|glpat-)[A-Za-z0-9_\-]{8,}"), "<token>"),
@@ -288,11 +363,39 @@ _REDACT = [
 ]
 
 
-REDACT_MAX_CHARS = 4000   # callers keep at most 200 chars; cutting first keeps regex cost bounded
+REDACT_MAX_CHARS = 4000   # callers keep at most 200 chars; the bounded prefix keeps regex cost fixed
+_QUOTED_SECRET_START = re.compile(
+    r"(?i)(?<![\w-])(?P<prefix>(?:-{1,2})?[\"']?(?:[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|"
+    r"access[_-]?key|private[_-]?key|credentials?|cookies?|sessionid|authorization|authentication)"
+    r"[\w-]*|sshpass|(?:[\w-]{1,64}[-_])?(?:pass|pw)|signature|"
+    r"[\w-]*(?:oauth|auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth)(?:[-_][\w-]+)?)[\"']?\s*[=:]\s*)(?P<quote>[\"'])"
+)
+
+
+def _bounded_prefix(text: str) -> str:
+    """Clip regex input while replacing any quoted credential cut in half by the cap."""
+    if len(text) <= REDACT_MAX_CHARS:
+        return text
+    prefix = text[:REDACT_MAX_CHARS]
+    for match in _QUOTED_SECRET_START.finditer(prefix):
+        quote = match.group("quote")
+        escaped = False
+        for pos in range(match.end(), len(prefix)):
+            char = prefix[pos]
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                break
+        else:
+            return prefix[:match.end() - 1] + quote + "<secret>" + quote
+    return prefix
 
 
 def redact(text: str) -> str:
-    text = str(text)[:REDACT_MAX_CHARS].replace(str(Path.home()), "~")
+    text = _bounded_prefix(str(text)).replace(str(Path.home()), "~")
+    text = _redact_containers(text)
     has_command_option = "-" in text
     for pat, sub in _REDACT:
         if not has_command_option and (pat is _CURL_COOKIE or pat is _CURL_USER):

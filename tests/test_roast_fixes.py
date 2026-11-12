@@ -115,6 +115,12 @@ def test_ledger_redacts_secrets_before_writing(raw, gone):
     assert gone not in row["note"]
 
 
+def test_ledger_add_does_not_persist_nested_credential_leaves():
+    ledger.add("miss", "nested-auth", note='{"auth": {"user": "bob", "bearer": "R8_NESTED_SECRET"}}')
+    row = [r for r in ledger.rows() if r["key"] == "nested-auth"][-1]
+    assert "R8_NESTED_SECRET" not in row["note"]
+
+
 def test_redaction_leaves_plain_words_alone():
     assert ledger.redact("pip install from a lockfile") == "pip install from a lockfile"
     assert ledger.redact("ratio 3:2 at 10:30") == "ratio 3:2 at 10:30"
@@ -124,6 +130,24 @@ def test_redaction_leaves_plain_words_alone():
 
 def test_redaction_keeps_the_auth_scheme_word():
     assert ledger.redact("Authorization: Bearer abcdef0123456789abcdef") == "Authorization: Bearer <token>"
+
+
+@pytest.mark.parametrize("raw,secret", [
+    ("api_key={SYNTH-0006}", "SYNTH-0006"),
+    ("token: {SYNTH-0006}", "SYNTH-0006"),
+    ("password={{SYNTH-0006}}", "SYNTH-0006"),
+    ("password: required-SYNTH-0007", "SYNTH-0007"),
+    ('password="required-SYNTH-0007"', "SYNTH-0007"),
+    ("password='required SYNTH-0007'", "SYNTH-0007"),
+])
+def test_redaction_does_not_skip_brace_or_required_prefix_values(raw, secret):
+    redacted = ledger.redact(raw)
+    assert secret not in redacted
+    assert "<secret>" in redacted
+
+
+def test_redaction_leaves_the_whole_required_value_alone():
+    assert ledger.redact("password: required") == "password: required"
 
 
 def test_oauth_apikey_redaction_consumes_the_credential_and_keeps_following_prose():
@@ -200,10 +224,45 @@ def test_redaction_catches_quoted_and_command_credentials(raw, expected):
     ("podman login -p FLAG_SECRET", "FLAG_SECRET"),
     ("SSHPASS=FLAG_SECRET", "FLAG_SECRET"),
     ("token: |\n  FLAG_SECRET", "FLAG_SECRET"),
+    ("client_secret: |\n  FLAG_SECRET", "FLAG_SECRET"),
+    ("db_password: >-\n  FLAG_SECRET", "FLAG_SECRET"),
+    ("access_token: |\n    FLAG_SECRET", "FLAG_SECRET"),
     ("AWS4-HMAC-SHA256 Signature=FLAG_SECRET", "FLAG_SECRET"),
+    ('Authorization: Digest username="bob",realm="r",nonce="n",uri="/",response="FLAG_SECRET"',
+     "FLAG_SECRET"),
+    ("cookies = {'site': {'sid': 'FLAG_SECRET'}}", "FLAG_SECRET"),
+    ('{"credentials": {"user": "bob", "pw": "FLAG_SECRET"}}', "FLAG_SECRET"),
+    ('{"auth": {"user": "bob", "bearer": "FLAG_SECRET"}}', "FLAG_SECRET"),
+    ("curl -b sid=FLAG_SECRET", "FLAG_SECRET"),
+    ("redis-cli --pass FLAG_SECRET", "FLAG_SECRET"),
+    ("mysqladmin -pFLAG_SECRET", "FLAG_SECRET"),
+    ("http -a bob:FLAG_SECRET", "FLAG_SECRET"),
+    ("the password is FLAG_SECRET", "FLAG_SECRET"),
+    ("pw=FLAG_SECRET", "FLAG_SECRET"),
 ])
 def test_redaction_catches_round_seven_secret_shapes(text, secret):
     assert secret not in ledger.redact(text)
+
+
+@pytest.mark.parametrize("text", [
+    "tests passed: 12",
+    "passed=40 failed=2",
+    "bypass: true",
+    "pass_rate: 98%",
+    "compass: north",
+    "signature: Ada",
+])
+def test_redaction_leaves_noncredential_pass_and_signature_words(text):
+    assert ledger.redact(text) == text
+
+
+def test_redaction_still_catches_a_long_signature_value():
+    assert "abcdef0123456789" not in ledger.redact("signature: abcdef0123456789")
+
+
+def test_redaction_consumes_a_quoted_secret_cut_by_its_safety_limit():
+    text = 'password="first ' + "x " * 1940 + "R8_SYNTHETIC" + "z " * 100 + '"'
+    assert "R8_SYNTHETIC" not in ledger.redact(text)
 
 
 def test_redaction_keeps_mysql_ports_prompt_form_and_token_limits():

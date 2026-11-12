@@ -131,7 +131,6 @@ def test_wall_family_action_overrides_fake_ack(text):
     "out of tokens",
     "the model ran out of tokens",
     "need 1000 tokens for context length",
-    "Need the vault token for context length checks from secops agent",
     "token limit reached",
     "more tokens for the context window",
     "LLM context window is full",
@@ -139,6 +138,11 @@ def test_wall_family_action_overrides_fake_ack(text):
 def test_llm_token_budget_is_not_a_credentials_wall(text):
     assert classify(text).cls != WALL
     assert not wall_family(text)
+
+
+def test_context_length_checks_do_not_hide_a_required_vault_token():
+    verdict = classify("Need the vault token for context length checks from secops agent")
+    assert verdict.cls == WALL and verdict.subtype == "credentials", verdict
 
 
 @pytest.mark.parametrize("text", [

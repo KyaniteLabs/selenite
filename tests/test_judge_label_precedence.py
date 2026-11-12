@@ -47,9 +47,23 @@ def test_parse_accepts_common_markdown_answer_lines(text):
     assert judge.parse(text) == "FAKE"
 
 
+@pytest.mark.parametrize("text,label", [
+    ("ANSWER: HUMAN (needs a pricing decision)", "HUMAN"),
+    ("ANSWER: WALL - deploy needs approval", "WALL"),
+    ("ANSWER: FAKE — just waiting for a relay", "FAKE"),
+    ("ANSWER: DEPENDENCY, task t_12 must land", "DEPENDENCY"),
+    ("**ANSWER: MACHINERY** because the host is down", "MACHINERY"),
+    ("ANSWER: WALL</s>", "WALL"),
+    ("ANSWER:\nFAKE", "FAKE"),
+])
+def test_parse_accepts_a_verdict_followed_by_its_reason(text, label):
+    assert judge.parse(text) == label
+
+
 @pytest.mark.parametrize("text", [
     "ANSWER: [WALL|HUMAN|MACHINERY|DEPENDENCY|FAKE]",
     "ANSWER: <FAKE|WALL>",
+    "ANSWER: WALL | HUMAN",
 ])
 def test_parse_rejects_echoed_class_templates(text):
     assert judge.parse(text) == ""
