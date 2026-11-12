@@ -11,6 +11,7 @@ Selenite takes friction off the human, treated as accessibility, and clears it a
 | Gate | `frictionless` | Steps handed to a person: logins, approvals, copied tokens, manual runbook steps. | Directly. |
 | Fake gates | `antibeaurocracy` | One agent parking work on another for a reason that isn't real. | Later, as a stale board the person has to untangle. |
 | Pedantry | `antipedantry` | Checks that can't change the decision but still delay or escalate it. | As delay, or as an escalation the person has to rule on. |
+| Cowardice (added after the merge) | `anticowardice` | Replies that hedge, announce or defer where the agent had the evidence and authority to commit. | As a decision handed to a person that the agent could have made. |
 
 **Walls always stand:** credentials, spend, publishing or deploying, destructive steps, legal, a named freeze, and questions only a person can answer. A wall is asked once, as a decision. No facet routes around one.
 
