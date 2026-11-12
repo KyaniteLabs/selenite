@@ -132,6 +132,6 @@ def test_web_tab_has_cleanse_evolve_and_readable_gate_names():
 
 def test_ci_and_readme_install_the_same_test_requirements():
     reqs = (ROOT / "requirements-test.txt").read_text(encoding="utf-8").split()
-    assert reqs == ["pytest==8.4.2", "fastapi==0.115.12", "httpx==0.28.1"]
+    assert reqs == ["pytest==9.2.0", "fastapi==0.162.5", "starlette==1.7.0", "httpx==0.28.1"]
     for f in (".forgejo/workflows/ci.yml", ".github/workflows/validate.yml", "README.md"):
         assert "-r requirements-test.txt" in (ROOT / f).read_text(encoding="utf-8"), f
