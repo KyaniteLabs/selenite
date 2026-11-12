@@ -109,7 +109,7 @@ def _snip(s: str, n: int = 80) -> str:
 
 
 _NEG_BEFORE = re.compile(r"\b(not|never|no longer|isn'?t|aren'?t|wasn'?t|won'?t|don'?t|doesn'?t|didn'?t|cannot|can'?t|"
-                         r"without|nothing|no|zero|n'?t)\W+(\w+\W+){0,2}\Z", re.I)
+                         r"without|nothing|no|zero|n'?t)[^\w,;.:!?]+(\w+[^\w,;.:!?]+){0,2}\Z", re.I)
 
 
 def _negated(text: str, start: int) -> bool:
@@ -192,13 +192,22 @@ def _loose_wall(sentence: str) -> bool:
     return bool(_MONEY.search(sentence) or (wall_family(sentence) and (_WALL_FAMILY_ACTION.search(sentence) or _LIVE_NOUN.search(sentence))))
 
 
+_LINK = re.compile(r"\b(after|once|until|when|then|afterwards|following|pending|that|those|them|it|this|these|first|before|so|because|but)\b", _I)
+
+
+def _linked(here: str, neighbour: str) -> bool:
+    """A wall next door protects a sentence that refers back to it ("I'll proceed after.") or shares its subject.
+    "Blocked on the CEO for the deploy sign-off. Meanwhile I'll write the runbook tests." is independent work."""
+    return bool(_LINK.search(here) or len(_words(here) & _words(neighbour)) >= 1 or len(here.split()) <= 4)
+
+
 def _walled(sents: Sequence[str], i: int, loose: bool = True) -> bool:
     """Is sentence i a stop, or next to one? A wall or a hold in the sentence before or after counts.
     Action modes also use the loose wall-family net on the sentence itself; the rest use the strict check."""
     here = sents[i]
     if _strict(here) or (loose and _loose_wall(here)):
         return True
-    return any(_strict(sents[j]) for j in (i - 1, i + 1) if 0 <= j < len(sents))
+    return any(_strict(sents[j]) and _linked(here, sents[j]) for j in (i - 1, i + 1) if 0 <= j < len(sents))
 
 
 _APPROVED = re.compile(r"\b(approved|signed off|(has|have|had|gave|given|got) (my |the |his |her |their )?(sign-?off|approval|go-?ahead|ok|okay)|"
@@ -253,7 +262,7 @@ _CAUSAL = re.compile(r"\b(caus(e|es|ed|ing)|because|due to|root cause|result of|
 
 def _hedge(t: Turn, sents: list[str]) -> list[Finding]:
     fact_words = [_words(ln) - _GENERIC for c in t.tools for ln in str(c.output or "").splitlines()
-                  if _FACT.search(ln) and not _ZERO_FACT.search(ln)]
+                  if _FACT.search(ln) and (not _ZERO_FACT.search(ln) or _FACT.search(_ZERO_FACT.sub(" ", ln)))]
     if not fact_words:
         return []
     out = []
@@ -355,6 +364,8 @@ def _ready(t: Turn, sents: list[str]) -> list[Finding]:
         m = _READY.search(s)
         if not m or s.endswith("?") or _COND.search(s) or _negated(s, m.start()) or _walled(sents, i):
             continue
+        if m.group(0).lower().startswith("going to") and s[:m.start()].strip(" \"'-\u2014*_"):
+            continue  # "The release is going to ship Thursday" describes the future; only a sentence that opens with it promises
         if _acted(m.group("verb").lower(), t):
             continue
         out.append(Finding(READY, _snip(s), ADVICE[READY]))
@@ -416,7 +427,7 @@ def _caveat(t: Turn, sents: list[str]) -> list[Finding]:
 
 _BROAD = re.compile(r"\b(all|everything|every|each|whole|entire|any and all|noise)\b", _I)
 _USER_NARROW = re.compile(r"\b(only|just(?! (\w+ )?(all|everything|every|each)\b)|first (one|file|item|few|two|three|\d|warning|error|issue|failure|test|bug)|instead|except|"
-                          r"leave (the )?(rest|others?|remaining|everything else)|skip everything else|ignore (every|all) other|not all|rather than|"
+                          r"leave (the )?(rest|others?|remaining|everything else)|skip everything else|ignore (every|all) other|ignore (\w+ ){1,3}(and|,) ?(just )?(fix|do|handle|address)|not all|rather than|"
                           r"don'?t (fix|touch|change) (all|everything))\b", _I)
 _NARROWED = re.compile(
     r"\b((only|just|merely) (fixed|addressed|handled|touched|changed|removed|silenced|cleared)|"
@@ -447,17 +458,22 @@ def _narrow(t: Turn, sents: list[str]) -> list[Finding]:
 _ASK = re.compile(r"\b(should (i|we)|shall (i|we)|do you want me to|would you like me to|want me to|can i|may i|is it ok(ay)? (if|to))\b"
                   r"(?P<rest>[^?.\n]*)", _I)
 _GRANT = re.compile(
-    r"\b(fix (it )?(all|everything)|do (it|everything|all)|go[- ]?ahead|you have (my|the) (sign-?off|approval|ok|okay)|"
-    r"(now|meanwhile|in the meantime),? (fix|update|add|run|write|change|finish|merge|ship|commit|do|go)|just do|you decide|your call|hold (is )?lifted|lifted the hold|"
+    r"(?:^|[;:.,]\s*)(?:so )?(?:fix|update|add|implement|run|write|finish)\b|\bstop waiting|\bact on your|\b(?:has |have )?come through|\bcame through|"
+    r"\bjust (?:close|fix|ship|merge|update|run|finish)\b|\b(fix (it )?(all|everything)|do (it|everything|all)|go[- ]?ahead|you have (my|the) (sign-?off|approval|ok|okay)|"
+    r"(now|meanwhile|in the meantime),? (close|fix|update|add|run|write|change|finish|merge|ship|commit|do|go)|just do|you decide|your call|hold (is )?lifted|lifted the hold|"
     r"carry on|resume|you may proceed|don'?t ask|no questions|"
     r"all approved|use your judg(e)?ment|without asking|make the call|do whatever you (think|want|like)|"
     r"whatever you think (is )?best|up to you)\b", _I)
 _NOT_YET = re.compile(r"^\W*(yet|first|until|only|but|after|once|when|unless)\b", _I)
 
 
+_CONDITIONAL = re.compile(r"\b(only after|after i|until|unless|once i|when i|before i)\b", _I)
+
+
 def _granted(text: str) -> bool:
     for m in _GRANT.finditer(text or ""):
-        if not _negated(text, m.start()) and not _NOT_YET.match(text[m.end():m.end() + 8]):
+        if (not _negated(text, m.start()) and not _NOT_YET.match(text[m.end():m.end() + 8])
+                and not _CONDITIONAL.search(text[m.end():m.end() + 40])):
             return True
     return False
 
@@ -485,6 +501,8 @@ def _defer(t: Turn, sents: list[str]) -> list[Finding]:
         if not m or _walled(sents, i):
             continue
         rest = m.group("rest")
+        if re.match(r"\s*(get|see|know|understand|explain|show|clarify|ask|find|hear)\b", rest, _I):
+            continue  # "Can I get more detail" asks for information, not permission
         verbs = {w for w in _words(rest, min_len=3) if w not in ("this", "that", "them", "with")}
         if re.search(r"\bor\b", rest, _I):
             # A real choice unless the user already picked one side ("use blue" before "blue or green?").
@@ -540,7 +558,7 @@ def _overcorrect(t: Turn, sents: list[str]) -> list[Finding]:
 _FLATTER = re.compile(
     r"^\W*(you'?re|you are) (absolutely|completely|totally|entirely|quite|so|100% )?\s*right\b|"
     r"^\W*(great|excellent|good|fantastic|wonderful|brilliant|sharp) (point|catch|idea|observation|call)\b|"
-    r"^\W*absolutely[,!. ]|^\W*that'?s (a )?(great|excellent|fantastic) (point|catch|idea|observation|call)", _I)
+    r"^\W*absolutely(?!\s+not\b)[,!. ]|^\W*that'?s (a )?(great|excellent|fantastic) (point|catch|idea|observation|call)", _I)
 # Tools that only read: a read-back is a check.
 _READ_TOOLS = re.compile(r"^(read|read_file|view|open|cat|grep|glob|search_files|search|find|list_dir|ls_files|web_fetch|fetch)$", _I)
 # Commands that only look, whatever their arguments.

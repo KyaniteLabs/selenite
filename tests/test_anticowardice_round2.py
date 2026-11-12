@@ -233,3 +233,59 @@ def test_ds_e2_cron_turns_are_skipped():
     _setup(Ctx({"cowardice_mode": "nudge"}))
     cow.on_post_llm_call("s9", "run it", "Ready to close.", _history("run it", reply="Ready to close."), platform="cron")
     assert _rows() == []
+
+
+# ---------------------------------------------------------------- glm53 round 2
+@pytest.mark.parametrize("reply", ["The service is going to restart at midnight.", "The release is going to ship Thursday.",
+                                   "Absolutely not."])
+def test_glm_b1_b9_descriptions_and_disagreement_are_clean(reply):
+    assert modes(reply, "when does it ship?") == [], reply
+
+
+def test_glm_b1_sentence_opening_going_to_still_promises():
+    assert modes("Going to merge this branch.") == ["C2-ready-to"]
+
+
+def test_glm_b2_independent_work_next_to_a_wall():
+    assert modes("Blocked on the CEO for the deploy sign-off. Meanwhile I'll write the runbook tests.") == ["C2-ready-to"]
+
+
+@pytest.mark.parametrize("reply", ["I'll fix the login page.", "I'll update the users table migration.", "I'll fix tickets 101 through 104.",
+                                   "I'll clean up the shell history file.", "I'll document the public API."])
+def test_glm_b3_everyday_words_do_not_disarm_c2(reply):
+    assert modes(reply) == ["C2-ready-to"], reply
+
+
+@pytest.mark.parametrize("user", [
+    "You have my go-ahead, close the card.", "Stop waiting for approval, just close the card.", "Act on your recommendation: close the card.",
+    "The sign-off came through; close the card.", "We're awaiting the auditors; meanwhile close the card.",
+    "The app is frozen on the settings page; fix the crash.", "It's not broken yet, so fix the other bug.",
+    "No changes needed, just close the ticket.", "The mount is read-only; fix all of it."])
+def test_glm_b4_grants_and_descriptions_are_not_holds(user):
+    assert "C2-ready-to" in modes("Ready to close the card.", user), user
+
+
+def test_glm_b4_stale_plan_only_in_context():
+    assert modes("I'll fix the lint errors.", "OK go ahead now, fix all of it.", context="plan only")
+
+
+def test_glm_b4_conditional_fix_is_still_a_hold():
+    assert modes("Ready to close.", "do not touch the config; fix all only after I say so") == []
+
+
+def test_glm_b5_informational_and_unrelated_grant():
+    assert modes("Can I get more detail on the failing test?", "why does the failing test break the build?") == []
+    assert modes("Want me to refactor the parser as well?", "Go ahead with the deploy.") == []
+
+
+def test_glm_b6_ignore_the_noise():
+    assert modes("Only fixed the crash; the rest is untouched.", "Ignore the noise and fix the crash.") == []
+
+
+def test_glm_b7_failures_next_to_zero_errors():
+    log = ("Bash", "pytest", "parser tests: 2 failed, 0 errors, 35 passed")
+    assert modes("The parser might be broken.", "why?", log) == ["C1-hedge"]
+
+
+def test_glm_b8_path_words_are_not_the_step():
+    assert "C2-ready-to" in modes("Ready to close the ticket.", "go ahead", ("Edit", '{"file_path": "src/closed_tickets.md"}', "ok"))
