@@ -76,7 +76,7 @@ def _load_extra() -> dict[str, list[str]]:
     extra: dict[str, list[str]] = {}
     f = home / "signals.txt"
     if f.exists():
-        for line in f.read_text(errors="ignore").splitlines():
+        for line in f.read_text(encoding="utf-8", errors="ignore").splitlines():
             if "\t" in line and not line.startswith("#"):
                 cat, pat = line.split("\t", 1)
                 extra.setdefault(cat.strip(), []).append(pat.strip())

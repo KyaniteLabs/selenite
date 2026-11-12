@@ -163,7 +163,7 @@ def _ledger(event: str, **fields) -> None:
             if path.exists() and path.stat().st_size >= LEDGER_ROTATE_BYTES:
                 os.replace(path, path.with_name("ledger.1.jsonl"))
             fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-            with os.fdopen(fd, "a") as fh:
+            with os.fdopen(fd, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(rec, default=str) + "\n")
         finally:
             os.close(lock)
@@ -525,7 +525,7 @@ def slash(raw_args: str = "", *, platform: str | None = None) -> str:
     if sub == "ledger":
         n = _whole(rest, 15)
         p = data_dir() / "ledger.jsonl"
-        lines = p.read_text().splitlines()[-n:] if p.exists() else []
+        lines = p.read_text(encoding="utf-8").splitlines()[-n:] if p.exists() else []
         return "\n".join(lines) or "Ledger is empty."
     return _audit.render_markdown(s, boards, [], top=5)
 

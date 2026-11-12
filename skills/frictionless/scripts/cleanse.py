@@ -149,7 +149,7 @@ def _check_one_skill(d: Path, agent: str) -> list[dict]:
     f = d / "SKILL.md"
     if not f.exists():
         return []  # a folder of other things, not a skill
-    text = f.read_text(errors="ignore")
+    text = f.read_text(encoding="utf-8", errors="ignore")
     fm = frontmatter(text)
     if fm is None or not fm.get("name") or not fm.get("description"):
         return [finding("skill", f, "no-frontmatter", "No name or description, so agents can't tell when to load it",
@@ -194,7 +194,7 @@ def check_plugins(ctx: dict) -> list[dict]:
                 out.append(finding("plugin", d, "no-manifest", "No plugin.yaml, so Hermes can't load it",
                                    "Add a manifest or remove the folder.", severity=EVERY_USE))
             continue
-        keys = {m.group(1) for m in re.finditer(r"^([A-Za-z_]\w*):", man.read_text(errors="ignore"), re.M)}
+        keys = {m.group(1) for m in re.finditer(r"^([A-Za-z_]\w*):", man.read_text(encoding="utf-8", errors="ignore"), re.M)}
         if "manifest_version" not in keys:
             out.append(finding("plugin", man, "old-manifest", "No `manifest_version`, so newer Hermes treats it as legacy",
                                "Add `manifest_version: 2` and declare settings in `config_schema`.", severity=DRIFT))
@@ -216,7 +216,7 @@ def check_hooks(ctx: dict) -> list[dict]:
     out: list[dict] = []
     for f in (HOME / ".claude/settings.json", HOME / ".claude/settings.local.json"):
         try:
-            settings = json.loads(f.read_text())
+            settings = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
         for event, cmd in _hook_commands(settings):
@@ -264,7 +264,7 @@ def check_runbooks(ctx: dict) -> list[dict]:
             if any(part in ("node_modules", ".git") for part in f.parts):
                 continue
             try:
-                lines = f.read_text(errors="ignore").splitlines()
+                lines = f.read_text(encoding="utf-8", errors="ignore").splitlines()
             except OSError:
                 continue
             hits = sum(1 for ln in lines if any(p.search(ln) for p in pats))
@@ -301,7 +301,7 @@ def _fake_cards(f: Path, since: float, last: dict[str, bool]) -> None:
     """Track each card's latest event. A fake block marks it; an ask or a
     declared kind clears it; a fail-open leaves it as it was. A row that
     carries a declared kind is Hermes's own wall, never a fake wait."""
-    with f.open(errors="ignore") as fh:
+    with f.open(encoding="utf-8", errors="ignore") as fh:
         for line in fh:
             try:
                 r = json.loads(line)
@@ -392,7 +392,7 @@ def write(report: dict) -> Path | None:
         except OSError:
             continue
         try:
-            with os.fdopen(fd, "w") as fh:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 json.dump(report, fh, indent=2)
         except OSError:  # a full disk can fail mid-write: drop it and try the next folder
             try:
@@ -415,7 +415,7 @@ def latest() -> dict | None:
                    key=lambda f: f.stat().st_mtime)
     for f in reversed(files):
         try:
-            return json.loads(f.read_text())
+            return json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
     return None

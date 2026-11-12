@@ -41,7 +41,7 @@ def _kinds():
 def test_register_matches_manifest():
     ctx = Ctx()
     plugin.register(ctx)
-    manifest = (REPO / "plugin.yaml").read_text()
+    manifest = (REPO / "plugin.yaml").read_text(encoding="utf-8")
     assert [n for n, _ in ctx.skills] == ["frictionless", "antibeaurocracy", "antipedantry"]
     assert all(path.exists() for _, path in ctx.skills)
     assert ctx.commands == ["frictionless", "antibeaurocracy", "fake-gate"]
@@ -55,13 +55,13 @@ def test_register_matches_manifest():
 
 def test_versions_agree():
     import re
-    v_manifest = re.search(r'^version: "([\d.]+)"', (REPO / "plugin.yaml").read_text(), re.M).group(1)
-    v_skill = re.search(r"^  version: ([\d.]+)", (REPO / "skills/frictionless/SKILL.md").read_text(), re.M).group(1)
-    v_py = re.search(r'^version = "([\d.]+)"', (REPO / "pyproject.toml").read_text(), re.M).group(1)
-    v_skills = {re.search(r"^  version: ([\d.]+)", (REPO / f"skills/{n}/SKILL.md").read_text(), re.M).group(1)
+    v_manifest = re.search(r'^version: "([\d.]+)"', (REPO / "plugin.yaml").read_text(encoding="utf-8"), re.M).group(1)
+    v_skill = re.search(r"^  version: ([\d.]+)", (REPO / "skills/frictionless/SKILL.md").read_text(encoding="utf-8"), re.M).group(1)
+    v_py = re.search(r'^version = "([\d.]+)"', (REPO / "pyproject.toml").read_text(encoding="utf-8"), re.M).group(1)
+    v_skills = {re.search(r"^  version: ([\d.]+)", (REPO / f"skills/{n}/SKILL.md").read_text(encoding="utf-8"), re.M).group(1)
                 for n in plugin.SKILLS}
-    v_core = re.search(r'^__version__ = "([\d.]+)"', (REPO / "antibeaurocracy_core/__init__.py").read_text(), re.M).group(1)
-    v_dash = json.loads((REPO / "dashboard/manifest.json").read_text())["version"]
+    v_core = re.search(r'^__version__ = "([\d.]+)"', (REPO / "antibeaurocracy_core/__init__.py").read_text(encoding="utf-8"), re.M).group(1)
+    v_dash = json.loads((REPO / "dashboard/manifest.json").read_text(encoding="utf-8"))["version"]
     assert {v_manifest, v_skill, v_py, v_core, v_dash} | v_skills == {v_manifest}
 
 
@@ -165,7 +165,7 @@ def test_kanban_blocked_keeps_no_reason_text():
     plugin.kanban_task_blocked(task_id="t_3", reason="waiting on t_9 to merge")
     rows = list(ledger.rows())
     assert [(r["kind"], r["key"]) for r in rows] == [("blocked", "kanban:t_1")]
-    assert "ABC123" not in ledger.LEDGER.read_text()
+    assert "ABC123" not in ledger.LEDGER.read_text(encoding="utf-8")
 
 
 def test_kanban_completed_clears_only_known_blocks():

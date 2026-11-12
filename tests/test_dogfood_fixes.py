@@ -153,7 +153,7 @@ def test_mine_samples_are_fair_across_agents(tmp_path, monkeypatch):
     rc = m.main()
     assert rc == 0
     sp = sorted(tmp_path.glob("samples-*.json"))[-1]
-    samples = json.loads(sp.read_text())["curse"]
+    samples = json.loads(sp.read_text(encoding="utf-8"))["curse"]
     agents = [s["agent"] for s in samples]
     assert agents.count("claude-code") <= 4, "one busy agent must not eat the whole budget (D8)"
     assert "hermes" in agents, "the seat's own friction must be visible in the default samples (D8)"

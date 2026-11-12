@@ -295,7 +295,7 @@ def audit_rules(paths: Iterable[Path]) -> list[dict]:
         if not p.is_file() or p.resolve().is_relative_to(SELF_SKILLS):
             continue
         try:
-            text = p.read_text(errors="replace")
+            text = p.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
             out.append({"path": str(p), "words": 0, "gate_lines": 0, "gate_density_per_1k": 0.0,
                         "has_anti_gate_clause": False, "examples": [], "error": type(exc).__name__})

@@ -252,7 +252,7 @@ def mark(body: Mark) -> dict:
 
 
 def _proposal_view(f: Path) -> dict:
-    return {"name": f.name, "mtime": f.stat().st_mtime, "text": f.read_text(errors="ignore")[:PROPOSAL_CHARS]}
+    return {"name": f.name, "mtime": f.stat().st_mtime, "text": f.read_text(encoding="utf-8", errors="ignore")[:PROPOSAL_CHARS]}
 
 
 def _latest_proposal() -> Path | None:
