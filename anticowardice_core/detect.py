@@ -119,14 +119,14 @@ def _negated(text: str, start: int) -> bool:
 # What the fake-gate classifier has no word for: a hold, a wait on a person, or a request that only wants
 # advice or analysis. It judges whether a wait is fake; this judges whether the agent should stop.
 _HOLD = re.compile(
-    r"\b(on hold|hold (off|until|for|on|everything)|please hold|(?<!\w)hold\.?$|freeze|frozen|read-?only|research-?only|"
+    r"\b(on hold|hold (off|until|for|on|everything)|please hold|(?<!\w)hold\.?$|freeze|frozen|(?<!is )(?<!are )(?<!was )(?<!went )read-?only|research-?only|"
     r"only research|(advice|analysis|diagnosis|plan|review|report)[- ]only|"
     r"just (diagnose|investigate|explain|plan|look|research|review|advise|report|tell|check)|"
     r"no (changes|edits|writes|actions?)|don'?t (do )?anything|do not do anything|nothing (should|is to|to) (move|change|happen)|"
     r"(do not|don'?t|never|must not|mustn'?t|not to) (touch|change|restart|merge|deploy|delete|push|close|edit|modify|run|commit|"
     r"send|install|rename|write|stop|reboot|migrate|restore|upload|publish|release|ship|remove|apply|start|kill|update|create|"
     r"act|move|proceed|continue|go ahead|fix|ship|tag|post|email|reset|drop|wipe)|"
-    r"wait(ing|s|ed)? (for|on|until)\b|(blocked|parked|paused|held|stalled|pending) (on|pending|until|by)\b|pending (approval|review|"
+    r"wait(ing|s|ed)? (for|on|until)\b|(blocked|parked|paused|held|stalled|pending) (on|pending|until|by|as|per)\b|pending (approval|review|"
     r"sign-?off|a decision|the)|awaiting|sign-?off|go-?ahead|green-?light|your (ok|okay|approval|word|call|say-?so)|"
     r"(requires?|needs?) (the )?(\w+'?s? )?(approval|sign-?off|consent|permission|ok|okay)|"
     r"(once|when|after|until) (you|he|she|they|\w+) (say|says|approve|approves|confirm|confirms|ok|signs?|lifts?|opens?|lands?)|"
@@ -189,7 +189,7 @@ def _user_hold(t: "Turn") -> bool:
 # ---------------------------------------------------------------- C1 hedging when the evidence is clear
 
 _HEDGE_WORDS = re.compile(
-    r"\b(i )?(suspect(s|ed)?|might|maybe|perhaps|possibly|probably|likely|could (be|have been)|may (be|have)|"
+    r"\b(i )?(suspect(s|ed)?|might|maybe|perhaps|possibly|probably|likely|presumably|i'?d say|my (?:guess|bet) is|could (be|have been)|may (be|have)|"
     r"seems? (to|like)|appears? to|i (think|believe|guess|assume))\b", _I)
 # A line of tool output that states a hard fact.
 _FACT = re.compile(
@@ -286,11 +286,14 @@ def _acted(verb: str, t: Turn) -> bool:
     return any(tok.startswith(st) for tok in toks for st in stems)
 
 
+_COND = re.compile(r"^\W*(if|unless|when|once|in case)\b", _I)
+
+
 def _ready(t: Turn, sents: list[str]) -> list[Finding]:
     out = []
     for i, s in enumerate(sents):
         m = _READY.search(s)
-        if not m or s.endswith("?") or _negated(s, m.start()) or _walled(sents, i):
+        if not m or s.endswith("?") or _COND.search(s) or _negated(s, m.start()) or _walled(sents, i):
             continue
         if _acted(m.group("verb").lower(), t):
             continue
@@ -302,7 +305,7 @@ def _ready(t: Turn, sents: list[str]) -> list[Finding]:
 
 _RISK = re.compile(
     r"\b(would (be )?(lost|overwritten|wiped)|will be (lost|overwritten|wiped)|would lose|will lose|"
-    r"won'?t survive|will not survive|not (yet )?(tracked|committed|in version control|persisted|backed up|saved)|"
+    r"won'?t survive|will not survive|(?:not|isn'?t|aren'?t|wasn'?t|hasn'?t been|haven'?t been) (yet )?(tracked|committed|in version control|persisted|backed up|saved)|"
     r"uncommitted|untracked|(lives|exists|stored|saved|kept) only (on|in)|"
     r"a (rebuild|reinstall|reboot) (would|will) (lose|wipe|erase|undo|revert|reset|clear|overwrite))\b", _I)
 _SIGNOFF = re.compile(r"^(?:[-\u2014\u2013]+\s*\w[\w .]*$|(?:let me know|thanks|thank you|hope|cheers|happy to)\b[^\n]{0,120}$)", _I)
@@ -476,8 +479,9 @@ def _syco(t: Turn, sents: list[str]) -> list[Finding]:
 
 # ---------------------------------------------------------------- C8 vague status
 
+_BASIS = re.compile(r"\d|\b(green|passing|passed|ci|confirmed|verified|line)\b", _I)  # the sentence cites what it saw
 _VAGUE = re.compile(
-    r"\b(should be (fine|good|ok|okay|working|done|all set|resolved)|(it|that|this) (should|ought to) work|"
+    r"\b(should be (fine|good|ok|okay|working|done|all set|resolved)|(it|that|this|everything) (should|ought to) (work|do it)|no reason (it|this|that) (should ?n'?t|wouldn'?t) work|"
     r"looks? (good|fine|ok|okay|right)( to me)?|seems? (fine|good|ok|okay|to work)|probably (works|fine|ok|okay)|"
     r"good to go|all good|i think (it|that|this) works)\b", _I)
 
@@ -486,7 +490,7 @@ def _vague(t: Turn, sents: list[str]) -> list[Finding]:
     if _verified(t):
         return []
     for i, s in enumerate(sents):
-        if _VAGUE.search(s) and not s.endswith("?") and not _walled(sents, i, loose=False):
+        if _VAGUE.search(s) and not _BASIS.search(s) and not s.endswith("?") and not _walled(sents, i, loose=False):
             return [Finding(VAGUE, _snip(s), ADVICE[VAGUE])]
     return []
 

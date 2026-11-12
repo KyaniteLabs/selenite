@@ -180,7 +180,7 @@ CHECK_SCHEMA = {
     "description": ("Check one reply for epistemic cowardice: hedging where the evidence is clear, announcing a step instead of "
                     "taking it, ending on a fixable caveat, a narrow reading of a broad instruction, a question the context "
                     "already answers, flipping a claim after criticism, sycophantic agreement, or vague status. Deterministic, "
-                    "advice only. A sentence that names a known wall or hold is left alone."),
+                    "advice only. A sentence that names a known wall or hold is left alone. Lexical and English only."),
     "parameters": {
         "type": "object",
         "properties": {
