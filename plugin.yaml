@@ -98,7 +98,7 @@ config_schema:
       ends on a fixable caveat, reads a broad instruction narrowly, asks what the context answers, flips a claim
       after criticism, agrees without checking, or reports status without verifying. "observe" (default) only
       writes counts to the ledger. "nudge" also adds one note to that session's next turn. Nothing is ever
-      blocked. A sentence that names a wall or a hold is never flagged.
+      blocked. A sentence that names a known wall or hold, or sits next to one, is left alone. English only.
   cowardice_ledger:
     type: bool
     default: true

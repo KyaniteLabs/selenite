@@ -23,6 +23,6 @@ known_issues:
   - "Tested on Linux; macOS and Windows unverified."
 capabilities:
   provides_tools: [selenite_ledger, bureaucracy_classify, bureaucracy_audit, cowardice_check]
-  provides_hooks: [pre_llm_call, post_approval_response, kanban_task_blocked, kanban_task_completed, on_kanban_task_updated, pre_tool_call, transform_tool_result, on_kanban_dispatch_tick]
+  provides_hooks: [pre_llm_call, post_approval_response, kanban_task_blocked, kanban_task_completed, on_kanban_task_updated, pre_tool_call, transform_tool_result, on_kanban_dispatch_tick, post_llm_call]
   provides_middleware: []
   requires_env: []

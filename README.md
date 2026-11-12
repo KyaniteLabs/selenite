@@ -13,7 +13,7 @@ One test runs through all of it: **does this step, wait or check earn its cost t
 - **Gate** (`frictionless` skill): steps handed to a person, such as logins, approvals, copied tokens and manual runbook steps.
 - **Fake gates** (`antibeaurocracy` skill): one agent parking work on another for a reason that isn't real. Those waits pile up into a stale board a person has to untangle.
 - **Pedantry** (`antipedantry` skill): checks that can't change the decision but still delay or escalate it.
-- **Cowardice** (`anticowardice` skill): a hedge, caveat, "ready to X" or question that hands a person a call the agent already had the evidence and authority to make. Detection is plain code (no model), advice only, and a sentence that names a wall or a hold is never flagged.
+- **Cowardice** (`anticowardice` skill): a hedge, caveat, "ready to X" or question that hands a person a call the agent already had the evidence and authority to make. Detection is plain code (no model), advice only, and a sentence that names a known wall or hold (or sits next to one) is left alone. It is a lexical, English-only heuristic: a wall phrased in words it does not know can still be flagged, which is why `observe` is the default.
 
 Walls always stand: credentials, spend, publishing or deploying, destructive steps, legal, a named freeze, and questions only a person can answer. Selenite asks those once, as a decision, and never routes around them.
 
@@ -37,7 +37,7 @@ Walls always stand: credentials, spend, publishing or deploying, destructive ste
 | `tests/` | Unit tests for the scripts, the plugin hooks, the backend routes, and the needs-no-cleansing requirement. |
 | `tools/` | `embed-fonts.py`, which rebuilds the font subsets embedded in `desktop/plugin.js`. |
 
-One product: **Selenite** is the product, and its three skills are its facets. The names `antibeaurocracy` and `bureaucracy_*` are kept as they were so existing installs and scripts keep working.
+One product: **Selenite** is the product, and its four skills are its facets. The names `antibeaurocracy` and `bureaucracy_*` are kept as they were so existing installs and scripts keep working.
 
 ## The four modes
 

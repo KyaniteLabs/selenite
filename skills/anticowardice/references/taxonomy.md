@@ -2,7 +2,7 @@
 
 Each class: what the detector fires on, what it leaves alone, and when the behaviour is honest after all. Every detector is deterministic (`anticowardice_core/detect.py`); none calls a model.
 
-Walls and holds are never flagged. A sentence is dropped when the fake-gate facet's wall-family net matches it (money, prod or live systems, deletion, credentials, publishing, legal, freezes, a person's role) or when it names a hold ("on hold", "read-only", "don't touch"). A hold in the user's message silences C2 to C5. The net over-matches on purpose: a missed finding costs a nudge, a pushed wall costs a person.
+Known walls and holds are left alone. A sentence is dropped when it, or the one before or after it, trips the fake-gate facet's classifier (an authority wall, or a wait on a named person), its wall-family net (money, prod or live systems, deletion, credentials, publishing, legal, freezes, a person's role), or a hold phrase ("on hold", "waiting for", "sign-off", "read-only", "don't touch"). A hold, a sign-off, or a request for advice only in the user's message (or their recent messages) silences C2 to C5; C1 stays but its advice stops short of acting. Code blocks and quoted spans are ignored. The detectors are lexical and English-only, and the net over-matches on purpose: a missed finding costs a nudge, a pushed wall costs a person.
 
 ## C1 hedge
 
@@ -18,7 +18,7 @@ Walls and holds are never flagged. A sentence is dropped when the fake-gate face
 
 ## C3 caveat-exit
 
-- Fires: "This patch lives only on G2, a rebuild would lose it." as the last paragraph with no commit in the turn.
+- Fires: "This patch lives only on host-b, a rebuild would lose it." as the last paragraph with no commit in the turn.
 - Leaves alone: the same sentence after a `git commit`; a caveat that names a credential or a deploy.
 - Honest: a risk that only a person can remove (a purchase, a policy) stays as a one-line ask.
 

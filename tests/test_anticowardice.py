@@ -26,7 +26,7 @@ def test_transcript_fixture_one_finding_per_example():
     cases = [
         (Turn(assistant="Fixed the mount. Ready to close.", user=user,
               tools=[ToolCall("kanban_comment", '{"text": "mount fixed"}')]), READY),
-        (Turn(assistant="Mount is stable now.\n\nNote this patch lives only on G2, a rebuild would lose it.", user=user,
+        (Turn(assistant="Mount is stable now.\n\nNote this patch lives only on host-b, a rebuild would lose it.", user=user,
               tools=[ToolCall("Bash", "cp fix.sh /usr/local/bin/")]), CAVEAT),
         (Turn(assistant="I suspect the old port is the problem.", user=user,
               tools=[ToolCall("Bash", "dmesg | tail", KERNEL_LOG)]), HEDGE),
@@ -39,7 +39,7 @@ def test_transcript_fixture_one_finding_per_example():
 
 def test_transcript_fixture_whole_reply_yields_all_four():
     reply = ("I suspect the old port is the problem. Only fixed the single log line; the rest is untouched. "
-             "Ready to close.\n\nNote this patch lives only on G2, a rebuild would lose it.")
+             "Ready to close.\n\nNote this patch lives only on host-b, a rebuild would lose it.")
     turn = Turn(assistant=reply, user="fix all of it", tools=[ToolCall("Bash", "dmesg", KERNEL_LOG)])
     assert {HEDGE, READY, CAVEAT, NARROW} <= set(modes(turn))
 
@@ -49,7 +49,7 @@ def test_transcript_fixture_whole_reply_yields_all_four():
 WALL_REPLIES = [
     "Ready to delete the production backups.",
     "I suggest we publish the release to PyPI.",
-    "Note this credential lives only on G2, a rebuild would lose it.",
+    "Note this credential lives only on host-b, a rebuild would lose it.",
     "Should I spend the $400 on the larger tier?",
     "Ready to deploy; waiting for the go-ahead from the CEO.",
     "Ready to merge, but the repo is frozen until Monday.",
@@ -67,7 +67,7 @@ def test_wall_adjacent_replies_have_zero_findings(reply):
 def test_a_named_hold_in_the_user_message_silences_action_modes():
     user = "do not touch the config; fix all only after I say so"
     for reply in ("Ready to close.", "Want me to fix the rest?", "Only fixed one; the rest is untouched.",
-                  "Note this lives only on G2."):
+                  "Note this lives only on host-b."):
         assert analyze(Turn(assistant=reply, user=user)) == [], reply
 
 
@@ -75,11 +75,12 @@ def test_wall_negative_fixture_mirrors_the_positive_one():
     """The same four shapes, each next to a wall word: nothing."""
     user = "fix all of it"
     replies = ["Ready to close the production incident.",
-               "Note this token lives only on G2, a rebuild would lose it.",
-               "I suspect the credentials rotated.",
+               "Note this token lives only on host-b, a rebuild would lose it.",
+               "I suspect the credentials rotated; retesting needs the CEO's sign-off.",
                "Only fixed the single log line; the rest is frozen."]
+    log = KERNEL_LOG + "\nerror: credentials rotated, log line frozen"
     for r in replies:
-        assert analyze(Turn(assistant=r, user=user, tools=[ToolCall("Bash", "dmesg", KERNEL_LOG)])) == [], r
+        assert analyze(Turn(assistant=r, user=user, tools=[ToolCall("Bash", "dmesg", log)])) == [], r
 
 
 # ---------------------------------------------------------------- per-mode positives and negatives
@@ -102,11 +103,11 @@ def test_c2_ready_to():
 
 
 def test_c3_caveat_exit():
-    text = "Done.\n\nThis script lives only on G2 and is not in version control."
+    text = "Done.\n\nThis script lives only on host-b and is not in version control."
     assert modes(Turn(assistant=text)) == [CAVEAT]
     committed = Turn(assistant=text, tools=[ToolCall("Bash", "git add fix.sh && git commit -m fix")])
     assert modes(committed) == []
-    assert modes(Turn(assistant="This script lives only on G2.\n\nDone, all tests pass.")) == []  # not the exit
+    assert modes(Turn(assistant="This script lives only on host-b.\n\nDone, all tests pass.")) == []  # not the exit
 
 
 def test_c4_narrow_read():
@@ -237,8 +238,11 @@ def test_nudge_mode_adds_one_note_to_the_next_turn_once():
 def test_nudge_and_calm_share_one_context():
     _setup(Ctx({"cowardice_mode": "nudge"}))
     cow.on_post_llm_call("s1", "x", "Ready to close.", _history("x", reply="Ready to close."))
+    calm_only = plugin.pre_llm_call(session_id="s2", user_message="wtf why did you stop")
+    assert calm_only and "anticowardice" not in calm_only["context"]
+    marker = calm_only["context"].strip().splitlines()[0]     # a line only Calm's own context carries
     out = plugin.pre_llm_call(session_id="s1", user_message="wtf why did you stop")
-    assert "Walls still stand" in out["context"] and "anticowardice" in out["context"]
+    assert "Walls still stand" in out["context"] and "anticowardice" in out["context"] and marker in out["context"]
 
 
 def test_hooks_off_switch_silences_it(monkeypatch):
@@ -255,9 +259,13 @@ def test_unknown_mode_falls_back_to_observe_and_there_is_no_blocking_mode():
 
 def test_a_clean_reply_and_a_broken_history_fail_open():
     _setup(Ctx({"cowardice_mode": "nudge"}))
-    assert cow.on_post_llm_call("s1", "x", "Done: 12 passed.", _history("x", reply="Done: 12 passed.")) is None
-    assert cow.on_post_llm_call("s1", "x", "Ready to close.", [object(), None, {"role": 5}]) is None
-    assert cow.on_post_llm_call("s1", "x", None, None) is None
+    cow.on_post_llm_call("s1", "x", "Done: 12 passed.", _history("x", reply="Done: 12 passed."))
+    assert _rows() == [] and not cow._pending             # a clean reply leaves no row and holds no note
+    cow.on_post_llm_call("s1", "x", "Ready to close.", [object(), None, {"role": 5}])
+    assert [r["mode_id"] for r in _rows()] == [READY]     # a broken history still analyses the reply itself
+    cow.on_post_llm_call("s2", "x", None, None)
+    cow.on_post_llm_call("s3", "x", "Ready to close.", 42)
+    assert len(_rows()) == 2 and "s2" not in cow._pending  # no crash, nothing for the empty reply
 
 
 def test_history_supplies_tool_evidence():
@@ -284,6 +292,7 @@ def test_ledger_rotates_so_it_needs_no_cleansing(monkeypatch):
 
 
 def test_tool_and_slash_command():
+    _setup(Ctx())
     out = json.loads(cow.tool_check({"text": "Ready to close.", "user_message": "fix all"}))
     assert out["success"] and [f["mode"] for f in out["findings"]] == [READY]
     assert json.loads(cow.tool_check({}))["success"] is False

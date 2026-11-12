@@ -2,7 +2,7 @@
 
 Selenite is the stone used to clear the other stones, and it needs no
 cleansing itself: no upkeep, self-trimming state. This Hermes plugin wraps
-Selenite's three provider-agnostic facet skills and registers:
+Selenite's four provider-agnostic facet skills and registers:
 
   skills   frictionless, antibeaurocracy, antipedantry, anticowardice   (skills/<name>/SKILL.md)
   commands /frictionless [cleanse|gate|calm|evolve|status] [text]

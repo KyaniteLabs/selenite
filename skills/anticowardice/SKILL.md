@@ -32,7 +32,7 @@ Cowardice fails the first two and is not the third.
 | Class | Symptom | Do instead | Detection signal (code, no model) |
 |---|---|---|---|
 | **C1 hedge** | "Suspect", "might", "probably" on a claim the turn's own tool output settles | State the conclusion; act on it. | Hedge word in a sentence that shares a content word with a tool-output line holding a hard fact (error, reset, refused, exit code). |
-| **C2 ready-to** | "Ready to close", "suggest we merge", "I recommend" | Do the step. | Intent phrase with no tool call in the turn whose name or arguments match the verb. |
+| **C2 ready-to** | "Ready to close", "suggest we merge", "I recommend", "I'll run it", "let me merge" | Do the step. | Intent phrase (ready to / suggest we / I'll / let me / going to) plus an action verb, with no tool call in the turn that actually ran that verb (echo, grep, comments and reads do not count). |
 | **C3 caveat-exit** | Ends on "lives only on X", "a rebuild would lose it", "not committed" | Fix it: commit, record, test. | Loss or persistence phrase in the last paragraph, and no `git add`/`git commit` in the turn. |
 | **C4 narrow read** | "Fix all" or "fix noise" answered with one slice | Do the broad part. | Broad scope word in the user's message plus a narrowing admission ("only fixed", "the rest is untouched") in the reply. |
 | **C5 false deference** | "Should I?" when the instruction already said do it | Take the default and say what you did. | Question whose verb or blanket grant ("fix all", "go ahead", "approved") already appears in the user's message or earlier context. |
