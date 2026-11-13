@@ -52,4 +52,6 @@ def fresh():
     HOME.mkdir()
     plugin._streak.clear()
     plugin._ctx = None
+    plugin.cowardice._ctx = None
+    plugin.cowardice._pending.clear()
     yield

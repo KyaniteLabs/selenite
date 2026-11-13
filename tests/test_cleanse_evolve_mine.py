@@ -190,3 +190,14 @@ def test_mine_generic_reads_only_user_rows(tmp_path, monkeypatch):
     samples = next(ledger.STATE.glob("samples-*.json")).read_text(encoding="utf-8")
     assert "a@b.co" not in samples and "<email>" in samples
     assert stat.S_IMODE(next(ledger.STATE.glob("samples-*.json")).stat().st_mode) == 0o600
+
+
+def test_mine_redacts_a_quoted_secret_before_clipping_the_sample(tmp_path, monkeypatch):
+    src = tmp_path / "logs"; src.mkdir()
+    message = 'wtf stop asking password="first R8_CLIPPED_SECRET ' + "x" * 250 + '"'
+    src.joinpath("a.jsonl").write_text(json.dumps({"role": "user", "content": message}) + "\n")
+    monkeypatch.setattr(sys, "argv", ["mine", "--days", "1", "--path", str(src), "--out", str(ledger.STATE)])
+
+    assert mine.main() == 0
+    samples = next(ledger.STATE.glob("samples-*.json")).read_text(encoding="utf-8")
+    assert "R8_CLIPPED_SECRET" not in samples

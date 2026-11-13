@@ -19,13 +19,17 @@ jobs:
         run: python -m pip install -r requirements-test.txt && python -m pytest -q
       - name: Desktop event contract
         run: node --experimental-vm-modules tests/test_pane_events.mjs
+      - name: Desktop query contract
+        run: |
+          npm install --prefix "$RUNNER_TEMP/query-core" --no-save --ignore-scripts --no-audit --no-fund @tanstack/query-core@5.83.0
+          TANSTACK_QUERY_CORE="$RUNNER_TEMP/query-core/node_modules/@tanstack/query-core" node --experimental-vm-modules tests/test_pane_queries.mjs
       - name: Package installs and the fake-gate CLI runs
         run: |
           V=$(mktemp -d) && python -m venv "$V" && "$V/bin/pip" install --no-cache-dir . && "$V/bin/antibeaurocracy" classify "Awaiting ACK from platform"
       - name: install.sh into an empty HOME
         run: |
           H=$(mktemp -d) && mkdir "$H/.claude" && HOME="$H" sh install.sh
-          for n in frictionless antibeaurocracy antipedantry; do test -L "$H/.claude/skills/$n"; done
+          for n in frictionless antibeaurocracy antipedantry anticowardice; do test -L "$H/.claude/skills/$n"; done
           test -L "$H/.local/bin/antibeaurocracy"
           again=$(HOME="$H" sh install.sh) && printf '%s\n' "$again" | grep "^ok " >/dev/null   # idempotent; grep -q would SIGPIPE install.sh under pipefail
   unit-os:
@@ -57,20 +61,25 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.14"
-      - name: Checkout tested Hermes runtime
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          repository: NousResearch/hermes-agent
-          ref: 2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19  # v0.23.0
-          path: .hermes-runtime
-          persist-credentials: false
+      - name: Fetch tested Hermes runtime (v0.23.0, pinned by commit)
+        run: |
+          git init -q .hermes-runtime
+          git -C .hermes-runtime fetch -q --depth 1 \
+            https://github.com/NousResearch/hermes-agent \
+            2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19
+          git -C .hermes-runtime checkout -q FETCH_HEAD
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
       - name: Install Hermes from its own lockfile
         run: uv sync --frozen --python 3.14 --directory .hermes-runtime
       - name: Plugin tests under the Hermes runtime
         run: |
           uv pip install --python .hermes-runtime/.venv/bin/python pytest==9.2.0
-          cd plugin && ../.hermes-runtime/.venv/bin/python -m pytest -q
+          set -o pipefail
+          cd plugin
+          SELENITE_TEST_HERMES_SOURCE="$(cd ../.hermes-runtime && pwd)" \
+            ../.hermes-runtime/.venv/bin/python -m pytest -q -rs \
+            | tee ../pytest-hermes.out
+          if grep -q "^SKIPPED" ../pytest-hermes.out; then echo "native Hermes tests were skipped" >&2; exit 1; fi
       - name: Real validator receipt (no credentials)
         run: |
           mkdir -p receipts

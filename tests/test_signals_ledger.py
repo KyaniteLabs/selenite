@@ -1,6 +1,8 @@
 import json
 import os
 import stat
+import subprocess
+import sys
 import time
 
 import pytest
@@ -116,6 +118,24 @@ def test_authorization_headers_redact_the_complete_value(text):
     assert "secret-value" not in redacted
 
 
+def test_authorization_redaction_stops_at_the_end_of_the_header_line():
+    redacted = ledger.redact("authorization: scheme-with-arbitrary-format secret-value\nDeployment proceeds")
+    assert "secret-value" not in redacted
+    assert "Deployment proceeds" in redacted
+
+
+@pytest.mark.parametrize("text,suffix", [
+    ("oauth: fails on login. Then the deploy step broke", "Then the deploy step broke"),
+    ("Authorization: header missing in request; retry later",
+     "in request; retry later"),
+    ("OAuth = broken since Monday, see card t_12", "since Monday, see card t_12"),
+])
+def test_authorization_redaction_only_consumes_the_scheme_and_one_value(text, suffix):
+    redacted = ledger.redact(text)
+    assert "<secret>" in redacted
+    assert suffix in redacted
+
+
 @pytest.mark.parametrize("text,secret", [
     ("private_key=short-secret", "short-secret"),
     ("credential: short-secret", "short-secret"),
@@ -127,6 +147,57 @@ def test_common_secret_fields_and_curl_credentials_are_redacted(text, secret):
     assert secret not in ledger.redact(text)
 
 
+@pytest.mark.parametrize("text,secret", [
+    ("curl --user bob:hunter2 https://x", "bob:hunter2"),
+    ("curl -ubob:hunter2 https://x", "bob:hunter2"),
+    ("mysql -u root -phunter2 db", "hunter2"),
+])
+def test_attached_and_mysql_command_credentials_are_redacted(text, secret):
+    assert secret not in ledger.redact(text)
+
+
+def test_curl_cookie_header_redaction_preserves_shell_quotes():
+    redacted = ledger.redact("curl -H 'Cookie: sid=abc123' https://x")
+    assert "abc123" not in redacted
+    assert redacted.count("'") == 2
+
+
+def test_digest_fields_without_spaces_are_redacted_as_one_authorization_value():
+    raw = 'Authorization: Digest username="bob",realm="r",nonce="n",uri="/",response="R8_SYNTHETIC"'
+    redacted = ledger.redact(raw)
+    assert "R8_SYNTHETIC" not in redacted
+    assert "response=" not in redacted
+
+
+def test_curl_cookie_jar_path_is_not_redacted_as_cookie_data():
+    text = "curl -b cookiejar.txt https://example.test"
+    assert ledger.redact(text) == text
+
+
+@pytest.mark.parametrize("text", [
+    "ran curl" + " " * 24 + "x",
+    "ran curl" + " " * 26 + "x",
+    "curl https://example.com/api \\\n" + " " * 24 + "--data @body.json",
+    "curl \\\n"
+    "    --silent \\\n"
+    "    --show-error \\\n"
+    "    --location \\\n"
+    "    --request POST \\\n"
+    "    --header 'Accept: application/json' \\\n"
+    "    --data @body.json https://example.com/api?q=" + "x" * 100,
+])
+def test_curl_redaction_finishes_quickly_on_noncredential_commands(text):
+    script = ("import sys; sys.path.insert(0, 'skills/frictionless/scripts'); "
+              "import ledger; ledger.redact(sys.argv[1])")
+    started = time.monotonic()
+    try:
+        subprocess.run([sys.executable, "-c", script, text], check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=0.45)
+    except subprocess.TimeoutExpired:
+        pytest.fail("redaction exceeded 0.45 seconds")
+    assert time.monotonic() - started < 0.5
+
+
 def test_rotation_keeps_history_readable(monkeypatch):
     monkeypatch.setattr(ledger, "ROTATE_BYTES", 200)
     for i in range(10):
@@ -135,3 +206,20 @@ def test_rotation_keeps_history_readable(monkeypatch):
     assert ledger.LEDGER.stat().st_size < 400
     keys = {r["key"] for r in ledger.rows()}
     assert "k9" in keys and len(keys) >= 2
+
+
+@pytest.mark.parametrize("text", [
+    "curl -H 'x' " * 8000,
+    "curl 'curl " * 8000,
+    "mysql -x " * 8000,
+])
+def test_redaction_stays_linear_when_text_repeats_command_words(text):
+    started = time.monotonic()
+    ledger.redact(text)
+    assert time.monotonic() - started < 2.0
+
+
+def test_curl_credential_scan_stops_at_the_end_of_the_command():
+    redacted = ledger.redact("curl https://x \\\n  -u bob:hunter2")
+    assert "hunter2" not in redacted
+    assert ledger.redact("curl https://x\nnext -u keep-me") .endswith("-u keep-me")

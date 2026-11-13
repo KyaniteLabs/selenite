@@ -7,8 +7,9 @@ import { pathToFileURL } from 'node:url'
 const root = process.env.TANSTACK_QUERY_CORE
 const source = await readFile(new URL('../desktop/plugin.js', import.meta.url), 'utf8')
 
-test('all five revision-keyed queries keep their last data during event refreshes',
-  { skip: !root && 'Set TANSTACK_QUERY_CORE to the unpacked query-core package' }, async () => {
+if (!root) throw new Error('Set TANSTACK_QUERY_CORE to the unpacked query-core package')
+
+test('all five revision-keyed queries keep their last data during event refreshes', async () => {
     const { QueryClient, QueryObserver } = await import(pathToFileURL(`${root}/build/modern/index.js`))
     const queries = [...source.matchAll(/const (overview|events|proposal|cleanse|fake) = useQuery\(\{([^\n]+)\}\)/g)]
     assert.equal(queries.length, 5)
