@@ -1,18 +1,18 @@
-# Pinned to the newest reviewed commit that contains the anticowardice facet; re-pin at release. Re-pin (sha, docs_url, image, screenshots) only to a later reviewed commit.
+# Pinned to the GitHub sync of Forgejo #55 (the anticowardice facet). Re-pin (sha, docs_url, image, screenshots) only to a later reviewed GitHub commit; Forgejo shas don't exist there.
 # screenshots stay out until real captures exist at a pinned commit.
 name: selenite
 title: Selenite
 repo: https://github.com/KyaniteLabs/selenite
-sha: e497402387babe8e2401e067886776542dcfa15c
+sha: 3103fd722c166c7068858c3646f6027066b64860
 description: "Takes friction off the person, treated as accessibility: one test, \"does this step, wait or check earn its cost to you?\", applied to steps handed to a person, agents parking Kanban work on each other for reasons that aren't real, and checks that can't change the decision. Calm mode cues the agent toward no questions and one-line replies when your messages show overload. A read-only cleanse ranks what to clear across skills, plugins, hooks, approvals, runbooks and boards. Walls always stand: credentials, spend, publishing, destructive steps, legal, named freezes. Adds /frictionless and /anticowardice, the selenite_ledger, selenite_show and cowardice_check tools, two fake-gate tools, skills, a Desktop page and a dashboard tab. Disclosure — no network, no credentials and no shell from the plugin itself; /frictionless starts an agent turn through the gateway only when Hermes's allow_gateway_injection is on, otherwise it prints the text for you to send; selenite_show and ledger, cleanse and evolve tool calls send local Desktop events (short keys only, no paths or private text) that the open Selenite page reacts to; hooks add a context note in Calm mode, a post_llm_call hook checks each reply for hedging or announcing instead of acting and, in cowardice_mode \"nudge\", adds one note to the next turn (default observe writes a counts-only ledger; it never blocks), and in fake_gate_mode \"nudge\" (default) or \"ask\" they add a note to, or hand back once with a question, a kanban_block that reads as agent bureaucracy (they never approve, unblock, close or edit a card, and any error fails open); when you approve a safe command once or for the session, its approval key is logged as an allowlist candidate (denials, timeouts and dangerous commands are never logged); writes a metadata-only ledger (no block reasons or prompt text, 0600, rotates at 4 MB), per-card question counts and a counts-only snapshot under plugin-data/antibeaurocracy/, and reports under the Selenite state directory (SELENITE_STATE, else XDG state, else HERMES_HOME/plugin-data/selenite, else ~/.local/state/selenite); reads kanban.db read-only (the CLI audit's --all-homes flag adds every ~/.hermes* home); the cleanse pass (the selenite_ledger tool, the Desktop page and the dashboard tab can run it) reads, read-only, the hook commands in ~/.claude/settings.json, the skill folders of Claude Code, Codex, OpenCode and ~/.agents, and Hermes plugin manifests; the `hermes antibeaurocracy audit` CLI also reads agent rule files (~/.claude/CLAUDE.md, ~/.codex/AGENTS.md, ~/.gemini/GEMINI.md) and the SOUL.md/AGENTS.md of every Hermes home and profile; the bundled frictionless skill's miner script, when the agent runs it, reads your own messages from local agent transcripts (Claude Code, Codex and Hermes state.db, all read-only) and keeps only counts plus a few redacted samples (emails, IPs, tokens, secrets and your home path stripped), 0600, in that state directory; the CLI's opt-in --judge runs a command you name, the plugin never does; all hooks turn off with hooks: false or SELENITE_HOOKS=0."
 maintainer: KyaniteLabs
 tier: community
 category: automation
 requires_hermes: ">=0.23.0"
 version: "0.6.0"
-docs_url: https://github.com/KyaniteLabs/selenite/blob/281baf36c5260e7efac24f957aec7a0d3c29cf98/README.md
+docs_url: https://github.com/KyaniteLabs/selenite/blob/3103fd722c166c7068858c3646f6027066b64860/README.md
 readme: true
-image: https://raw.githubusercontent.com/KyaniteLabs/selenite/281baf36c5260e7efac24f957aec7a0d3c29cf98/docs/banner.png
+image: https://raw.githubusercontent.com/KyaniteLabs/selenite/3103fd722c166c7068858c3646f6027066b64860/docs/banner.png
 platforms: [linux, macos]  # Windows stays out: install.sh is POSIX sh
 known_issues:
   - "Loads on the next gateway restart. Disable a standalone antibeaurocracy plugin first, or the fake-gate hooks run twice."
