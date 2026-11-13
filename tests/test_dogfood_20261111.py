@@ -99,6 +99,27 @@ def test_a_fallback_write_is_found_by_its_own_home_only(monkeypatch, tmp_path):
     assert "a-gate" not in ledger.fixed_keys()  # ... never clears A's gate
 
 
+def test_xdg_preferred_state_is_isolated_by_hermes_home(monkeypatch, tmp_path):
+    xdg = tmp_path / "xdg"
+    home_a = tmp_path / "home-a"
+    home_b = tmp_path / "home-b"
+    monkeypatch.setenv("HOME", str(tmp_path / "user"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(xdg))
+    monkeypatch.delenv("SELENITE_STATE", raising=False)
+    monkeypatch.setattr(ledger, "STATE", ledger._INITIAL_STATE)
+    monkeypatch.setenv("HERMES_HOME", str(home_a))
+
+    state_a = ledger.preferred_state()
+    assert state_a == xdg / "selenite" / "by-home" / ledger._home_tag(home_a)
+    _row(state_a, "profile-a-gate")
+
+    monkeypatch.setenv("HERMES_HOME", str(home_b))
+    state_b = ledger.preferred_state()
+    assert state_b == xdg / "selenite" / "by-home" / ledger._home_tag(home_b)
+    assert state_b != state_a
+    assert "profile-a-gate" not in {r["key"] for r in ledger.rows()}
+
+
 def test_the_default_home_still_reads_its_own_folder(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path / "user"))
     monkeypatch.delenv("HERMES_HOME", raising=False)

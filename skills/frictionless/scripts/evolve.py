@@ -54,7 +54,11 @@ def latest_report() -> dict | None:
 def _state_path() -> Path:
     """The cycle state: the newest copy in any state folder, else where the next write lands."""
     found = ledger.newest("evolve-state.json")
-    return found[0] if found else (ledger.writable_state() or ledger.STATE) / "evolve-state.json"
+    return (
+        found[0]
+        if found
+        else (ledger.writable_state() or ledger.preferred_state()) / "evolve-state.json"
+    )
 
 
 def _load_state() -> tuple[float, float, dict[str, int]]:

@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
-# Selenite installer. Links its three skills (frictionless, antibeaurocracy,
-# antipedantry) into each agent harness it finds and the `antibeaurocracy` CLI
+# Selenite installer. Links its four skills (frictionless, antibeaurocracy,
+# antipedantry, anticowardice) into each agent harness it finds and the `antibeaurocracy` CLI
 # into ~/.local/bin; with --hermes it also links and enables the Hermes plugin.
 #   ./install.sh             link the skills and CLI wherever a harness exists
-#   ./install.sh --hermes    also install the Hermes plugin (it registers all three skills itself)
+#   ./install.sh --hermes    also install the Hermes plugin (it registers all four skills itself)
 #   ./install.sh --no-enable link the Hermes plugin, but leave `hermes plugins enable` to you
 #   ./install.sh --dry-run   show what would be linked
 # Idempotent. It creates symlinks and the state folder, and with --hermes runs
@@ -87,7 +87,7 @@ link() {  # link <target> <link-path>; never fatal, always continues
 
 # Agent Skills-format homes. Hermes is not listed: its plugin registers the skills,
 # so linking them into the Hermes skills folder as well would load them twice.
-for NAME in frictionless antibeaurocracy antipedantry; do
+for NAME in frictionless antibeaurocracy antipedantry anticowardice; do
   for H in .claude .agents .codex .config/opencode; do   # Claude Code, any agentskills reader, Codex, OpenCode
     if [ -d "$HOME/$H" ]; then link "$ROOT/skills/$NAME" "$HOME/$H/skills/$NAME"; fi
   done

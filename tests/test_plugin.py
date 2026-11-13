@@ -42,10 +42,11 @@ def test_register_matches_manifest():
     ctx = Ctx()
     plugin.register(ctx)
     manifest = (REPO / "plugin.yaml").read_text(encoding="utf-8")
-    assert [n for n, _ in ctx.skills] == ["frictionless", "antibeaurocracy", "antipedantry"]
+    assert [n for n, _ in ctx.skills] == ["frictionless", "antibeaurocracy", "antipedantry", "anticowardice"]
     assert all(path.exists() for _, path in ctx.skills)
-    assert ctx.commands == ["frictionless", "antibeaurocracy", "fake-gate"]
-    assert [t for t, _ in ctx.tools] == ["selenite_ledger", "selenite_show", "bureaucracy_classify", "bureaucracy_audit"]
+    assert ctx.commands == ["frictionless", "antibeaurocracy", "fake-gate", "anticowardice"]
+    assert [t for t, _ in ctx.tools] == ["selenite_ledger", "selenite_show", "bureaucracy_classify", "bureaucracy_audit",
+                                         "cowardice_check"]
     assert all(f"  - {hook}\n" in manifest for hook in ctx.hooks)
     assert manifest.count("\n  - ") - manifest.split("optional_env:")[1].count("\n  - ") == len(ctx.hooks)
     for tool, _ in ctx.tools:
@@ -62,7 +63,8 @@ def test_versions_agree():
                 for n in plugin.SKILLS}
     v_core = re.search(r'^__version__ = "([\d.]+)"', (REPO / "antibeaurocracy_core/__init__.py").read_text(encoding="utf-8"), re.M).group(1)
     v_dash = json.loads((REPO / "dashboard/manifest.json").read_text(encoding="utf-8"))["version"]
-    assert {v_manifest, v_skill, v_py, v_core, v_dash} | v_skills == {v_manifest}
+    v_cow = re.search(r'^__version__ = "([\d.]+)"', (REPO / "anticowardice_core/__init__.py").read_text(encoding="utf-8"), re.M).group(1)
+    assert {v_manifest, v_skill, v_py, v_core, v_cow, v_dash} | v_skills == {v_manifest}
 
 
 def test_one_signal_is_not_calm():
@@ -227,6 +229,43 @@ def test_command_uses_real_hermes_session_accessor_when_available(monkeypatch):
         out = plugin.frictionless_command("calm")
     assert ctx.sent[0][1] == "task-local-session"
     assert out.startswith("Selenite: handed")
+
+
+def test_ledger_follows_the_active_hermes_profile(monkeypatch, tmp_path):
+    try:
+        import hermes_constants
+    except ImportError:
+        pytest.skip("Hermes profile context is not present in this source snapshot")
+
+    monkeypatch.delenv("SELENITE_STATE", raising=False)
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    profile_a, profile_b = tmp_path / "profiles" / "a", tmp_path / "profiles" / "b"
+
+    token = hermes_constants.set_hermes_home_override(profile_a)
+    try:
+        assert hermes_constants.get_hermes_home() == profile_a
+        fallback_a = ledger.state_dirs()[-1]
+        ledger.add("gate", "profile-scoped-gate")
+        assert (profile_a / "plugin-data/selenite/ledger.jsonl").exists()
+    finally:
+        hermes_constants.reset_hermes_home_override(token)
+
+    token = hermes_constants.set_hermes_home_override(profile_b)
+    try:
+        assert hermes_constants.get_hermes_home() == profile_b
+        fallback_b = ledger.state_dirs()[-1]
+        assert fallback_b != fallback_a
+        assert not list(ledger.rows())
+        ledger.add("fix", "profile-scoped-gate")
+        assert (profile_b / "plugin-data/selenite/ledger.jsonl").exists()
+    finally:
+        hermes_constants.reset_hermes_home_override(token)
+
+    token = hermes_constants.set_hermes_home_override(profile_a)
+    try:
+        assert "profile-scoped-gate" not in ledger.fixed_keys()
+    finally:
+        hermes_constants.reset_hermes_home_override(token)
 
 
 def test_command_falls_back_to_text_to_send_when_no_turn_can_start(monkeypatch):

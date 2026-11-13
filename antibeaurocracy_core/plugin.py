@@ -376,8 +376,8 @@ def observe_block(task_id: str = "", board: str | None = None, reason: str | Non
 # ---------------------------------------------------------------- dispatcher snapshot
 
 def _snapshot(home: Path) -> dict:
-    res = _audit.run(roots=[home], rule_paths=[])
-    out = {"ts": time.time(), "summary": _audit.counts_only(res["summary"])}
+    summary = _audit.summarize(_boards())
+    out = {"ts": time.time(), "summary": _audit.counts_only(summary)}
     atomic_write(data_dir(home) / "snapshot.json", json.dumps(out, indent=2, default=str))
     return out
 
@@ -580,7 +580,7 @@ def register(ctx) -> None:
         except (ValueError, TypeError, AttributeError) as exc:
             logger.warning("antibeaurocracy doctrine section not registered: %s", exc)
 
-    # Skills are registered once, by Selenite's register, for all three facets.
+    # Skills are registered once, by Selenite's register, for all four facets.
 
     if hasattr(ctx, "register_automation_blueprint"):
         ctx.register_automation_blueprint(

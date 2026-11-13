@@ -75,6 +75,22 @@ def test_bare_words_are_not_walls():
     assert classify("Waiting for sign-off from product on the budget line wording").cls == FAKE
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Need the API token for context-service from the ops agent",
+        "Need a token for context-service from the ops agent",
+    ],
+)
+def test_token_for_hyphenated_context_service_remains_a_credential_wall(text):
+    verdict = classify(text)
+    assert (verdict.cls, verdict.subtype, verdict.confidence) == (
+        WALL,
+        "credentials",
+        0.9,
+    )
+
+
 def test_wall_beats_fake():
     assert classify("Awaiting approval from Product; push=false for the bot").cls == WALL
 
@@ -110,8 +126,11 @@ def test_wall_family_action_overrides_fake_ack(text):
     "blocked on token budget",
     "needs 2000 more tokens of context",
     "need more tokens for context",
+    "Need more tokens for the context window to finish",
+    "need more tokens for context to finish the summary",
     "out of tokens",
     "the model ran out of tokens",
+    "need 1000 tokens for context length",
     "token limit reached",
     "more tokens for the context window",
     "LLM context window is full",
@@ -119,6 +138,62 @@ def test_wall_family_action_overrides_fake_ack(text):
 def test_llm_token_budget_is_not_a_credentials_wall(text):
     assert classify(text).cls != WALL
     assert not wall_family(text)
+
+
+def test_context_length_checks_do_not_hide_a_required_vault_token():
+    verdict = classify("Need the vault token for context length checks from secops agent")
+    assert verdict.cls == WALL and verdict.subtype == "credentials", verdict
+
+
+@pytest.mark.parametrize("text", [
+    "Need the vault token for context length validation from secops agent",
+    "Need the vault token for context length monitoring from secops agent",
+    "Need the vault token for context length inspection from secops agent",
+    "Need the vault token for context window proxy service from secops agent",
+    "Need the vault token for context length quota service from secops agent",
+    "Need the vault token for context-length gateway from secops agent",
+    "Need the vault token for context window validation from secops agent",
+])
+def test_capacity_task_nouns_do_not_hide_explicit_vault_credential_requests(text):
+    verdict = classify(text)
+    assert (verdict.cls, verdict.subtype, verdict.confidence) == (WALL, "credentials", 0.9), verdict
+
+
+@pytest.mark.parametrize("text", [
+    "Need the token for context window proxy from platform agent",
+    "Need the token for context window validation from ops agent",
+    "Need a token for context window monitoring from ops agent",
+    "Need the token for context window quota service from ops agent",
+])
+def test_context_capacity_filters_keep_noncapacity_task_requests(text):
+    assert classify(text).cls == WALL
+
+
+@pytest.mark.parametrize("text", [
+    "Need a GitHub token for the context API; waiting on reviewer agent to send it",
+    "Need tokens for the context API; waiting on reviewer agent to send them",
+    "Need an access token for context API; waiting on reviewer agent to send it",
+])
+def test_context_api_credentials_remain_walls(text):
+    verdict = classify(text)
+    assert verdict.cls == WALL and verdict.subtype == "credentials", verdict
+
+
+def test_token_for_context_service_remains_a_credential_wall():
+    verdict = classify("Need the token for context-service from the ops agent")
+    assert (verdict.cls, verdict.subtype, verdict.confidence) == (
+        WALL,
+        "credentials",
+        0.9,
+    )
+
+
+@pytest.mark.parametrize("text", [
+    "Need a token for the context broker; waiting on platform agent to mint it",
+    "Need the token for context service from the ops agent",
+])
+def test_singular_credential_tokens_for_context_services_are_not_model_capacity(text):
+    assert classify(text).cls == WALL
 
 
 def test_human_questions_are_not_agent_gates():

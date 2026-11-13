@@ -213,7 +213,7 @@ def test_register_surface(tmp_path, monkeypatch):
     _, ctx = _load_plugin(tmp_path, monkeypatch)
     assert {"pre_tool_call", "transform_tool_result", "on_kanban_dispatch_tick", "kanban_task_blocked"} <= set(ctx.hooks)
     assert {"bureaucracy_classify", "bureaucracy_audit"} <= set(ctx.tools)
-    assert {"antibeaurocracy", "antipedantry", "frictionless"} == set(ctx.skills)
+    assert {"antibeaurocracy", "antipedantry", "frictionless", "anticowardice"} == set(ctx.skills)
     assert {"antibeaurocracy", "fake-gate"} <= set(ctx.commands)
     assert "antibeaurocracy" in ctx.cli and ctx.skills and "weekly-audit" in ctx.blueprints
     assert not ctx.sections  # doctrine is off by default
@@ -574,7 +574,7 @@ def test_dashboard_overview_has_no_people_or_paths(tmp_path, monkeypatch):
 
 # ---------------------------------------------------------------- docs stay tied to the code
 
-@pytest.mark.parametrize("skill", ["antibeaurocracy", "antipedantry"])
+@pytest.mark.parametrize("skill", ["antibeaurocracy", "antipedantry", "anticowardice"])
 def test_files_the_skill_references_are_tracked(skill):
     import re
     try:
@@ -638,6 +638,17 @@ def test_judge_parse_phrasings():
     assert judge.parse("ANSWER: HUMAN\nwait\nANSWER: MACHINERY") == "MACHINERY"           # last ANSWER wins
     assert judge.parse("answer: fake") == "FAKE"
     assert judge.parse("ANSWER: MAYBE") == ""
+
+
+@pytest.mark.parametrize("out", [
+    "**ANSWER:** FAKE",
+    "**ANSWER: FAKE**",
+    "- ANSWER: FAKE",
+    "> ANSWER: FAKE",
+])
+def test_judge_parse_accepts_markdown_answer_lines(out):
+    from antibeaurocracy_core import judge
+    assert judge.parse(out) == "FAKE"
 
 
 def test_judge_lists_disagreements_only(tmp_path):

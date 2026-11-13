@@ -10,6 +10,8 @@ Compared against Check Yourself's Hermes plugin at `d421e421` (`hermes-plugin/`)
 |---|---|---|
 | Is a completion claim backed by executed evidence? | Check Yourself | Selenite never scores evidence or blocks a completion. |
 | Is an app ready to ship (findings register, risk score, fix backlog)? | Check Yourself | Selenite ranks friction in the agent stack, not defects in the product. |
+| Did the agent commit to a call, or hedge, announce, caveat or defer where it had the evidence and authority? | Selenite (cowardice) | Check Yourself judges whether a claim is true, not whether the agent made one. |
+| Is "should be fine" backed by a check? | Both, different questions | Selenite notices the missing check in the reply (C8, advice only); Check Yourself judges whether a completion claim has executed evidence. |
 | Is a step handed to a person needed, or can it shrink to one command? | Selenite (Gate) | Check Yourself doesn't measure the person's effort. |
 | Is an agent parking work on another agent for a reason that isn't real? | Selenite (fake gates) | Check Yourself gates `kanban_complete` only. |
 | Can a check change the decision, does it apply to every option, is it priced to the stakes? | Selenite (pedantry) | Check Yourself asks whether its own evidence is present, not whether a check is worth running. |
@@ -21,7 +23,8 @@ Compared against Check Yourself's Hermes plugin at `d421e421` (`hermes-plugin/`)
 3. **Ceremony around evidence.** "Need a reviewer agent to attest the evidence bundle" is F4 ceremony (0.7) and is nudged. That is the intended line: Check Yourself's executed receipts are the evidence; a second agent's sign-off on them adds a wait, not proof.
 4. **Pedantry about Check Yourself's own gate.** Selenite's pedantry facet may ask whether a gate is priced to the stakes. It does not rule on whether Check Yourself's evidence is sufficient; that is Check Yourself's question. Selenite's verdict on a check is advice in a report, never a hook action.
 5. **Friction from a refused completion.** A refusal lands on the agent, not the person, so it isn't Selenite's to count. It becomes Selenite's only when the card sits blocked and a person has to untangle the board; then the fake-gate facet and Cleanse see it like any other blocked card.
-6. **"Gate".** Selenite's **Gate mode** means a step handed to a person. Check Yourself's **Evidence Gate** means a completion check. In copy and demos, Selenite says "human step" when both products are in view.
+6. **Vague status.** Selenite's anticowardice facet flags a status phrase with no verification in the turn ("should be fine", C8) as advice in a note or the ledger. It never scores evidence and never blocks `kanban_complete`. Whether the completion claim is backed by executed evidence stays Check Yourself's.
+7. **"Gate".** Selenite's **Gate mode** means a step handed to a person. Check Yourself's **Evidence Gate** means a completion check. In copy and demos, Selenite says "human step" when both products are in view.
 
 ## Left for Check Yourself's owner
 
