@@ -21,43 +21,48 @@ from .classify import FAKE
 
 CLASSES = ("WALL", "HUMAN", "MACHINERY", "DEPENDENCY", "FAKE")
 _CLASS = "|".join(CLASSES)
-_ANSWER_LINE = re.compile(
-    r'^[\s>*#\-\d.)]*[*_`]*(?:FINAL[ \t]+)?ANSWER[*_`]*[ \t]*:[ \t]*(?:\r?\n[ \t]*)?[*_`\[<({"\']*[ \t]*('
+_ANSWER_CANDIDATE = re.compile(
+    r"^[\s>*#\-\d.)]*[*_\x60]*(?:FINAL[ \t]+)?ANSWER[*_\x60]*[ \t]*:[ \t]*(?:\r?\n[ \t]*)?[*_\x60\[<({\"']*[ \t]*("
     + _CLASS
-    + r')(?![A-Za-z0-9])(?!_(?:' + _CLASS + r')\b)'
-    + r'(?![ \t]*(?:/|or\b)[ \t]*(?:' + _CLASS + r')\b)'
-    + r'(?![^\r\n]*\|[ \t]*(?:' + _CLASS + r')\b)'
-    + r'(?![^\r\n]*\|\s*$)'
-    + r'(?![ \t]*\?[ \t]*[Nn]o[,;:]?[ \t]+(?:' + _CLASS + r')\b)'
-    + r'[^\r\n]*$',
+    + r")(?![A-Za-z0-9])(?!_(?:" + _CLASS + r")\b)[^\r\n]*$",
     re.IGNORECASE | re.MULTILINE,
 )
-_UPPER_CLASS = re.compile(r"\b(" + _CLASS + r")\b")
+_ANSWER_MARKER = re.compile(
+    r"^[\s>*#\-\d.)]*[*_\x60]*(?:FINAL[ \t]+)?ANSWER[*_\x60]*[ \t]*:",
+    re.IGNORECASE | re.MULTILINE,
+)
+_CLASS_WORD = re.compile(r"\b(" + _CLASS + r")\b", re.IGNORECASE)
 _BARE = re.compile(rf"(?:(?!\|)[\W_])*({_CLASS})(?:(?!\|)[\W_])*", re.IGNORECASE)
 _THINK = re.compile(r"<think(?:ing)?>.*?(?:</think(?:ing)?>|\Z)", re.I | re.S)
 
 
 def _ambiguous_classes(match: re.Match[str]) -> bool:
-    """Reject a second uppercase class choice while allowing class-leading explanation prose."""
+    """Reject answers that offer multiple classes while allowing explanatory mentions."""
     first = match.group(1).upper()
     suffix = match.string[match.end(1):match.end()]
-    for other in _UPPER_CLASS.finditer(suffix):
-        label = other.group(1)
-        if label == first:
+    if re.match(r"^\s*\?", suffix):
+        return True
+    if re.search(r"(?:/|\||\bor)\s*$", suffix, re.IGNORECASE):
+        return True
+    for other in _CLASS_WORD.finditer(suffix):
+        if other.group(1).upper() == first:
             continue
         before = suffix[:other.start()]
         after = suffix[other.end():]
-        if re.search(r"\b(?:not|no|never|without|isn't|aren't|wasn't)\s*$", before, re.IGNORECASE):
+        if re.search(r"\b(?:rather than|instead of|as opposed to)\b", before, re.IGNORECASE):
             continue
-        if (first == "WALL" and label == "HUMAN"
-                and re.search(r"\(\s*$", before)
-                and re.match(r"\s+must\b", after, re.IGNORECASE)):
+        clause = re.split(r"[.!?;]", before)[-1]
+        if re.search(r"\b(?:not|no|never|without|isn't|aren't|wasn't)\b", clause, re.IGNORECASE):
             continue
-        if (first == "HUMAN" and label == "WALL"
-                and re.search(r"[-—]\s*$", before)
-                and re.match(r"\s+is\s+not\s+involved\b", after, re.IGNORECASE)):
-            continue
-        return True
+        if re.search(r"(?:/|\||&|\+|->|→|\\|\bor\b|\band\b|\bvs\.?\b|\b(?:actually|maybe|possibly|unless|otherwise)\b)\s*$", before, re.IGNORECASE):
+            return True
+        if re.search(r"\bunless\b.*\bthen\b", before, re.IGNORECASE):
+            return True
+        if "?" in before or re.search(r"\b(?:is|was)\s+(?:wrong|incorrect)\b", before, re.IGNORECASE):
+            return True
+        separators = r"[\s,;:!?()\[\]{}<>|/—*'\"`\\&+.-]*"
+        if re.fullmatch(separators, before) and re.fullmatch(separators, after):
+            return True
     return False
 
 PROMPT = """Classify why this kanban card is blocked. Think briefly if you must, then end with a final line of the form
@@ -83,9 +88,13 @@ def parse(out: str) -> str:
     exception is a reply that is nothing but a single class word, the old one-word contract.
     """
     text = _THINK.sub("", out or "")
-    found = [m.group(1) for m in _ANSWER_LINE.finditer(text) if not _ambiguous_classes(m)]
+    found = list(_ANSWER_CANDIDATE.finditer(text))
     if found:
-        return found[-1].upper()
+        last = found[-1]
+        markers = list(_ANSWER_MARKER.finditer(text))
+        if markers and markers[-1].start() != last.start():
+            return ""
+        return "" if _ambiguous_classes(last) else last.group(1).upper()
     m = _BARE.fullmatch(text.strip())
     return m.group(1).upper() if m else ""
 

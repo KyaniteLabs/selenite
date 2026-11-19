@@ -97,7 +97,7 @@ def test_parse_rejects_echoed_class_templates(text):
 
 
 def test_an_ambiguous_later_answer_does_not_replace_an_earlier_verdict():
-    assert judge.parse("ANSWER: WALL\nANSWER: FAKE or WALL (not sure)") == "WALL"
+    assert judge.parse("ANSWER: WALL\nANSWER: FAKE or WALL (not sure)") == ""
 
 
 def test_class_leading_reason_is_counted_as_a_judge_disagreement():
@@ -112,3 +112,65 @@ def test_class_leading_reason_is_counted_as_a_judge_disagreement():
     result = judge.second_opinion(boards, lambda _: answer)
     assert result["no_answer"] == 0
     assert result["disagree"] == [{"id": "t_r9", "regex": "FAKE", "judge": "WALL"}]
+
+
+@pytest.mark.parametrize("text,label", [
+    ("ANSWER: WALL. A HUMAN cannot override it.", "WALL"),
+    ("ANSWER: DEPENDENCY on the HUMAN review", "DEPENDENCY"),
+    ("ANSWER: HUMAN (the CEO must decide; not a WALL)", "HUMAN"),
+    ("ANSWER: FAKE (the WALL claim is bogus)", "FAKE"),
+    ("ANSWER: MACHINERY (the HUMAN gate fired by mistake)", "MACHINERY"),
+    ("ANSWER: WALL (needs HUMAN sign-off)", "WALL"),
+    ("ANSWER: WALL - a HUMAN has to log in", "WALL"),
+    ("ANSWER: FAKE. This is not a HUMAN gate.", "FAKE"),
+    ("ANSWER: FAKE rather than WALL", "FAKE"),
+    ("ANSWER: WALL (not HUMAN, FAKE or MACHINERY)", "WALL"),
+    ("ANSWER: WALL because a HUMAN must approve", "WALL"),
+    ("ANSWER: FAKE (the WALL is only a claim)", "FAKE"),
+    ("ANSWER: WALL — not HUMAN, the policy forbids it", "WALL"),
+    ("ANSWER: WALL, not HUMAN", "WALL"),
+    ("ANSWER: WALL (HUMAN must not override)", "WALL"),
+    ("ANSWER: HUMAN — WALL is not involved", "HUMAN"),
+    ("ANSWER: HUMAN; WALL is not involved", "HUMAN"),
+    ("ANSWER: FAKE — no HUMAN needed", "FAKE"),
+    ("ANSWER: WALL | reason: needs HUMAN login", "WALL"),
+    ("ANSWER: HUMAN (needs sign-off from the API owner)", "HUMAN"),
+    ("ANSWER: MACHINERY (cron/systemd timer dead)", "MACHINERY"),
+    ("ANSWER: HUMAN (approve or reject)", "HUMAN"),
+    ("ANSWER: DEPENDENCY (t_12 or t_13 must land)", "DEPENDENCY"),
+    ("ANSWER: HUMAN (Ada and/or Bob must sign)", "HUMAN"),
+    ("ANSWER: DEPENDENCY - waiting on card t_1 which is a WALL", "DEPENDENCY"),
+    ("ANSWER: FAKE, it is hardly a WALL", "FAKE"),
+    ("ANSWER: FAKE instead of HUMAN", "FAKE"),
+    ("ANSWER: WALL, as opposed to FAKE", "WALL"),
+    ("ANSWER: WALL (I first thought FAKE)", "WALL"),
+])
+def test_round_ten_explanations_can_mention_other_classes(text, label):
+    assert judge.parse(text) == label
+
+
+@pytest.mark.parametrize("text", [
+    "ANSWER: WALL/HUMAN",
+    "ANSWER: WALL or HUMAN",
+    "ANSWER: WALL | HUMAN",
+    "ANSWER: WALL? HUMAN",
+    "ANSWER: wall, human",
+    "ANSWER: FAKE, or wall",
+    "ANSWER: FAKE? no - wall",
+    "ANSWER: FAKE? Not WALL",
+    "ANSWER: WALL |",
+    "ANSWER: HUMAN? No, WALL",
+    "ANSWER: FAKE, WALL",
+    "ANSWER: FAKE; WALL",
+    "ANSWER: FAKE -> WALL",
+    "ANSWER: FAKE... actually WALL",
+    "ANSWER: FAKE vs WALL",
+    "ANSWER: FAKE, possibly WALL",
+])
+def test_round_ten_genuine_class_alternatives_have_no_answer(text):
+    assert judge.parse(text) == ""
+
+
+def test_round_ten_unclear_last_answer_does_not_fall_back_to_an_earlier_one():
+    assert judge.parse("ANSWER: FAKE\nANSWER: WALL or FAKE") == ""
+    assert judge.parse("ANSWER: FAKE\nANSWER: unclear") == ""

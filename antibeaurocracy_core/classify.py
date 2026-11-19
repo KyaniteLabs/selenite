@@ -142,14 +142,14 @@ WALL_FAMILY = re.compile(
 _LLM_TOKEN_CONTEXT = re.compile(
     r"\b(?:(?:(?:\d+\s+)?(?:more\s+)?tokens|\d+\s+(?:more\s+)?token)\s+(?:of|for)\s+(?:the\s+)?(?:llm\s+)?context(?:[ -]+(?:window|length))?(?![-\w])|"
     r"token\s+(?:of|for)\s+(?:the\s+)?(?:llm\s+)?context[ -]+(?:window|length)(?![-\w])"
-    r"(?![ \t]+(?:checks?|services?|apis?|brokers?|endpoints?|limits?|requests?|validation|proxy|proxies|monitoring|quotas?|gateways?|inspection)\b)|"
+    r"(?![ \t]+(?!(?:to|for|of|is|full|exhausted)\b)[A-Za-z][\w-]*\b)|"
     r"(?:out of|ran out of)\s+(?:the\s+)?(?:llm\s+)?(?:(?:\d+\s+)?tokens|\d+\s+token)|"
     r"(?:llm\s+)?tokens?\s+(?:budget|limit)|"
     r"(?:llm\s+)?context(?:\s+window)?\s+(?:is\s+)?(?:full|exhausted))\b",
     _I,
 )
 _LLM_TOKEN_CREDENTIAL_CONTEXT = re.compile(
-    r"\b(github|api|deploy\w*|access|pat|vault|credential\w*|secret)\b", _I
+    r"\b(github|api|deploy\w*|access|pat|vault|credential\w*|secret|auth\w*|secops)\b", _I
 )
 
 
