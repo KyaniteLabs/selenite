@@ -226,22 +226,47 @@ def _redact_key_value(match: re.Match[str]) -> str:
             + match.group("sep") + _quoted_secret(match))
 
 
-_SECRET_KEY = (r"[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|"
-               r"access[_-]?key|private[_-]?key|credentials?|cookies?|sessionid|"
-               r"oauth|auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth)[\w-]*")
+_SECRET_KEY = (
+    r"(?:[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|"
+    r"private[_-]?key|credentials?|session[_-]?id|oauth|auth(?:key|code|[-_](?:key|code))?|"
+    r"basic[-_]?auth|authorization|authentication)(?:s|[_-]?v?\d+)?|"
+    r"[\w-]*(?:cookies?|cookies?[_-](?:jar|list|data)|cookie[_-]?(?:jar|list|data))|"
+    r"[\w-]*(?:pass|pw)|(?:[\w-]+[-_])?key)"
+)
+_YAML_SECRET_NAME = r"(?:" + _SECRET_KEY + r"|[\w-]*(?:signature|cert))"
+
+
+def _is_secret_name(name: str, *, allow_pass: bool = False) -> bool:
+    name = name.strip().strip("\"'")
+    credential_suffix = re.compile(
+        r"(?i)(?:password|passphrase|passwd|pwd|pass|pw|secrets?|tokens?|"
+        r"(?:api|access|private)[_-]?key|credentials?|cookies?|sessionid|oauth|"
+        r"auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth|authorization|authentication|signature|cert|key)$"
+    )
+    if not credential_suffix.search(name):
+        return False
+    if re.fullmatch(r"(?i)(?:num|total|min|max)[_-]?tokens?", name):
+        return False
+    return allow_pass or not re.search(r"(?i)(?:pass|pw)$", name)
+
+
 _CREDENTIAL_CONTAINER = re.compile(
-    r"(?i)(?<![\w-])(?P<prefix>[\"']?" + _SECRET_KEY + r"[\"']?\s*[=:]\s*)"
+    r"(?i)(?<![\w-])(?P<prefix>[\"']?(?!(?:bypass|compass|encompass|surpass|overpass|underpass|trespass|max[_-]?tokens?)[\"']?\s*[=:])"
+    + _SECRET_KEY + r"[\"']?\s*[=:]\s*)"
     r"(?P<open>[\[{(])"
 )
 
 
-def _container_end(text: str, start: int) -> int:
-    """End of a bounded JSON/Python-style object or list, including nested values."""
+def _container_end(text: str, start: int, *, line_bound: bool = True) -> tuple[int, bool]:
+    """Return the end and closure state of a nested container."""
     pairs = {"{": "}", "[": "]", "(": ")"}
     stack = [pairs[text[start]]]
     quote = ""
     escaped = False
-    for pos in range(start + 1, len(text)):
+    limit = text.find("\n", start) if line_bound else -1
+    if limit < 0:
+        limit = len(text)
+    for pos in range(start + 1, limit):
         char = text[pos]
         if quote:
             if escaped:
@@ -251,19 +276,17 @@ def _container_end(text: str, start: int) -> int:
             elif char == quote:
                 quote = ""
             continue
-        if char in ("'", '\"'):
+        if char in ("'", '\"') and text[pos - 1] in ":,[{( \t":
             quote = char
         elif char in pairs:
             stack.append(pairs[char])
         elif char in ("}", "]", ")"):
             if char != stack[-1]:
-                end = re.search(r"[\s,;|&]", text[start:])
-                return start + end.start() if end else len(text)
+                return limit, False
             stack.pop()
             if not stack:
-                return pos + 1
-    end = re.search(r"[\s,;|&]", text[start:])
-    return start + end.start() if end else len(text)
+                return pos + 1, True
+    return limit, False
 
 
 def _redact_containers(text: str) -> str:
@@ -273,9 +296,53 @@ def _redact_containers(text: str) -> str:
     for match in _CREDENTIAL_CONTAINER.finditer(text):
         if match.start() < cursor:
             continue
-        end = _container_end(text, match.start("open"))
-        if text[match.start("open")] == "[" and text[end:end + 1] == "(":
+        open_pos = match.start("open")
+        end, closed = _container_end(text, open_pos, line_bound=False)
+        if not closed:
+            end, closed = _container_end(text, open_pos, line_bound=True)
+        if closed and not text[open_pos + 1:end - 1].strip():
             continue
+        linked = False
+        if closed and text[open_pos] == "[" and text[end:end + 1] == "(":
+            link_end, link_closed = _container_end(text, end, line_bound=True)
+            if link_closed:
+                end = link_end
+                linked = True
+            else:
+                end, closed = link_end, False
+        if closed and text[open_pos] in "([" and not linked:
+            inner = text[open_pos + 1:end - 1]
+            simple = not any(c in inner for c in "\"',")
+            if simple and not _contains_secret_token(inner):
+                line_end = text.find("\n", end)
+                if line_end < 0:
+                    line_end = len(text)
+                tail = text[end:line_end]
+                secret_tail = next(
+                    (m for m in re.finditer(r"[^\s,;|&]+", tail) if _looks_like_secret(m.group())),
+                    None,
+                )
+                if secret_tail:
+                    out.append(text[cursor:end] + tail[:secret_tail.start()] + "<secret>")
+                    cursor = line_end
+                continue
+        if closed:
+            while True:
+                next_container = re.match(r"\s*,?\s*([\[{(])", text[end:])
+                if not next_container:
+                    break
+                next_pos = end + next_container.end() - 1
+                next_end, next_closed = _container_end(text, next_pos)
+                if not next_closed:
+                    end, closed = next_end, False
+                    break
+                end = next_end
+            line_end = text.find("\n", end)
+            if line_end < 0:
+                line_end = len(text)
+            tail = text[end:line_end]
+            if any(_looks_like_secret(token) for token in re.findall(r"[^\s,;|&]+", tail)):
+                end, closed = line_end, False
         out.append(text[cursor:match.start()])
         out.append(match.group("prefix") + '"<secret>"')
         cursor = end
@@ -284,7 +351,8 @@ def _redact_containers(text: str) -> str:
 
 
 _YAML_SECRET_BLOCK = re.compile(
-    r"(?i)^(?P<prefix>[ \t]*" + _SECRET_KEY + r"\s*:\s*)"
+    r"(?i)^(?P<indent>[ \t]*)(?P<list>-[ \t]+)?(?P<prefix>(?!(?:num|total|min|max)[_-]?tokens?[\"']?\s*:)(?P<key_quote>[\"']?)" + _YAML_SECRET_NAME
+    + r"(?P=key_quote)\s*:\s*)"
     r"(?P<header>[|>])(?P<mods>[1-9+-]*)(?:[ \t]+#.*)?[ \t]*(?:\r?\n)?$"
 )
 
@@ -301,7 +369,7 @@ def _redact_yaml_blocks(text: str) -> str:
             out.append(line)
             i += 1
             continue
-        parent_indent = len(match.group("prefix")) - len(match.group("prefix").lstrip(" \t"))
+        parent_indent = len(match.group("indent"))
         indent_match = re.search(r"[1-9]", match.group("mods"))
         content_indent = parent_indent + int(indent_match.group()) if indent_match else None
         j = i + 1
@@ -312,40 +380,632 @@ def _redact_yaml_blocks(text: str) -> str:
                 continue
             indent = len(body) - len(body.lstrip(" \t"))
             if content_indent is None:
-                if indent <= parent_indent:
+                if indent <= parent_indent and re.match(r"[ \t]*[\w-]+\s*:", body):
                     break
                 content_indent = indent
+            elif indent <= parent_indent and re.match(r"[ \t]*[\w-]+\s*:", body):
+                break
             if indent < content_indent:
                 break
             j += 1
         newline = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
-        out.append(match.group("prefix") + "<secret>" + newline)
+        out.append(match.group("indent") + (match.group("list") or "") + match.group("prefix") + "<secret>" + newline)
         i = j
     return "".join(out)
 
 
-_K8S_SECRET_VALUE = re.compile(
-    r"(?im)(?P<prefix>\bname\s*:\s*[\"']?" + _SECRET_KEY + r"[\"']?\s*\r?\n"
-    r"[ \t]+value\s*:\s*)(?P<value>\"(?:\\.|[^\"\\\r\n])*\"|"
-    r"'(?:\\.|[^'\\\r\n])*'|[^\s#]+)"
+def _redact_yaml_nested_values(text: str) -> str:
+    """Replace indented YAML values that follow a secret key on their own line."""
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        match = _YAML_SECRET_LINE.match(line.rstrip("\r\n"))
+        value = match.group("value").strip() if match else ""
+        if not match or (value and not value.startswith("#")):
+            out.append(line)
+            i += 1
+            continue
+        parent_indent = len(match.group("indent"))
+        j = i + 1
+        found_value = False
+        while j < len(lines):
+            body = lines[j].rstrip("\r\n")
+            if not body.strip() or body.lstrip().startswith("#"):
+                j += 1
+                continue
+            indent = len(body) - len(body.lstrip(" \t"))
+            sequence_value = bool(re.match(r"[ \t]*-[ \t]+", body)) and indent >= parent_indent
+            mapping = bool(re.match(r"[ \t]*[\w\"']+\s*:", body))
+            if indent <= parent_indent and mapping:
+                break
+            if indent <= parent_indent and j != i + 1 and not sequence_value:
+                break
+            found_value = True
+            j += 1
+        if not found_value:
+            out.append(line)
+            i += 1
+            continue
+        newline = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
+        out.append(line[:match.start("value")] + "<secret>" + newline)
+        i = j
+    return "".join(out)
+
+
+_SECRET_NAME_FIELD = re.compile(
+    r"(?i)(?<![\w-])[\"']?(?:name|key)[\"']?\s*[:=]\s*[\"']?(?P<name>(?:" + _SECRET_KEY + r"|[\w-]*signature))[\"']?(?![\w-])"
+)
+_VALUE_FIELD = re.compile(r"(?i)(?<![\w-])[\"']?value[\"']?\s*[:=]\s*")
+_YAML_NAME_FIELD = re.compile(r"(?im)^[ \t]*(?:-[ \t]*)?[\"']?(?:name|key)[\"']?\s*:")
+_YAML_VALUE_FIELD = re.compile(r"(?im)^[ \t]*(?:-[ \t]*)?[\"']?value[\"']?\s*:")
+_YAML_SECRET_LINE = re.compile(
+    r"(?i)^(?P<indent>[ \t]*)(?P<list>-[ \t]+)?(?P<key_quote>[\"']?)(?P<key>" + _YAML_SECRET_NAME
+    + r")(?P=key_quote)\s*:\s*(?P<value>.*?)(?P<newline>\r?\n)?$"
 )
 
 
+def _field_value_span(text: str, start: int, *, block_scalars: bool = True) -> tuple[int, int]:
+    """Locate one scalar/container value, including a YAML block or a closed multiline quote."""
+    pos = start
+    while pos < len(text) and text[pos] in " \t":
+        pos += 1
+    line_end = text.find("\n", pos)
+    if line_end < 0:
+        line_end = len(text)
+    if pos >= line_end or text[pos] == "#":
+        if not block_scalars:
+            return pos, pos
+        next_line = line_end + 1
+        while next_line < len(text):
+            end = text.find("\n", next_line)
+            if end < 0:
+                end = len(text)
+            body = text[next_line:end].rstrip("\r")
+            if not body.strip():
+                next_line = end + 1
+                continue
+            if len(body) - len(body.lstrip(" \t")) <= 0:
+                break
+            return pos, end
+        return pos, pos
+    if block_scalars and text[pos] in "|>" and (pos + 1 == line_end or text[pos + 1] in "+-0123456789 #\t"):
+        line_start = text.rfind("\n", 0, pos) + 1
+        line_prefix = text[line_start:pos]
+        indent = len(line_prefix) - len(line_prefix.lstrip(" \t"))
+        end = line_end
+        cursor = line_end + 1
+        while cursor < len(text):
+            next_end = text.find("\n", cursor)
+            if next_end < 0:
+                next_end = len(text)
+            body = text[cursor:next_end].rstrip("\r")
+            if body.strip() and len(body) - len(body.lstrip(" \t")) <= indent:
+                break
+            end = next_end
+            cursor = next_end + 1
+        return pos, end
+    if text[pos] in "\"'":
+        quote = text[pos]
+        escaped = False
+        cursor = pos + 1
+        while cursor < len(text):
+            char = text[cursor]
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                return pos, cursor + 1
+            elif char == "\n" and not block_scalars:
+                return pos, line_end
+            cursor += 1
+        return pos, line_end
+    if text[pos] in "{[(":
+        end, closed = _container_end(text, pos, line_bound=False)
+        return pos, end if closed else line_end
+    end = pos
+    while end < line_end:
+        if text[end] == "#" and (end == pos or text[end - 1].isspace()):
+            break
+        if text[end].isspace():
+            break
+        end += 1
+    return pos, end
+
+
+def _replace_value(text: str, start: int, *, block_scalars: bool = True) -> str:
+    value_start, value_end = _field_value_span(text, start, block_scalars=block_scalars)
+    if value_start == value_end:
+        return text
+    return text[:value_start] + "<secret>" + text[value_end:]
+
+
+def _redact_k8s_pairs(text: str) -> str:
+    """Redact values paired with a secret-bearing name in one YAML item or inline object."""
+    replacements: list[tuple[int, int, str]] = []
+    lines = text.splitlines(keepends=True)
+    offsets = []
+    offset = 0
+    for line in lines:
+        offsets.append(offset)
+        offset += len(line)
+    item_starts = []
+    for i, line in enumerate(lines):
+        match = re.match(r"^(?P<indent>[ \t]*)-[ \t]+", line)
+        if match:
+            item_starts.append((i, len(match.group("indent"))))
+    groups: list[tuple[int, int]] = []
+    for start_index, indent in item_starts:
+        end_index = len(lines)
+        for next_index, next_indent in item_starts:
+            if next_index > start_index and next_indent <= indent:
+                end_index = next_index
+                break
+        groups.append((start_index, end_index))
+    if not item_starts:
+        groups.append((0, len(lines)))
+
+    for start_index, end_index in groups:
+        begin = offsets[start_index] if start_index < len(offsets) else 0
+        finish = offsets[end_index] if end_index < len(offsets) else len(text)
+        group = text[begin:finish]
+        yaml_pair = _YAML_NAME_FIELD.search(group) and _YAML_VALUE_FIELD.search(group)
+        inline_assignments = any(
+            _SECRET_NAME_FIELD.search(line) and _VALUE_FIELD.search(line) and not re.search(r"[{}\[\]]", line)
+            for line in group.splitlines()
+        )
+        if not yaml_pair and not inline_assignments:
+            continue
+        names = list(_SECRET_NAME_FIELD.finditer(group))
+        values = list(_VALUE_FIELD.finditer(group))
+        if not names or not values:
+            continue
+        if not any(_is_secret_name(m.group("name"), allow_pass=True) for m in names):
+            continue
+        for field in values:
+            value_start, value_end = _field_value_span(group, field.end())
+            line_start = group.rfind("\n", 0, field.start()) + 1
+            line_end = group.find("\n", field.end())
+            if line_end < 0:
+                line_end = len(group)
+            field_indent = len(group[line_start:field.start()])
+            if value_start < len(group) and group[value_start] in "\"'":
+                quote = group[value_start]
+                first_line = group[value_start + 1:line_end]
+                first_line_closed = re.search(r"(?<!\\)" + re.escape(quote), first_line)
+                if not first_line_closed and value_end > line_end:
+                    content = group[value_start + 1:value_end - 1]
+                    if not _contains_secret_token(content):
+                        value_end = line_end
+                if not first_line_closed and value_end == line_end:
+                    next_start = line_end + 1
+                    while next_start < len(group):
+                        next_end = group.find("\n", next_start)
+                        if next_end < 0:
+                            next_end = len(group)
+                        body = group[next_start:next_end].rstrip("\r")
+                        indent = len(body) - len(body.lstrip(" \t"))
+                        if re.match(r"[ \t]*(?:-[ \t]+)?[\"']?[\w-]+[\"']?[ \t]*:", body) and indent <= field_indent:
+                            break
+                        for token in re.finditer(r"[^\s,;|&]+", body):
+                            if _looks_like_secret(token.group()):
+                                replacements.append((begin + next_start + token.start(), begin + next_start + token.end(), "<secret>"))
+                        next_start = next_end + 1
+            raw_start = value_start
+            while raw_start < line_end and group[raw_start] in " \t":
+                raw_start += 1
+            if (value_start < value_end and _YAML_VALUE_FIELD.match(group[line_start:line_end])
+                    and group[raw_start] not in "\"'|>{[(" and group[raw_start] != "#"):
+                comment = re.search(r"\s+#", group[raw_start:line_end])
+                value_end = raw_start + comment.start() if comment else line_end
+            if value_start < value_end:
+                quote = group[value_start] if group[value_start] in "\"'" else ""
+                replacement = quote + "<secret>" + quote if quote else "<secret>"
+                replacements.append((begin + value_start, begin + value_end, replacement))
+
+    # Multiline JSON and inline maps may not be represented as separate YAML lines.
+    for start, char in enumerate(text):
+        if char not in "{[":
+            continue
+        end, closed = _container_end(text, start, line_bound=False)
+        if not closed:
+            continue
+        body = text[start:end]
+        names = list(_SECRET_NAME_FIELD.finditer(body))
+        values = list(_VALUE_FIELD.finditer(body))
+        if not names or not values or not any(_is_secret_name(m.group("name"), allow_pass=True) for m in names):
+            continue
+        for field in values:
+            value_start, value_end = _field_value_span(body, field.end())
+            if value_start < value_end:
+                quote = body[value_start] if body[value_start] in "\"'" else ""
+                replacement = quote + "<secret>" + quote if quote else "<secret>"
+                replacements.append((start + value_start, start + value_end, replacement))
+
+    for start, end, replacement in sorted(set(replacements), reverse=True):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
+def _redact_yaml_multiline_values(text: str) -> str:
+    """Redact closed multiline quoted values on a YAML key line; malformed quotes stop at EOL."""
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        match = _YAML_SECRET_LINE.match(line.rstrip("\r\n"))
+        if not match or not match.group("value").startswith(("\"", "'")):
+            out.append(line)
+            i += 1
+            continue
+        value_start = line.index(match.group("value"))
+        quote = match.group("value")[0]
+        parent_indent = len(match.group("indent"))
+        escaped = False
+        close_line = i
+        close_col = -1
+        closed = False
+        for j in range(i, len(lines)):
+            if j > i and lines[j].strip():
+                indent = len(lines[j]) - len(lines[j].lstrip(" \t"))
+                if indent <= parent_indent:
+                    body = lines[j].strip()
+                    folded_line = bool(re.fullmatch(r"[a-z0-9]+(?:[ \t]+[a-z0-9]+){0,2}", body))
+                    if not _contains_secret_token(body) and not folded_line:
+                        break
+            start_col = value_start + 1 if j == i else 0
+            for col in range(start_col, len(lines[j])):
+                char = lines[j][col]
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    close_line = j
+                    close_col = col
+                    closed = True
+                    break
+            if closed:
+                break
+        if closed:
+            replacement = quote + "<secret>" + quote
+            if close_line == i:
+                out.append(line)
+                i += 1
+                continue
+            out.append(line[:value_start] + replacement + lines[close_line][close_col + 1:])
+            i = close_line + 1
+        else:
+            newline = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
+            out.append(line[:value_start] + quote + "<secret>" + quote + newline)
+            i += 1
+    return "".join(out)
+
+
+def _looks_like_secret(value: str) -> bool:
+    """A prose value is secret-shaped when it is opaque, mixed-case, or has token punctuation."""
+    value = value.strip().strip("\"'`$.,;:()[]{}")
+    if not value or value.startswith(("-", "/", "./", "../", "~/")):
+        return False
+    if re.search(r"\s", value):
+        return False
+    if re.fullmatch(r"\d+[A-Z][a-z]+", value):
+        return False
+    if re.fullmatch(r"(?i)(?:true|false|yes|no|ok|done|started|pending|n/?a|passed|success|successful|required|missing|not|valid|revoked|reset|rotated|expired|wrong|unknown|unavailable|false)", value):
+        return False
+    if value.isdigit() or re.fullmatch(r"\d+\s+of\s+\d+\s+checks?", value, re.IGNORECASE):
+        return False
+    if re.fullmatch(r"[A-Z]", value):
+        return True
+    if re.search(r"[0-9]", value) and re.search(r"[A-Za-z]", value):
+        return True
+    if re.fullmatch(r"[A-Z][A-Z0-9_-]{7,}", value) and re.search(r"[_-]|[0-9]", value):
+        return True
+    return bool(re.fullmatch(r"[A-Za-z0-9]{24,}", value))
+
+
+def _contains_secret_token(value: str) -> bool:
+    return any(_looks_like_secret(part) for part in value.split())
+
+
+def _mask_tail_secrets(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        raw = match.group()
+        if not _looks_like_secret(raw):
+            return raw
+        if raw.startswith('"') and raw.endswith('"'):
+            return '"<secret>"'
+        if raw.startswith("'") and raw.endswith("'"):
+            return "'<secret>'"
+        return "<secret>"
+
+    return re.sub(r"[^\s,;|&]+", replace, value)
+
+
+_CREDENTIAL_WORD = r"(?:password|passphrase|passwd|pwd|pass|pw|secrets?|tokens?|(?:api|access|private)[ _-]+key)"
+_ASSIGNMENT_KEY = r"(?:" + _SECRET_KEY + r"|(?:api|access|private)[ _-]+key)"
+_CREDENTIAL_ASSIGNMENT = re.compile(
+    r"(?i)(?<![\w-])(?P<key_quote>[\"']?)(?P<key>(?!(?:bypass|compass|encompass|surpass|overpass|underpass|trespass)(?![\w-]))"
+    + _ASSIGNMENT_KEY
+    + r")(?P=key_quote)(?P<sep>\s*[=:]\s*)(?P<value>\"(?:\\.|[^\"\\\r\n])*\"|"
+    r"'(?:\\.|[^'\\\r\n])*'|\"[^\r\n]*|'[^\r\n]*|[^\s,;|&]+)"
+)
+_TRAILING_CREDENTIAL_KEY = r"(?:[\w-]*(?:password|passphrase|passwd|pwd|pass|pw|tokens?)|(?:api|access|private)[ _-]+key)"
+_CREDENTIAL_TRAILING = re.compile(
+    r"(?i)(?P<prefix>(?<![\w-])(?![\"']?(?:proxy-)?authorization[\"']?\s*[=:])[\"']?"
+    + _TRAILING_CREDENTIAL_KEY + r"[\"']?\s*[=:]\s*)"
+    r"(?P<value>[^\r\n]*)"
+)
+_ASSIGNMENT_STATUS = re.compile(
+    r"(?i)(?P<prefix>(?<![\w-])[\"']?(?!(?:bypass|compass|encompass|surpass|overpass|underpass|trespass)(?![\w-]))"
+    + _ASSIGNMENT_KEY
+    + r"[\"']?\s*[=:]\s*)(?P<status>is|was|now)[ \t]+(?P<value>\"(?:\\.|[^\"\\\r\n])*\"|"
+    r"'(?:\\.|[^'\\\r\n])*'|[^\s,;|&]+)"
+)
+_PROSE_CREDENTIAL = re.compile(
+    r"(?i)(?<![\w-])(?P<key>" + _CREDENTIAL_WORD + r")\b"
+    r"(?P<qualifier>(?:[ \t]*\([^\r\n)]*\))?)"
+    r"(?![ \t]*[:=])"
+    r"(?P<phrase>(?:(?:[ \t]+[A-Za-z][A-Za-z'-]*)|[ \t]*[,;:]){0,8}[ \t]*(?:[=:][ \t]*|[ \t]+|\r?\n[ \t]*))"
+    r"(?P<value>\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|\"[^\r\n]*|'[^\r\n]*|[^\s,;|&]+)"
+)
+_CREDENTIAL_STATUS_TAIL = re.compile(
+    r"(?i)(?P<prefix>(?<![\w-])(?P<key>" + _CREDENTIAL_WORD + r"|[\w-]*signature)\b"
+    r"(?:[ \t]*[:=])?[ \t]+(?:(?:is|was|now)[ \t]+)?"
+    r"(?:not(?:-[ \t]*|[ \t]+)|(?:wrong|required|missing|expired|valid|revoked|reset|rotated|unknown|unavailable)[.,;:]?[ \t]+))"
+    r"(?P<value>\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|[^\s,;|&]+)"
+)
+_CREDENTIAL_EXPRESSION = re.compile(
+    r"(?im)(?P<prefix>(?<![\w-])[\"']?(?:" + _SECRET_KEY + r")[\"']?\s*[=:]\s*)"
+    r"(?P<value>[^\r\n]*(?:\b(?:getenv|environ|HTTPBasicAuth)\b|\bor\b|\+)[^\r\n]*)"
+)
+_OAUTH_ASSIGNMENT = re.compile(
+    r"(?i)(?P<prefix>(?<![\w-])[\w-]*oauth\s*[=:]\s*)(?P<api>(?:api[ _-]?key\s+))?"
+    r"(?P<scheme>(?:bearer|basic|token)[ \t]+)?"
+    r"(?P<value>\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|[^\s,;|&]+)"
+)
+_SHORT_PASS = re.compile(
+    r"(?i)(?<![\w-])(?P<flag>-{1,2})?(?P<key>(?!(?:bypass|compass|encompass|surpass|overpass|underpass|trespass)(?![\w-]))"
+    r"(?:[\w-]*(?:password|passphrase|passwd|pwd|pass|pw)|p))(?P<quote>[\"']?)(?P<sep>[ \t]+)"
+    r"(?P<value>\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|\"[^\r\n]*|'[^\r\n]*|[^\s,;|&]+)"
+)
+_HAWK_AUTH = re.compile(r"(?im)(?P<prefix>\b(?:proxy-)?authorization[\"']?\s*[=:]\s*)Hawk\b[^\r\n]*")
+_HTTP_SIGNATURE = re.compile(
+    r"(?im)(?P<prefix>(?<![\w-])(?:x-hub-signature(?:-\d+)?|stripe-signature|signature)\s*:\s*)"
+    r"(?P<value>[^\r\n]*)"
+)
+_SIGNATURE_ASSIGNMENT = re.compile(
+    r"(?i)(?<![\w-])(?P<key>[\w-]*(?:signature|sig|hmac|digest))(?P<quote>[\"']?)(?P<sep>\s*[=:]\s*)"
+    r"(?P<value>(?:v\d+\s*[,=:]\s*)?\"(?:\\.|[^\"\\\r\n])*\"|"
+    r"(?:v\d+\s*[,=:]\s*)?'(?:\\.|[^'\\\r\n])*'|(?:v\d+\s*[,=:]\s*)?[^\s,;|&]+)"
+)
+_REDIS_AUTH = re.compile(
+    r"(?i)(?P<prefix>\bredis-cli\b" + _CMD_ARGS + r"(?:-a(?=[ \t=]|\S)|--pass(?:word)?(?=[ \t=])))"
+    r"(?P<sep>[ \t]*=[ \t]*|[ \t]+)?(?P<value>\S+)"
+)
+_HTTP_AUTH = re.compile(
+    r"(?i)(\b(?:http|https|xh)\b" + _CMD_ARGS + r"(?:-a|--auth)(?:[ \t]*=[ \t]*|[ \t]+)?)(\S+)"
+)
+_PASSWORD_COMMAND = re.compile(
+    r"(?i)(?<!\w)(--password-command(?:[ \t]*=[ \t]*|[ \t]+))(?:\"[^\"\r\n]*\"|'[^'\r\n]*'|[^\s;|&]+)"
+)
+
+
+def _redact_assignment(match: re.Match[str]) -> str:
+    key = match.group("key").lower()
+    raw = match.group("value")
+    if key in {"cookie", "cookies"}:
+        line_start = match.string.rfind("\n", 0, match.start()) + 1
+        if re.search(r"(?i)\bcurl\b.*(?:-H|--header)(?:[ \t]+|=)[\"']?$", match.string[line_start:match.start()]):
+            return match.group()
+    if raw in {"{", "[", "("} or raw.strip() in {"{}", "[]", "()"}:
+        return match.group()
+    if raw.startswith(("(", "[")):
+        close = ")" if raw.startswith("(") else "]"
+        value = raw[1:-1] if raw.endswith(close) else raw[1:]
+        if not _contains_secret_token(value):
+            return match.group()
+    if re.fullmatch(r"(?:num|total|min|max)[_-]?tokens?", key):
+        return match.group()
+    if key in {"authorization", "proxy-authorization"}:
+        return match.group()
+    if key.endswith("oauth") and raw.lower() in {"bearer", "basic", "token"}:
+        return match.group()
+    if raw.startswith(("<secret>", "<token>")):
+        return match.group()
+    value = raw[1:-1] if len(raw) >= 2 and raw[0] in "\"'" and raw[-1] == raw[0] else raw
+    if value.lower() in {"bearer", "basic", "token", "apikey", "api-key"}:
+        return match.group()
+    if key in {"token", "tokens"} and value.isdigit():
+        return match.group()
+    if key in {"token", "tokens"} and not _looks_like_secret(value):
+        line_end = match.string.find("\n", match.end())
+        if line_end < 0:
+            line_end = len(match.string)
+        if re.match(r"[;|&][ \t]*<secret>", match.string[match.end():line_end]):
+            return match.group()
+    if key.endswith(("pass", "pw")) and not _contains_secret_token(value):
+        return match.group()
+    if key.endswith("signature"):
+        return match.group()
+    if not raw.startswith(("\"", "'")) and not _looks_like_secret(value):
+        line_end = match.string.find("\n", match.end())
+        if line_end < 0:
+            line_end = len(match.string)
+        if re.match(r"\s+[A-Z][a-z]+[;,]", match.string[match.end():line_end]):
+            return match.group()
+    if value.lower() in {"required", "true", "false", "yes", "no", "ok", "done", "started", "pending", "n/a", "passed", "success", "successful", "is", "was", "now", "wrong", "missing", "expired", "not", "valid", "revoked", "reset", "rotated", "unknown", "unavailable"}:
+        return match.group()
+    if key.endswith(("pass", "pw")) and value.isdigit() and re.match(r"(?i)\s+of\s+\d+\s+checks?\b", match.string[match.end():]):
+        return match.group()
+    if raw.startswith("\""):
+        hidden = '"<secret>"'
+    elif raw.startswith("'"):
+        hidden = "'<secret>'"
+    else:
+        hidden = "<secret>"
+    return match.group("key_quote") + match.group("key") + match.group("key_quote") + match.group("sep") + hidden
+
+
+def _redact_credential_trailing(match: re.Match[str]) -> str:
+    value = match.group("value")
+    if value.startswith(("\"", "'")):
+        quote = value[0]
+        end_quote = re.search(r"(?<!\\)" + re.escape(quote), value[1:])
+        if not end_quote:
+            return match.group()
+        end = end_quote.end() + 1
+        status = value[1:end - 1].lower()
+        tail = value[end:]
+        if status in {"required", "true", "false", "yes", "no", "ok", "done", "started", "pending", "n/a", "passed", "success", "successful", "valid", "revoked", "reset", "rotated", "expired", "wrong", "missing", "unknown", "unavailable"}:
+            masked_tail = _mask_tail_secrets(tail)
+            if masked_tail != tail:
+                return match.group("prefix") + value[:end] + masked_tail
+        return match.group()
+    if value.startswith(("{", "[", "(", "<secret>", "<token>")):
+        return match.group()
+    first = re.match(r"[^\s,;|&]+", value)
+    if not first:
+        return match.group()
+    tail = value[first.end():]
+    masked_tail = _mask_tail_secrets(tail)
+    return match.group("prefix") + first.group() + masked_tail if masked_tail != tail else match.group()
+
+
+def _redact_oauth(match: re.Match[str]) -> str:
+    raw = match.group("value")
+    if raw.startswith("(") and not _contains_secret_token(raw[1:].rstrip(")")):
+        return match.group()
+    if raw.startswith(("<secret>", "<token>")):
+        return match.group()
+    return match.group("prefix") + (match.group("scheme") or "") + "<secret>"
+
+
+def _redact_prose_value(match: re.Match[str]) -> str:
+    raw = match.group("value")
+    value = raw[1:-1] if len(raw) >= 2 and raw[0] in "\"'" and raw[-1] == raw[0] else raw
+    if not _contains_secret_token(value):
+        return match.group()
+    hidden = '"<secret>"' if raw.startswith('"') else "'<secret>'" if raw.startswith("'") else "<secret>"
+    return match.group("key") + match.group("qualifier") + match.group("phrase") + hidden
+
+
+def _redact_assignment_status(match: re.Match[str]) -> str:
+    raw = match.group("value")
+    value = raw[1:-1] if len(raw) >= 2 and raw[0] in "\"'" and raw[-1] == raw[0] else raw
+    if not _looks_like_secret(value):
+        return match.group()
+    hidden = '"<secret>"' if raw.startswith('"') else "'<secret>'" if raw.startswith("'") else "<secret>"
+    return match.group("prefix") + match.group("status") + " " + hidden
+
+
+def _redact_credential_status_tail(match: re.Match[str]) -> str:
+    raw = match.group("value")
+    if raw.startswith(("<secret>", "<token>")):
+        return match.group()
+    value = raw[1:-1] if len(raw) >= 2 and raw[0] in "\"'" and raw[-1] == raw[0] else raw
+    if not _looks_like_secret(value):
+        return match.group()
+    hidden = '"<secret>"' if raw.startswith('"') else "'<secret>'" if raw.startswith("'") else "<secret>"
+    return match.group("prefix") + hidden
+
+
+def _redact_credential_expression(match: re.Match[str]) -> str:
+    return match.group("prefix") + "<secret>"
+
+
+def _redact_short_pass(match: re.Match[str]) -> str:
+    if match.group("key") == "P":
+        return match.group()
+    raw = match.group("value")
+    value = raw[1:-1] if len(raw) >= 2 and raw[0] in "\"'" and raw[-1] == raw[0] else raw
+    before = match.string[:match.start()]
+    if (match.group("flag") == "-" and match.group("key").lower() == "p"
+            and re.search(r"(?i)\b(?:mysql|mariadb|mysqldump)\b[^\r\n]*$", before)
+            and re.fullmatch(r"[a-z][a-z0-9_-]*", value)):
+        return match.group()
+    if not match.group("flag") and not _contains_secret_token(value):
+        return match.group()
+    hidden = '"<secret>"' if raw.startswith('"') else "'<secret>'" if raw.startswith("'") else "<secret>"
+    return (match.group("flag") or "") + match.group("key") + match.group("quote") + match.group("sep") + hidden
+
+
+def _redact_signature(match: re.Match[str]) -> str:
+    if match.group("key").lower() == "stripe-signature":
+        return match.group()
+    raw = match.group("value")
+    if "(" in raw or ")" in raw or ("," in raw and not re.match(r"(?i)^v\d+\s*,", raw)):
+        return match.group()
+    value = raw[1:-1] if len(raw) >= 2 and raw[0] in "\"'" and raw[-1] == raw[0] else raw
+    if len(value) < 4:
+        return match.group()
+    if re.fullmatch(r"(?i)(?:hmac(?:-sha\d+)?|sha(?:1|256|384|512)|base64|hex)", value):
+        return match.group()
+    if value.lower() in {"required", "n/a", "none", "null"} or not _looks_like_secret(value):
+        return match.group()
+    hidden = '"<secret>"' if raw.startswith('"') else "'<secret>'" if raw.startswith("'") else "<secret>"
+    if re.match(r"(?i)v\d+\s*[,=:]", value):
+        marker = re.match(r"(?i)v\d+\s*[,=:]\s*", value).group()
+        hidden_value = marker + "<secret>"
+    else:
+        hidden_value = hidden
+    return match.group("key") + match.group("quote") + match.group("sep") + hidden_value
+
+
+def _redact_signature_header(match: re.Match[str]) -> str:
+    prefix, value = match.group("prefix"), match.group("value")
+    if re.match(r"(?i)stripe-signature\b", prefix):
+        value = re.sub(r"(?i)(\bv\d+\s*=\s*)[^,\s]+", r"\1<secret>", value)
+        return prefix + value
+    if re.match(r"(?i)x-hub-signature\b", prefix):
+        value = re.sub(r"(?i)(\bsha(?:1|256|384|512)\s*=\s*)[^,\s]+", r"\1<secret>", value)
+        return prefix + ("<secret>" if value == match.group("value") else value)
+    value = re.sub(
+        r"(?i)(\b(?:v\d+\s*[,=:]\s*|sha(?:1|256|384|512)\s*=\s*|base64\s*[:=]\s*|"
+        r"hmac(?:-sha\d+)?\s+|hmac(?:-sha\d+)?\s*[:=]\s*))([^,\s]+)",
+        r"\1<secret>",
+        value,
+    )
+    return prefix + value
+
+
+def _redact_hawk_auth(match: re.Match[str]) -> str:
+    return match.group("prefix") + "Hawk <secret>"
+
+
+def _redact_http_auth(match: re.Match[str]) -> str:
+    prefix, value = match.group(1), match.group(2)
+    if ":" in value:
+        user = value.rsplit(":", 1)[0]
+        return prefix + user + ":<secret>"
+    return prefix + "<secret>" if _looks_like_secret(value) else match.group()
+
+
+def _redact_redis_auth(match: re.Match[str]) -> str:
+    value = match.group("value")
+    if match.group("sep") or _looks_like_secret(value):
+        return match.group("prefix") + (match.group("sep") or "") + "<secret>"
+    return match.group()
+
+
 # Redaction runs on every key and note the ledger writes, and on miner samples. Order matters:
-# whole secrets first, then the generic long-run rule.
+# whole secrets first, then structured credentials, then generic token patterns.
 _REDACT = [
     # A PEM block (or a lone header someone pasted) is removed whole.
     (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----(?:.*?-----END [A-Z ]*PRIVATE KEY-----)?", re.S),
      "<private-key>"),
     (re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*"), "<token>"),  # JWT, any length
     (re.compile(r"[\w.+-]{1,64}@[\w-]+(\.[\w-]+)+"), "<email>"),
-    (re.compile(r"://[^/\s:@]+:[^@\s]+@"), "://<cred>@"),
+    (re.compile(r"://[^/\s:@]*:[^@\s]+@"), "://<cred>@"),
     (re.compile(r"(?i)\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 <token>"),
     # Limit unquoted auth values to a scheme and one token so prose stays readable.
     (
         re.compile(
             r"(?i)\b(oauth)(\s*[=:]\s*)"
-            r"(?!(?:bearer|basic|token)\s+<token>|<secret>)"
+            r"(?!(?:bearer|basic|token)\s+(?:<token>|<secret>)|<secret>|\()"
             r"(?:(?:api[ _-]?key)\s+)?" + _SHELL_VALUE
         ),
         r"\1\2<secret>",
@@ -363,44 +1023,7 @@ _REDACT = [
     (_CURL_COOKIE, r"\1\2\3<secret>\2"),
     (_CURL_COOKIE_ARG, _redact_curl_cookie_arg),
     (_ROOTPW_PLAINTEXT, r"\1<secret>"),
-    (re.compile(r"(?i)(?<![\w-])(?:(?P<flag>-{1,2})|(?<!-))(?P<key>(?!(?:bypass|compass|encompass|surpass|overpass|underpass|trespass|sshpass|rootpw(?=\s+--plaintext))\b)"
-                r"(?:[A-Za-z0-9]{0,32}(?:pass|pw)|[\w-]{1,64}[-_](?:pass|pw)))"
-                r"(?P<key_quote>[\"']?)(?P<sep>\s*(?:[=:]\s*|\s+))"
-                r"(?!(?:[\"']?(?:is|was|now)\b|[\"']?(?:true|false|yes|no|ok|done|started|pending|n/a|passed|success|successful|required|missing|not applicable)[\"']?(?=\s*(?:$|[\s,;}\]]|#))|\d+\s+of\s+\d+\s+checks?\b))"
-                r"(?!(?:[\"']?(?:bearer|basic|token)\s+<token>|[\"']?<secret>))"
-                r"(?:(?P<double_quote>\")(?:\\.|[^\"\\])*?(?P=double_quote)|"
-                r"(?P<single_quote>')(?:\\.|[^'\\])*?(?P=single_quote)|\S+)"),
-     _redact_key_value),
-    (re.compile(r"(?i)(?<![\w-])(?:(?P<flag>-{1,2})|(?<!-))(?P<key>[\w-]*signature)"
-                r"(?P<key_quote>[\"']?)(?P<sep>\s*[=:]\s*)"
-                r"(?!(?:[\"']?required\b))"
-                r"(?:(?P<double_quote>\")(?:\\.|[^\"\\])*?(?P=double_quote)|"
-                r"(?P<single_quote>')(?:\\.|[^'\\])*?(?P=single_quote)|"
-                r"(?:(?:sha(?:1|256|384|512)|v\d+)[=:,]\s*[A-Za-z0-9_+/=-]+|"
-                r"[A-Za-z0-9_+/=-]{8,}|(?=[A-Za-z0-9_+/=-]*[0-9_+/=-])[A-Za-z0-9_+/=-]+|"
-                r"[A-Za-z0-9_+/=-])(?![A-Za-z0-9_+/=-]))"),
-     _redact_key_value),
-    # key=value / key: value. A value the bearer rule already replaced keeps its scheme word, so
-    # "Authorization: Bearer <token>" stays readable.
-    (re.compile(r"(?i)(?<!\w)(?:(?P<flag>-{1,2})|(?<!-))(?=[\w][\w-]*[\"']?\s*[=:])"
-                r"(?!max[-_]?tokens?\b)(?!(?:tokenizer|(?:num|total|min|max)_tokens\w*)[\"']?\s*[=:])"
-                r"(?P<key>(?:[\w-]*(?:password|passphrase|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credentials?|cookies?|sessionid)[\w-]*|"
-                r"sshpass|"
-                r"[\w-]*(?:oauth|auth(?:key|code|[-_](?:key|code))?|basic[-_]?auth)(?:[-_][\w-]+)?|authorization|authentication))"
-                r"(?P<key_quote>[\"']?)(?P<sep>\s*[=:]\s*)"
-                r"(?![\[{(])"
-                r"(?![\"']?required[\"']?(?=\s*(?:$|[\r\n,}\]]|#)))"
-                r"(?!(?:[\"']?(?:bearer|basic|token)\s+<token>|[\"']?<secret>))"
-                r"(?:(?P<double_quote>\")(?:\\.|[^\"\\])*(?P=double_quote)|"
-                r"(?P<single_quote>')(?:\\.|[^'\\])*(?P=single_quote)|\S+)"),
-     _redact_key_value),
-    (re.compile(r"(?i)(?P<key>\b(?:password|passphrase|passwd|pwd|pw|secret|token|(?:api|access|private)\s+key))"
-                r"(?P<prefix>\s+(?:(?:is|was)\s+(?:(?:now|set\s+to)\s+)?|now\s+|(?:is|was|now)\s*:\s*))"
-                r"(?!(?:required|wrong|missing|expired|not\s+set|unset|unknown|unavailable)\b)\S+"),
-     r"\g<key>\g<prefix><secret>"),
-    # "password hunter2" with no separator; a plain word ("password reset") is left alone.
-    (re.compile(r"(?i)\b(password|passphrase|passwd)(\s+)(?!<secret>)(?!(?:is|was|now|required|wrong|missing|not)\b)(?=\S*[^\sA-Za-z])\S+"),
-     r"\1\2<secret>"),
+    (_PASSWORD_COMMAND, r"\1<secret>"),
     # curl and mysql credentials. _CMD_ARGS bounds each scan to one command, so text with
     # many "curl" words stays linear-time.
     (_CURL_USER, r"\1<secret>"),
@@ -412,11 +1035,8 @@ _REDACT = [
     (re.compile(r"(?i)(\b(?:docker|podman)\b" + _CMD_ARGS + r"login\b" + _CMD_ARGS + r"(?:-p|--password)(?:" + _CMD_SEP + r"|=)?)"
                 + _SHELL_VALUE),
      r"\1<secret>"),
-    (re.compile(r"(?i)(\bredis-cli\b" + _CMD_ARGS + r"(?:-a|--pass(?:word)?)(?=" + _CMD_SEP + r"|=)(?:" + _CMD_SEP + r"|=))"
-                + _SHELL_VALUE),
-     r"\1<secret>"),
-    (re.compile(r"(?i)(\bhttps?\b" + _CMD_ARGS + r"(?:-a|--auth)(?=" + _CMD_SEP + r"|=)(?:" + _CMD_SEP + r"|=))(?=[^\s;|&]*:)" + _SHELL_VALUE),
-     r"\1<secret>"),
+    (_REDIS_AUTH, _redact_redis_auth),
+    (_HTTP_AUTH, _redact_http_auth),
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "<token>"),
     (re.compile(r"\b(?:sk-proj-|sk-|ghp_|gho_|ghs_|ghu_|github_pat_|xox[abprs]-|glpat-)[A-Za-z0-9_\-]{8,}"), "<token>"),
     (re.compile(r"(?<![\w/+=])(?=[A-Za-z0-9_\-/+=]*\d)(?=[A-Za-z0-9_\-/+=]*[A-Za-z])[A-Za-z0-9_\-/+=]{32,}"), "<token>"),
@@ -447,6 +1067,8 @@ def _bounded_prefix(text: str) -> str:
         escaped = False
         for pos in range(match.end(), len(prefix)):
             char = prefix[pos]
+            if char == "\n":
+                break
             if escaped:
                 escaped = False
             elif char == "\\":
@@ -461,8 +1083,21 @@ def _bounded_prefix(text: str) -> str:
 def redact(text: str) -> str:
     text = _bounded_prefix(str(text)).replace(str(Path.home()), "~")
     text = _redact_yaml_blocks(text)
-    text = _K8S_SECRET_VALUE.sub(lambda m: m.group("prefix") + "<secret>", text)
+    text = _redact_yaml_nested_values(text)
+    text = _redact_k8s_pairs(text)
+    text = _redact_yaml_multiline_values(text)
     text = _redact_containers(text)
+    text = _HAWK_AUTH.sub(_redact_hawk_auth, text)
+    text = _HTTP_SIGNATURE.sub(_redact_signature_header, text)
+    text = _PROSE_CREDENTIAL.sub(_redact_prose_value, text)
+    text = _CREDENTIAL_STATUS_TAIL.sub(_redact_credential_status_tail, text)
+    text = _OAUTH_ASSIGNMENT.sub(_redact_oauth, text)
+    text = _ASSIGNMENT_STATUS.sub(_redact_assignment_status, text)
+    text = _CREDENTIAL_EXPRESSION.sub(_redact_credential_expression, text)
+    text = _CREDENTIAL_TRAILING.sub(_redact_credential_trailing, text)
+    text = _CREDENTIAL_ASSIGNMENT.sub(_redact_assignment, text)
+    text = _SHORT_PASS.sub(_redact_short_pass, text)
+    text = _SIGNATURE_ASSIGNMENT.sub(_redact_signature, text)
     has_command_option = "-" in text
     for pat, sub in _REDACT:
         if not has_command_option and (pat is _CURL_COOKIE or pat is _CURL_USER):
