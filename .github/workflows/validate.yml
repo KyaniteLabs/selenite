@@ -1,10 +1,18 @@
 name: Plugin gate
-on: [push, pull_request]
+# The only CI for this public repo (fleet GIT-CI-STRATEGY-20261123): GitHub is
+# the trunk and the Forgejo copy is a mirror that runs nothing.
+on:
+  # Branch pushes are tested by their PR; pushing every branch ran the whole
+  # matrix (macOS legs included) twice per PR commit.
+  push:
+    branches: [main]
+  pull_request:
 permissions:
   contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
@@ -16,7 +24,14 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Unit tests (includes the needs-no-cleansing requirement)
-        run: python -m pip install -r requirements-test.txt && python -m pytest -q
+        shell: bash
+        run: |
+          python -m pip install -r requirements-test.txt
+          set -o pipefail
+          python -m pytest -q -rs -p no:cacheprovider | tee pytest.out
+          # Every test should run here (fastapi is installed, the checkout is a git repo):
+          # a skip is a failure. Tests that need a real Hermes checkout run in hermes-validate.
+          if grep "^SKIPPED" pytest.out | grep -v -e "Hermes gateway session context is not present" -e "Hermes profile context is not present" -e "real Hermes source is not configured"; then echo "unexpected skips" >&2; exit 1; fi
       - name: Desktop event contract
         run: node --experimental-vm-modules tests/test_pane_events.mjs
       - name: Desktop query contract
@@ -32,7 +47,13 @@ jobs:
           for n in frictionless antibeaurocracy antipedantry anticowardice; do test -L "$H/.claude/skills/$n"; done
           test -L "$H/.local/bin/antibeaurocracy"
           again=$(HOME="$H" sh install.sh) && printf '%s\n' "$again" | grep "^ok " >/dev/null   # idempotent; grep -q would SIGPIPE install.sh under pipefail
+      # Moved from Forgejo CI when GitHub became the only CI (GIT-CI-STRATEGY-20261123).
+      - name: Cleanse runs on an empty HOME with no findings
+        run: |
+          H=$(mktemp -d) && HOME="$H" HERMES_HOME="$H/.hermes" SELENITE_STATE="$H/s" python3 -I skills/frictionless/scripts/cleanse.py | tee out.txt
+          grep -q "^Selenite cleanse: 0 finding" out.txt
   unit-os:
+    timeout-minutes: 20
     # macOS unit-test leg. Catalog/selenite.yaml lists `platforms: [linux, macos]`.
     # No Windows leg: install.sh is POSIX sh and the state files rely on POSIX modes
     # and locks, so Windows is unsupported (Forgejo issue #28).
@@ -53,6 +74,7 @@ jobs:
         run: python -m pip install -r requirements-test.txt && python -m pytest -q
   hermes-validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:

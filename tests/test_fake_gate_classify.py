@@ -145,6 +145,21 @@ def test_context_length_checks_do_not_hide_a_required_vault_token():
     assert verdict.cls == WALL and verdict.subtype == "credentials", verdict
 
 
+@pytest.mark.parametrize("noun", [
+    "cache", "dashboard", "tooling", "exporter", "metrics", "linter", "sidecar", "auth",
+])
+@pytest.mark.parametrize("cue", ["from secops", "from vault", "auth service"])
+def test_round_ten_context_window_nouns_do_not_hide_credential_walls(noun, cue):
+    verdict = classify(f"Need a token for the context window {noun} {cue}")
+    assert verdict.cls == WALL and verdict.subtype == "credentials", verdict
+
+
+@pytest.mark.parametrize("noun", ["cache", "dashboard", "tooling", "exporter", "metrics", "linter", "sidecar"])
+def test_round_ten_context_length_nouns_do_not_hide_credential_walls(noun):
+    verdict = classify(f"Need a token for context length {noun} from vault")
+    assert verdict.cls == WALL and verdict.subtype == "credentials", verdict
+
+
 @pytest.mark.parametrize("text", [
     "Need the vault token for context length validation from secops agent",
     "Need the vault token for context length monitoring from secops agent",

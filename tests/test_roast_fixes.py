@@ -425,14 +425,20 @@ def test_round_nine_signature_digest_and_command_credentials_are_redacted(raw, s
     "password is wrong",
     "the password is not set",
     "password is expired",
+    "password is stored in 1Password",
+    "token: 'required'",
+    "auth: {}",
     "secret is required",
     "redis-cli --passive",
     "http check -a failed",
     "the http check -a failed",
-    "Use auth: [the docs](url)",
 ])
 def test_round_nine_benign_auth_words_and_prose_are_preserved(raw):
     assert ledger.redact(raw) == raw
+
+
+def test_credential_markdown_links_are_not_exempted_from_redaction():
+    assert ledger.redact("Use auth: [the docs](url)") == 'Use auth: "<secret>"'
 
 
 @pytest.mark.parametrize("raw,expected_prefix", [
@@ -445,8 +451,8 @@ def test_round_nine_benign_auth_words_and_prose_are_preserved(raw):
     ("pwd is R9_SECRET", "pwd is <secret>"),
     ("pw is R9_SECRET", "pw is <secret>"),
     ("api key is R9_SECRET", "api key is <secret>"),
-    ("auth: [WIP} fix the login flow", 'auth: "<secret>" fix the login flow'),
-    ("auth: { follow-up note", 'auth: "<secret>" follow-up note'),
+    ("auth: [WIP} fix the login flow", 'auth: "<secret>"'),
+    ("auth: { follow-up note", 'auth: "<secret>"'),
 ])
 def test_round_nine_auth_redaction_preserves_neighboring_prose(raw, expected_prefix):
     redacted = ledger.redact(raw)
@@ -466,3 +472,290 @@ def test_run_together_pass_rule_does_not_redact_ordinary_words(raw):
 
 def test_rootpw_plaintext_redacts_only_the_password_value():
     assert ledger.redact("rootpw --plaintext R9_SECRET") == "rootpw --plaintext <secret>"
+
+
+@pytest.mark.parametrize("raw,secret", [
+    ("- password: |\n    R10_BLOCK_SECRET\n", "R10_BLOCK_SECRET"),
+    ('"password": |\n  R10_QUOTED_BLOCK_SECRET\n', "R10_QUOTED_BLOCK_SECRET"),
+    ("'db_password': >-\n    R10_SINGLE_BLOCK_SECRET\nnext: ok", "R10_SINGLE_BLOCK_SECRET"),
+    ("  - password: >\n      first\n      R10_LIST_BLOCK_SECRET\n", "R10_LIST_BLOCK_SECRET"),
+    ("token: [x](R10_LINK_SECRET)", "R10_LINK_SECRET"),
+    ("password: [link](https://x.test/R10_URL_SECRET)", "R10_URL_SECRET"),
+    ("secret: [R10_LABEL_SECRET](y)", "R10_LABEL_SECRET"),
+    ('auth: {"k": "R10_UNCLOSED_SECRET"', "R10_UNCLOSED_SECRET"),
+    ('credentials: {\n  "arbitrary": ["R10_MULTILINE_CONTAINER_SECRET"]\n}', "R10_MULTILINE_CONTAINER_SECRET"),
+    ("credentials: {a: it's, b: R10_APOSTROPHE_SECRET}", "R10_APOSTROPHE_SECRET"),
+    ('adminpw: {"arbitrary": "R10_ADMINPW_SECRET"}', "R10_ADMINPW_SECRET"),
+    ("password2: R10_PASSWORD2_SECRET", "R10_PASSWORD2_SECRET"),
+    ("client_secret_v2: |\n  R10_VERSIONED_SECRET", "R10_VERSIONED_SECRET"),
+    ("cookies_list=[R10_COOKIE_LIST_SECRET]", "R10_COOKIE_LIST_SECRET"),
+    ("password:\n  R10_NESTED_YAML_SECRET\nnext: ok", "R10_NESTED_YAML_SECRET"),
+    ("creds:\n  password: |\n    R10_NESTED_BLOCK_SECRET\n  user: bob", "R10_NESTED_BLOCK_SECRET"),
+    ("- token: |\n    R10_LIST_TOKEN_SECRET", "R10_LIST_TOKEN_SECRET"),
+    ("redis-cli -aR10_REDIS_SECRET", "R10_REDIS_SECRET"),
+    ("redis-cli -aS", "-aS"),
+    ("redis-cli -a passphrase ping", "passphrase"),
+    ("http -a R10_HTTP_SECRET x", "R10_HTTP_SECRET"),
+    ("http -a S x", "-a S"),
+    ("passwd not-R10_PASSWD_SECRET", "R10_PASSWD_SECRET"),
+    ('pw: "is R10_QUOTED_PW_SECRET"', "R10_QUOTED_PW_SECRET"),
+])
+def test_round_ten_secret_shapes_are_removed_from_ledger_input(raw, secret):
+    redacted = ledger.redact(raw)
+    assert secret not in redacted
+    assert "<secret>" in redacted
+
+
+@pytest.mark.parametrize("raw,secret", [
+    ("PASS=R10_PASS_SECRET", "R10_PASS_SECRET"),
+    ("export DB_PASS=R10_EXPORT_PASS_SECRET", "R10_EXPORT_PASS_SECRET"),
+    ("wifi_pass: R10_WIFI_SECRET", "R10_WIFI_SECRET"),
+    ("--pass=R10_FLAG_SECRET", "R10_FLAG_SECRET"),
+    ("bypass_token=R10_BYPASS_TOKEN_SECRET", "R10_BYPASS_TOKEN_SECRET"),
+    ("passport_secret=R10_PASSPORT_SECRET", "R10_PASSPORT_SECRET"),
+    ("compass_api_key=R10_COMPASS_KEY_SECRET", "R10_COMPASS_KEY_SECRET"),
+    ("surpass_token=R10_SURPASS_SECRET", "R10_SURPASS_SECRET"),
+    ("encompass_token=R10_ENCOMPASS_SECRET", "R10_ENCOMPASS_SECRET"),
+    ("bypass-secret=R10_BYPASS_SECRET", "R10_BYPASS_SECRET"),
+    ("trespass_password=R10_TRESPASS_SECRET", "R10_TRESPASS_SECRET"),
+    ("upw_token=R10_UPW_SECRET", "R10_UPW_SECRET"),
+    ("pass_secret_key: R10_PASS_KEY_SECRET", "R10_PASS_KEY_SECRET"),
+    ("sshpass -p R10_SSHPASS_SECRET ssh host", "R10_SSHPASS_SECRET"),
+    ("sshpass=R10_SSHPASS_ENV_SECRET", "R10_SSHPASS_ENV_SECRET"),
+    ("password: |\nR10_ROOT_BLOCK_SECRET\nnext: ok", "R10_ROOT_BLOCK_SECRET"),
+])
+def test_opus_round_ten_redaction_cases(raw, secret):
+    assert secret not in ledger.redact(raw)
+
+
+@pytest.mark.parametrize("raw", [
+    "The tests pass 12",
+    "pass rate 98%",
+    "pass through the proxy",
+    "make pass && make deploy",
+    "CI will pass once a reviewer approves",
+    "first pass review",
+    "one more pass needed",
+    "should pass after the token refresh",
+    "let it pass through the gateway",
+    "Checks pass: 3 of 4, waiting on a reviewer.",
+    "Ask a reviewer to sign off; the signature requirement is blocking.",
+    "rootpw is set in the kickstart; ask a reviewer.",
+    "mypw reset needed",
+    "token is valid",
+    "token was revoked",
+    "the token is expired; waiting on a reviewer to rotate it.",
+    "password is wrong for the staging db; waiting on a reviewer",
+    "password was reset",
+    "api key was rotated",
+    "pwd is /srv/app",
+    "signature: n/a",
+    "e-signature: DocuSign",
+    "type_signature: Callable",
+    "rootpw --lock",
+    "- name: TOKEN_TTL\n  value: 3600",
+    "- name: AUTH_MODE\n  value: password",
+    "- name: PASSWORD_MIN_LENGTH\n  value: 16",
+    "- name: COOKIE_DOMAIN\n  value: example.test",
+    "tokens: 1200",
+    "bypass: true",
+    "bypass=R9_SECRET",
+    "auth: (see the runbook) blocked on a reviewer for the merge.",
+    "token: (none yet) waiting on the vendor.",
+    "password is case-sensitive",
+    "api key is rate-limited",
+    "signature: A",
+    "signature: X",
+    "signature: v2",
+    'signature: "John Smith, CEO"',
+    "method_signature: foo(a, b)",
+    "redis-cli -audit",
+    "redis-cli --pass-through",
+    "redis-cli -a",
+    "redis-cli --password-file f",
+    "pass: 2",
+    "pass=3",
+    "pass: compile",
+    "pass: second",
+    "pass: all",
+    "pass: 12/12",
+    "pass: 100%",
+    "pass: green",
+    "pass: fail",
+    "pass: skipped",
+    "auth: [x] done",
+    "token: [x] rotated",
+    "password: [redacted]",
+    "secret: (TBD)",
+    "oauth: (not configured)",
+])
+def test_round_ten_ordinary_pass_words_and_settings_are_preserved(raw):
+    assert ledger.redact(raw) == raw
+
+
+@pytest.mark.parametrize("raw,secret", [
+    ("- value: R10_VALUE_FIRST\n  name: DB_PASSWORD", "R10_VALUE_FIRST"),
+    ("- name: DB_PASSWORD\n  # comment\n  value: R10_COMMENT_SECRET", "R10_COMMENT_SECRET"),
+    ("env:\n- name: DB_PASSWORD\n  value: R10_ENV_SECRET\n- name: MODE\n  value: prod", "R10_ENV_SECRET"),
+    ("- name: DB_PASSWORD\n  valueFrom: secretKeyRef\n  value: R10_VALUE_AFTER_FROM", "R10_VALUE_AFTER_FROM"),
+    ("- name: DB_PASS\n  value: R10_DB_PASS", "R10_DB_PASS"),
+    ("- name: DB_PW\n  value: R10_DB_PW", "R10_DB_PW"),
+    ("- {name: DB_PASSWORD, value: R10_INLINE_SECRET}", "R10_INLINE_SECRET"),
+    ('{"name": "DB_PASSWORD", "value": "R10_JSON_SECRET"}', "R10_JSON_SECRET"),
+    ('- name: DB_PASSWORD\n  value: {key: R10_VALUE_CONTAINER_SECRET}', "R10_VALUE_CONTAINER_SECRET"),
+    ('- name: DB_PASSWORD\n  value: "first\n    R10_MULTILINE_QUOTE_SECRET"', "R10_MULTILINE_QUOTE_SECRET"),
+    ('- name: DB_PASSWORD\n  value: "first\n    R10_UNTERMINATED_PAIR_SECRET', "R10_UNTERMINATED_PAIR_SECRET"),
+    ('- name: DB_PASSWORD\n  value: |\n    R10_BLOCK_VALUE_SECRET', "R10_BLOCK_VALUE_SECRET"),
+    ("- key: DB_PASSWORD\n  value: R10_KEY_VALUE_SECRET", "R10_KEY_VALUE_SECRET"),
+    ("--set name=DB_PASSWORD --set value=R10_SET_SECRET", "R10_SET_SECRET"),
+    ("- name: DB_PASSWORD\n  value: p@ss R10_TRAILING_PAIR_SECRET", "R10_TRAILING_PAIR_SECRET"),
+    ("- name: \"API_TOKEN\"\n  value: R10_QUOTED_NAME_SECRET", "R10_QUOTED_NAME_SECRET"),
+])
+def test_round_ten_kubernetes_name_value_pairs_are_redacted(raw, secret):
+    assert secret not in ledger.redact(raw)
+
+
+def test_round_ten_unterminated_secret_quote_stops_at_the_line_boundary():
+    cases = (
+        (
+            'note: password: "x\nBlocked on a reviewer for the "merge"',
+            'note: password: "<secret>"\nBlocked on a reviewer for the "merge"',
+        ),
+        (
+            'password: "x\nBlocked on a reviewer for the "merge"',
+            'password: "<secret>"\nBlocked on a reviewer for the "merge"',
+        ),
+    )
+    for raw, expected in cases:
+        assert ledger.redact(raw) == expected
+
+
+@pytest.mark.parametrize("raw,expected", [
+    (
+        'password: "line1\nR10_MULTILINE_SECRET"\nQuestion: keep?',
+        'password: "<secret>"\nQuestion: keep?',
+    ),
+    (
+        'password: "a\nb\nc R10_MULTILINE_SECRET"\nQuestion: keep?',
+        'password: "<secret>"\nQuestion: keep?',
+    ),
+])
+def test_round_ten_closed_multiline_secret_quotes_are_consumed(raw, expected):
+    assert ledger.redact(raw) == expected
+
+
+def test_round_ten_unterminated_pair_quote_keeps_nonsecret_blocker_text():
+    raw = '- name: DB_PASSWORD\n  value: "x\nBlocked on a reviewer for the "merge"\nQuestion: keep?'
+    expected = '- name: DB_PASSWORD\n  value: "<secret>"\nBlocked on a reviewer for the "merge"\nQuestion: keep?'
+    assert ledger.redact(raw) == expected
+
+
+def test_round_ten_unclosed_container_redacts_only_to_the_line_boundary():
+    raw = 'auth: {"k": "R10_OPEN_CONTAINER_SECRET"\nBlocked on a reviewer for the merge'
+    assert ledger.redact(raw) == 'auth: "<secret>"\nBlocked on a reviewer for the merge'
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("password is currently R10_CURRENT_SECRET", "password is currently <secret>"),
+    ("password is\nR10_NEWLINE_SECRET", "password is\n<secret>"),
+    ("password changed to R10_CHANGED_SECRET", "password changed to <secret>"),
+    ("password is still R10_STILL_SECRET", "password is still <secret>"),
+    ("password is actually R10_ACTUALLY_SECRET", "password is actually <secret>"),
+    ("password is the following: R10_FOLLOWING_SECRET", "password is the following: <secret>"),
+    ("password will be R10_WILL_SECRET", "password will be <secret>"),
+    ("password should be R10_SHOULD_SECRET", "password should be <secret>"),
+    ("password must be R10_MUST_SECRET", "password must be <secret>"),
+    ("password for db is R10_DB_SECRET", "password for db is <secret>"),
+    ("password (prod) is R10_PROD_SECRET", "password (prod) is <secret>"),
+    ("password is missing; use R10_MISSING_SECRET", "password is missing; use <secret>"),
+    ("password is expired, new one R10_EXPIRED_SECRET", "password is expired, new one <secret>"),
+    ("token is not set; use R10_TOKEN_SECRET", "token is not set; use <secret>"),
+    ("signature: t=1,v1=R10_SIGNATURE_FIELD_SECRET", "signature: t=1,v1=<secret>"),
+    ("signature: hmac-sha256 R10_HMAC_SECRET", "signature: hmac-sha256 <secret>"),
+    ("signature: HMAC R10_HMAC_FIELD_SECRET", "signature: HMAC <secret>"),
+    ("token: Bearer R10_BEARER_SECRET", "token: Bearer <secret>"),
+    ("auth_token: Bearer R10_AUTH_TOKEN_SECRET", "auth_token: Bearer <secret>"),
+    ("oauth: Bearer R10_OAUTH_BEARER_SECRET", "oauth: Bearer <secret>"),
+    ("pass: 1 of 3 checks R10_PASS_TAIL_SECRET", "pass: 1 of 3 checks <secret>"),
+    ("token: a;R10_TRAILING_SECRET", "token: a;<secret>"),
+    ("token: a|R10_PIPE_SECRET", "token: a|<secret>"),
+    ("pass=$S", "pass=<secret>"),
+    ('password is "my R10_QUOTED_PROSE_SECRET"', 'password is "<secret>"'),
+    ("password: is R10_ASSIGNED_SECRET", "password: is <secret>"),
+    ("pw: now R10_PW_SECRET", "pw: now <secret>"),
+    ("pass R10_PASS_SECRET", "pass <secret>"),
+    ('dbpass "a b R10_DBPASS_SECRET"', 'dbpass "<secret>"'),
+    ("--pass R10_FLAG_SECRET", "--pass <secret>"),
+    ("-pw R10_FLAG_PW_SECRET", "-pw <secret>"),
+    ("xh -a bob:R10_XH_SECRET", "xh -a bob:<secret>"),
+    ("http -a bob:password x", "http -a bob:<secret> x"),
+    ("redis-cli -u redis://:R10_URI_SECRET@host", "redis-cli -u redis://<cred>@host"),
+])
+def test_round_ten_credential_values_are_redacted_without_damaging_neighboring_prose(raw, expected):
+    assert ledger.redact(raw) == expected
+
+
+@pytest.mark.parametrize("raw,secret", [
+    ("x-hub-signature-256: sha256=R10_HUB_SECRET", "R10_HUB_SECRET"),
+    ("Stripe-Signature: t=123,v1=R10_STRIPE_SECRET", "R10_STRIPE_SECRET"),
+    ("Authorization: Hawk id=\"a\", mac=\"R10_HAWK_SECRET\"", "R10_HAWK_SECRET"),
+])
+def test_round_ten_signature_and_authorization_headers_are_redacted(raw, secret):
+    assert secret not in ledger.redact(raw)
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("sig=hunter2ZZ9", "sig=<secret>"),
+    ("&sig=hunter2ZZ9", "&sig=<secret>"),
+    ("X-Hmac: hunter2ZZ9", "X-Hmac: <secret>"),
+    ("digest: hunter2ZZ9", "digest: <secret>"),
+    ('password="required" continue with SYNTH_R9_SECRET',
+     'password="required" continue with <secret>'),
+    ('password="required" continue with the rollout',
+     'password="required" continue with the rollout'),
+])
+def test_round_ten_signature_aliases_and_quoted_status_tails(raw, expected):
+    assert ledger.redact(raw) == expected
+
+
+def test_round_ten_single_character_secrets_and_markdown_links_are_redacted():
+    for raw, expected in (
+        ("redis-cli -aS", "redis-cli -a<secret>"),
+        ("http -a S x", "http -a <secret> x"),
+        ("passwd not-S", "passwd not-<secret>"),
+        ('pw: "is S"', 'pw: "<secret>"'),
+        ("password is currently S", "password is currently <secret>"),
+        ("password changed to S", "password changed to <secret>"),
+        ("x-hub-signature-256: sha256=S", "x-hub-signature-256: sha256=<secret>"),
+        ("Stripe-Signature: t=123,v1=S", "Stripe-Signature: t=123,v1=<secret>"),
+        ('Authorization: Hawk id="a", mac="S"', "Authorization: <secret>"),
+        ("xh -a bob:S", "xh -a bob:<secret>"),
+        ("redis-cli -u redis://:S@h", "redis-cli -u redis://<cred>@h"),
+        ("token: [x](S)", 'token: "<secret>"'),
+        ("password: [link](https://x.test/S)", 'password: "<secret>"'),
+        ("secret: [S](y)", 'secret: "<secret>"'),
+    ):
+        assert ledger.redact(raw) == expected
+
+
+@pytest.mark.parametrize("raw,secret", [
+    ("password:\n- R10_LIST_VALUE_SECRET", "R10_LIST_VALUE_SECRET"),
+    ('cookies: ["R10_COOKIE_LIST_SECRET"]', "R10_COOKIE_LIST_SECRET"),
+    ('adminpw: ["R10_SHORTPASS_LIST_SECRET"]', "R10_SHORTPASS_LIST_SECRET"),
+    ('adminpw: "first\n  R10_SHORTPASS_QUOTE_SECRET"', "R10_SHORTPASS_QUOTE_SECRET"),
+    ("password: |2\n    first\n  R10_INDENTED_BLOCK_SECRET", "R10_INDENTED_BLOCK_SECRET"),
+    ('password: "first\\"\n  R10_ESCAPED_QUOTE_SECRET"\nQuestion: keep?', "R10_ESCAPED_QUOTE_SECRET"),
+    ("Authorization: OAuth R10_OAUTH_AUTH_SECRET", "R10_OAUTH_AUTH_SECRET"),
+    ("password is required_R10_PROSE_SECRET", "R10_PROSE_SECRET"),
+    ("signature=required_R10_SIGNATURE_SECRET", "R10_SIGNATURE_SECRET"),
+])
+def test_sol_round_ten_redaction_probe_cases(raw, secret):
+    assert secret not in ledger.redact(raw)
+
+
+def test_round_ten_yaml_block_and_kubernetes_secrets_do_not_reach_persisted_rows():
+    note = '- password: |\n    R10_PERSISTED_BLOCK_SECRET\n- name: DB_PASSWORD\n  value: {key: R10_PERSISTED_PAIR_SECRET}'
+    ledger.add("miss", "round-ten-persisted", note=note)
+    row = [r for r in ledger.rows() if r["key"] == "round-ten-persisted"][-1]
+    assert "R10_PERSISTED_BLOCK_SECRET" not in row["note"]
+    assert "R10_PERSISTED_PAIR_SECRET" not in row["note"]
