@@ -1,4 +1,4 @@
-"""Provider-agnostic CLI: ``antibeaurocracy classify|audit|rules``. Works with any agent that can run a shell."""
+"""Provider-agnostic CLI: ``antibeaurocracy classify|audit``. Works with any agent that can run a shell."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from . import __version__
 from . import audit as _audit
 from . import judge as _judge
 from . import settings as _settings
-from .classify import FAKE, classify
+from .classify import FAKE, classify, with_low_confidence
 
 
 def add_arguments(p: argparse.ArgumentParser) -> None:
@@ -52,9 +52,10 @@ def handle(args: argparse.Namespace, settings: dict | None = None) -> int:
             print("antibeaurocracy: nothing to classify (pass the reason as text or on stdin).", file=sys.stderr)
             return 2
         v = classify(text, kind=args.kind, age_hours=args.age_hours)
-        d = v.to_dict()
-        # Same bar the audit uses: a FAKE below min_confidence (or with no matched phrase) is not acted on.
-        d["low_confidence"] = v.cls == FAKE and not _audit.is_fake({"verdict": d})
+        vd = v.to_dict()
+        # Same bar the audit uses: a FAKE below min_confidence (or with no matched phrase) is not acted on,
+        # and its action says so.
+        d = with_low_confidence(v, v.cls == FAKE and not _audit.is_fake({"verdict": vd}))
         if args.json:
             print(json.dumps(d, indent=2))
         elif d["low_confidence"]:

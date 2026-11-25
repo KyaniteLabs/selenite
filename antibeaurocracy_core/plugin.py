@@ -29,7 +29,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import FAKE, __version__, classify
+from . import FAKE, __version__, classify, with_low_confidence
 from . import audit as _audit
 from . import cli as _cli
 from . import settings as _settings
@@ -472,7 +472,7 @@ def tool_classify(args: dict, **_kw) -> str:
     if problem:
         return _bad_arguments(problem)
     v = classify(args["text"], kind=args.get("kind"), age_hours=args.get("age_hours"))
-    return json.dumps(dict(v.to_dict(), low_confidence=_low_confidence(v)))
+    return json.dumps(with_low_confidence(v, _low_confidence(v)))
 
 
 def _low_confidence(v) -> bool:

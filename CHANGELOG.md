@@ -10,6 +10,15 @@
 - New `post_llm_call` hook, `cowardice_check` tool and `/anticowardice` command. `cowardice_mode` is
   `observe` by default (counts-only ledger under `plugin-data/anticowardice/`) or `nudge` (one note on the
   next turn). Neither mode blocks anything. The Check Yourself boundary doc gains the vague-status line.
+- **A low-confidence `bureaucracy_classify` no longer says to close the card.** No matched phrase, or
+  one below `min_confidence`, returned `low_confidence: true` with an action that ended "or close the
+  card". The action now says to read the card and, if in doubt, treat the wait as a wall and ask the
+  person once. The gate, the label enum and the tool name are unchanged; a matched F2-relay still
+  returns the carry-step advice. `antibeaurocracy classify --json` returns the same shape.
+- The `antibeaurocracy` module docstring no longer names a `rules` subcommand that never existed
+  (`--help` lists `classify` and `audit` only). Rule files stay on `audit --rules` / `--no-rules`.
+- `tools/embed-fonts.py --help` and unknown arguments print usage and exit without rewriting
+  `desktop/plugin.js`. A run with no arguments still rebuilds the font block.
 
 ## 0.6.0 (2026-11-11)
 
