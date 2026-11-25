@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Embed desktop/fonts/*.woff into desktop/plugin.js between the FONTS markers.
 
+Run it with no arguments to rebuild the font block. ``--help`` and an unknown
+argument print this usage and write nothing.
+
 Desktop plugins may import only the SDK and React, so the Chakra Petch subset
 ships inline as base64. Rebuild the subset with:
   pyftsubset ChakraPetch-<W>.ttf --flavor=woff --output-file=desktop/fonts/cp-<W>.woff \
@@ -9,23 +12,38 @@ ships inline as base64. Rebuild the subset with:
 Chakra Petch ships no tnum feature, so its digits stay proportional; the plugin
 puts aligned counts in the host mono face instead.
 """
+import argparse
 import base64
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WEIGHTS = {"Medium": 500, "SemiBold": 600}
 
-entries = []
-for name, weight in WEIGHTS.items():
-    b64 = base64.b64encode((ROOT / "desktop/fonts" / f"cp-{name}.woff").read_bytes()).decode()
-    entries.append(f"  {weight}: '{b64}'")
-block = "const FONTS = {\n" + ",\n".join(entries) + "\n}"
 
-js = ROOT / "desktop/plugin.js"
-src = js.read_text(encoding="utf-8")
-new, n = re.subn(r"(// --- FONTS \(generated\) -+\n).*?(\n// --- /FONTS)", lambda m: m.group(1) + block + m.group(2), src, flags=re.S)
-if n != 1:
-    raise SystemExit("FONTS markers not found")
-js.write_text(new)
-print(f"embedded {len(entries)} weights, plugin.js is {len(new) // 1024} KB")
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        prog="embed-fonts.py",
+        description="Embed desktop/fonts/*.woff into desktop/plugin.js between the FONTS markers.",
+        epilog="A run with no arguments rewrites desktop/plugin.js.")
+    # --help exits 0 here and an unknown argument exits 2; neither reaches the write below.
+    ap.parse_args(argv)
+    entries = []
+    for name, weight in WEIGHTS.items():
+        b64 = base64.b64encode((ROOT / "desktop/fonts" / f"cp-{name}.woff").read_bytes()).decode()
+        entries.append(f"  {weight}: '{b64}'")
+    block = "const FONTS = {\n" + ",\n".join(entries) + "\n}"
+
+    js = ROOT / "desktop/plugin.js"
+    src = js.read_text(encoding="utf-8")
+    new, n = re.subn(r"(// --- FONTS \(generated\) -+\n).*?(\n// --- /FONTS)", lambda m: m.group(1) + block + m.group(2), src, flags=re.S)
+    if n != 1:
+        raise SystemExit("FONTS markers not found")
+    js.write_text(new)
+    print(f"embedded {len(entries)} weights, plugin.js is {len(new) // 1024} KB")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

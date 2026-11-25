@@ -40,6 +40,12 @@ CEREMONY = "F4-ceremony"  # attestations, receipts, review-of-review
 PARKING = "F5-parking-lot"  # HOLD with no owner and expiry
 STALE = "F6-stale-wait"  # waiting with no named next actor or action
 
+# An unevidenced FAKE is the classifier's default, not a finding: no phrase matched, or none with
+# enough confidence to act on. The gate never acts on it, so its action must not either. It tells the
+# caller to read the card; it never tells them to close it.
+LOW_CONFIDENCE_ACTION = ("Nothing matched with enough confidence to act on, so this label is a guess, not a finding. "
+                         "Read the card yourself. If in doubt, treat the wait as a wall and ask the person once.")
+
 ACTIONS = {
     WALL: "Escalate once to the human with a decision-only ask (one line, options, default). Keep doing every other part of the work.",
     HUMAN: "A question for a person, not an agent gate. Leave it to the person's queue; this plugin does not judge it.",
@@ -50,7 +56,7 @@ ACTIONS = {
     LIMBO: "Make the call with a stated default and a revert path, comment it on the card, and move on. If ownership really is disputed, ask the named decider once.",
     CEREMONY: "Drop the ceremony. Keep only evidence a reader would actually check (a test run, a diff, a URL). Comment, don't open a new card.",
     PARKING: "Unpark: ask whoever set the hold for a named owner and an expiry, then dispatch it, put it in triage, or close it. A hold with neither lapses.",
-    STALE: "Name the next actor and action in one line, or close the card. A wait with no next step is not a wait.",
+    STALE: LOW_CONFIDENCE_ACTION,  # F6 only ever comes from a default below, never from a matched phrase
 }
 
 _I = re.I
@@ -342,6 +348,16 @@ class Verdict:
         return d
 
 
+def with_low_confidence(v: Verdict, low: bool) -> dict:
+    """The JSON every classify surface returns. A low-confidence FAKE carries ``low_confidence`` true
+    and the read-the-card action, whatever subtype it fell back to."""
+    d = v.to_dict()
+    d["low_confidence"] = low
+    if low:
+        d["action"] = LOW_CONFIDENCE_ACTION
+    return d
+
+
 def _hits(pattern: re.Pattern, text: str, *, skip_negated: bool = False) -> list[str]:
     out = []
     for m in pattern.finditer(text):
@@ -487,14 +503,15 @@ def classify(text: str, *, kind: str | None = None, age_hours: float | str | Non
         return Verdict(HUMAN, "", 0.5, "an approval from a named party this plugin does not know",
                        NAMED_APPROVER_ACTION, named)
 
-    # 11. Defaults: no phrase matched. These are low-confidence and never "evidenced".
+    # 11. Defaults: no phrase matched. These are low-confidence and never "evidenced", so their action
+    # says to read the card: the classifier has no finding to offer.
     if created_blocked:
-        return Verdict(FAKE, PARKING, 0.5, "created blocked with no reason of its own", ACTIONS[PARKING], [])
+        return Verdict(FAKE, PARKING, 0.5, "created blocked with no reason of its own", LOW_CONFIDENCE_ACTION, [])
     if not t:
-        return Verdict(FAKE, PARKING, 0.5, "blocked with no stated reason", ACTIONS[PARKING], [])
+        return Verdict(FAKE, PARKING, 0.5, "blocked with no stated reason", LOW_CONFIDENCE_ACTION, [])
     if age is not None and age > 24:
-        return Verdict(FAKE, STALE, 0.5, f"waiting {age:.0f}h with no recognised wall", ACTIONS[STALE], [])
-    return Verdict(FAKE, STALE, 0.3, "no wall, fault or dependency named", ACTIONS[STALE], [])
+        return Verdict(FAKE, STALE, 0.5, f"waiting {age:.0f}h with no recognised wall", LOW_CONFIDENCE_ACTION, [])
+    return Verdict(FAKE, STALE, 0.3, "no wall, fault or dependency named", LOW_CONFIDENCE_ACTION, [])
 
 
 RULES = (
